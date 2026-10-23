@@ -1,0 +1,147 @@
+arazzo: 1.0.1
+info:
+  title: Onboarding de tarjetas de crédito
+  version: 1.0.0
+  description: Solicitar, aprobar y activar una tarjeta; luego consultar su estado.
+sourceDescriptions:
+  - name: creditCards
+    url: ./credit-cards.yaml
+    type: openapi
+workflows:
+  - workflowId: onboarding-tarjeta
+    summary: Solicitud, aprobación y activación de una tarjeta nueva
+    inputs:
+      type: object
+      required: [customerId, productCode, requestedLimit, last4Digits]
+      properties:
+        customerId:
+          type: string
+          description: Identificador del cliente
+          example: CUST-001
+        productCode:
+          type: string
+          enum: [LATAM_PASS_VISA, LATAM_PASS_MASTERCARD]
+          example: LATAM_PASS_VISA
+        requestedLimit:
+          type: number
+          description: Cupo solicitado en USD
+          example: 1500
+        last4Digits:
+          type: string
+          description: Últimos 4 dígitos impresos en la tarjeta
+          pattern: '^[0-9]{4}$'
+          example: '4321'
+    parameters:
+      - name: X-Channel
+        in: header
+        value: WEB
+      - name: X-Country
+        in: header
+        value: EC
+    steps:
+      - stepId: solicitar
+        description: Crea la solicitud de tarjeta
+        operationId: createCardApplication
+        requestBody:
+          contentType: application/json
+          payload:
+            customerId: $inputs.customerId
+            productCode: $inputs.productCode
+            requestedLimit: $inputs.requestedLimit
+        successCriteria:
+          - condition: $statusCode == 201
+          - condition: $response.body#/status == 'PENDING'
+        onFailure:
+          - name: productoNoSoportado
+            type: end
+            criteria:
+              - condition: $statusCode == 422
+              - condition: $response.body#/code == 'INVALID_PRODUCT'
+        outputs:
+          applicationId: $response.body#/applicationId
+      - stepId: aprobar
+        description: Aprueba la solicitud creada
+        operationId: approveCardApplication
+        parameters:
+          - name: applicationId
+            in: path
+            value: $steps.solicitar.outputs.applicationId
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == 'APPROVED'
+        outputs:
+          cardId: $response.body#/cardId
+      - stepId: activar
+        description: Activa la tarjeta con los últimos 4 dígitos
+        operationId: activateCard
+        parameters:
+          - name: cardId
+            in: path
+            value: $steps.aprobar.outputs.cardId
+        requestBody:
+          contentType: application/json
+          payload:
+            last4Digits: $inputs.last4Digits
+        successCriteria:
+          - condition: $statusCode == 200
+        onFailure:
+          - name: digitosIncorrectos
+            type: end
+            criteria:
+              - condition: $statusCode == 422
+              - condition: $response.body#/code == 'DIGITS_MISMATCH'
+          - name: tarjetaNoEncontrada
+            type: end
+            criteria:
+              - condition: $statusCode == 404
+          - name: datosInvalidos
+            type: end
+            criteria:
+              - condition: $statusCode == 400
+        outputs:
+          activatedAt: $response.body#/activatedAt
+      - stepId: consultar
+        description: Verifica que la tarjeta quedó activa
+        operationId: getCard
+        parameters:
+          - name: cardId
+            in: path
+            value: $steps.aprobar.outputs.cardId
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            condition: ^\{.*"status":"ACTIVE"
+            type: regex
+        outputs:
+          status: $response.body#/status
+          creditLimit: $response.body#/creditLimit
+    outputs:
+      cardId: $steps.aprobar.outputs.cardId
+      status: $steps.consultar.outputs.status
+
+  - workflowId: consultar-tarjeta
+    summary: Consulta el estado de una tarjeta existente
+    inputs:
+      type: object
+      required: [cardId]
+      properties:
+        cardId:
+          type: string
+          example: CARD-1000
+    steps:
+      - stepId: consultar
+        operationId: getCard
+        parameters:
+          - name: cardId
+            in: path
+            value: $inputs.cardId
+          - name: X-Channel
+            in: header
+            value: MOBILE
+          - name: X-Country
+            in: header
+            value: EC
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          status: $response.body#/status

@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: Credit Cards API
+  version: 1.0.0
+  description: Contrato de ejemplo para Arazzo Studio (solicitud, aprobación y activación de tarjetas).
+servers:
+  - url: http://localhost:4010
+security:
+  - bearerAuth: []
+paths:
+  /card-applications:
+    post:
+      operationId: createCardApplication
+      summary: Crear una solicitud de tarjeta
+      parameters:
+        - $ref: '#/components/parameters/XChannel'
+        - $ref: '#/components/parameters/XCountry'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardApplicationRequest'
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardApplication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /card-applications/{applicationId}/approval:
+    post:
+      operationId: approveCardApplication
+      summary: Aprobar una solicitud
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XChannel'
+        - $ref: '#/components/parameters/XCountry'
+      responses:
+        '200':
+          description: Solicitud aprobada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cards/{cardId}/activation:
+    post:
+      operationId: activateCard
+      summary: Activar una tarjeta
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XChannel'
+        - $ref: '#/components/parameters/XCountry'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [last4Digits]
+              properties:
+                last4Digits:
+                  type: string
+                  pattern: '^[0-9]{4}$'
+      responses:
+        '200':
+          description: Tarjeta activada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /cards/{cardId}:
+    get:
+      operationId: getCard
+      summary: Consultar una tarjeta
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XChannel'
+        - $ref: '#/components/parameters/XCountry'
+      responses:
+        '200':
+          description: Tarjeta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    XChannel:
+      name: X-Channel
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: [WEB, MOBILE]
+    XCountry:
+      name: X-Country
+      in: header
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Petición inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Sin credenciales válidas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: Regla de negocio no cumplida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    CardApplicationRequest:
+      type: object
+      required: [customerId, productCode, requestedLimit]
+      properties:
+        customerId:
+          type: string
+        productCode:
+          type: string
+          enum: [LATAM_PASS_VISA, LATAM_PASS_MASTERCARD]
+        requestedLimit:
+          type: number
+          minimum: 100
+    CardApplication:
+      type: object
+      required: [applicationId, status]
+      properties:
+        applicationId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+    Approval:
+      type: object
+      required: [applicationId, status, cardId]
+      properties:
+        applicationId:
+          type: string
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        cardId:
+          type: string
+    Activation:
+      type: object
+      required: [cardId, status, activatedAt]
+      properties:
+        cardId:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE]
+        activatedAt:
+          type: string
+          format: date-time
+    Card:
+      type: object
+      required: [cardId, status, productCode, creditLimit]
+      properties:
+        cardId:
+          type: string
+        status:
+          type: string
+          enum: [INACTIVE, ACTIVE, BLOCKED]
+        productCode:
+          type: string
+        creditLimit:
+          type: number
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
