@@ -228,10 +228,10 @@ function buildGraph(wa: WorkflowAnalysis, opts: { actions: boolean; data: boolea
       pathOptions: { offset: 24 + distance * 34, borderRadius: 10 },
       label: e.output,
       animated: true,
-      style: { stroke: 'var(--accent)', strokeDasharray: '5 4' },
-      labelStyle: { fill: 'var(--accent)', fontWeight: 600, fontSize: 12 },
+      style: { stroke: 'var(--sim)', strokeDasharray: '5 4' },
+      labelStyle: { fill: 'var(--sim)', fontWeight: 600, fontSize: 12 },
       labelBgStyle: { fill: 'var(--surface)' },
-      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--accent)' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--sim)' },
     } as Edge)
   })
   return { nodes, edges }
@@ -251,7 +251,7 @@ export function WorkflowGraph({ wa }: { wa: WorkflowAnalysis }) {
           <span className="dot d-err" /> {t('graph.actionsToggle')} {actionCount > 0 && <span className="count">{actionCount}</span>}
         </Pill>
         <Pill active={showData} onClick={() => setShowData(!showData)}>
-          <span className="dot d-accent" /> {t('graph.dataToggle')} {wa.dataEdges.length > 0 && <span className="count">{wa.dataEdges.length}</span>}
+          <span className="dot d-flow" /> {t('graph.dataToggle')} {wa.dataEdges.length > 0 && <span className="count">{wa.dataEdges.length}</span>}
         </Pill>
         <span className="spacer" />
         <span className="legend small muted">

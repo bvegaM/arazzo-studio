@@ -245,7 +245,7 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
           <strong>{c.title}</strong>
           {c.expectation.type === 'success' && <span className="badge b-ok">{t('cases.expectSuccess')}</span>}
           {c.expectation.type === 'failure' && <span className="badge b-err">{t('cases.expectFailure')}</span>}
-          <span className={`badge ${simulated ? 'b-accent' : 'b-info'}`}>{simulated ? t('common.simulated') : t('common.realApi')}</span>
+          <span className={`badge ${simulated ? 'b-sim' : 'b-info'}`}>{simulated ? t('common.simulated') : t('common.realApi')}</span>
           {custom > 0 && <span className="badge b-warn">{t('cases.changedParams', { n: custom })}</span>}
           <span className="spacer" />
           {c.scenario && (

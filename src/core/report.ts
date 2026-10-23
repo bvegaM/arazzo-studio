@@ -109,7 +109,7 @@ function stepHtml(s: StepResult, i: number): string {
     s.action || s.actionName ? `<div class="note action">↪ ${esc(s.action ?? t('report.action', { action: s.actionName ?? '', type: s.actionType ?? '' }))}</div>` : '',
   ].join('')
   const head = `<span class="num">${i + 1}</span><span class="badge ${STEP_CLASS[s.status]}">${t(`step.${s.status as StepStatus}`)}</span> <strong>${esc(s.stepId)}</strong> <code class="muted">${esc(s.label)}</code>${
-    s.simulated ? ` <span class="badge accent">${t('common.simulated')}</span>` : ''
+    s.simulated ? ` <span class="badge sim">${t('common.simulated')}</span>` : ''
   }<span class="grow"></span>${s.response ? `<span class="muted">HTTP ${s.response.status} · ${s.response.durationMs} ms</span>` : ''}`
   if (s.status === 'skipped') return `<div class="step skipped"><div class="step-head">${head}</div>${notes}</div>`
   return `<details class="step st-${STEP_CLASS[s.status]}"${s.status === 'failed' ? ' open' : ''}><summary class="step-head">${head}</summary>${notes}<div class="step-body">${parts.join('')}</div></details>`
@@ -167,7 +167,7 @@ ${
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${t('report.title')} · ${esc(p.arazzoTitle)}</title>
 <style>
-:root{--bg:#f6f7f9;--surface:#fff;--surface2:#f1f3f6;--border:#e1e5ea;--text:#171b21;--muted:#5f6873;--accent:#4f46e5;--accentSoft:#eef0ff;--ok:#157f3c;--okSoft:#e4f5ea;--warn:#9a6100;--warnSoft:#fdf2de;--err:#b42318;--errSoft:#fdeae8;--skip:#59636e;--skipSoft:#edf0f3;}
+:root{--bg:#f6f7f9;--surface:#fff;--surface2:#f1f3f6;--border:#e1e5ea;--text:#171b21;--muted:#5f6873;--accent:#3f7a24;--accentSoft:#eef6e7;--ok:#0e7a5a;--okSoft:#e2f4ee;--sim:#6d4fc2;--simSoft:#f1ecfb;--warn:#9a6100;--warnSoft:#fdf2de;--err:#b42318;--errSoft:#fdeae8;--skip:#59636e;--skipSoft:#edf0f3;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
 main{max-width:1100px;margin:0 auto;padding:32px 24px 60px}
@@ -185,7 +185,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .n.ok{color:var(--ok)}.n.err{color:var(--err)}.n.warn{color:var(--warn)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .badge{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:600;white-space:nowrap}
-.badge.ok{background:var(--okSoft);color:var(--ok)}.badge.err{background:var(--errSoft);color:var(--err)}.badge.warn{background:var(--warnSoft);color:var(--warn)}.badge.skip{background:var(--skipSoft);color:var(--skip)}.badge.accent{background:var(--accentSoft);color:var(--accent)}
+.badge.ok{background:var(--okSoft);color:var(--ok)}.badge.err{background:var(--errSoft);color:var(--err)}.badge.warn{background:var(--warnSoft);color:var(--warn)}.badge.skip{background:var(--skipSoft);color:var(--skip)}.badge.accent{background:var(--accentSoft);color:var(--accent)}.badge.sim{background:var(--simSoft);color:var(--sim)}
 tr.v-err td:first-child{box-shadow:inset 3px 0 var(--err)}tr.v-warn td:first-child{box-shadow:inset 3px 0 var(--warn)}tr.v-ok td:first-child{box-shadow:inset 3px 0 var(--ok)}
 .case{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;break-inside:avoid-page}
 .case-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}

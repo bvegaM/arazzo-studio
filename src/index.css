@@ -8,10 +8,19 @@
   --text: #171b21;
   --muted: #5f6873;
   --faint: #8a939d;
-  --accent: #4f46e5;
-  --accent-soft: #eef0ff;
-  --ok: #157f3c;
-  --ok-soft: #e4f5ea;
+  /* Verde de Arazzo (oscurecido para que el texto blanco encima cumpla contraste AA). */
+  --accent: #3f7a24;
+  --accent-soft: #eef6e7;
+  --on-accent: #ffffff;
+  /* Los dos verdes del logo de Arazzo, para la marca. */
+  --brand-a: #6ba543;
+  --brand-b: #93c83d;
+  /* "Pasó / listo": verde azulado, distinto del color principal. */
+  --ok: #0e7a5a;
+  --ok-soft: #e2f4ee;
+  /* Simulación y flujo de datos: violeta, para no confundirse con el verde. */
+  --sim: #6d4fc2;
+  --sim-soft: #f1ecfb;
   --warn: #9a6100;
   --warn-soft: #fdf2de;
   --err: #b42318;
@@ -43,10 +52,13 @@
     --text: #e7eaee;
     --muted: #9aa4af;
     --faint: #6f7883;
-    --accent: #8b85ff;
-    --accent-soft: #23224a;
-    --ok: #4cc27a;
-    --ok-soft: #15291d;
+    --accent: #93c83d;
+    --accent-soft: #1f2a14;
+    --on-accent: #0f1a07;
+    --ok: #3cc4a0;
+    --ok-soft: #10291f;
+    --sim: #b48cf2;
+    --sim-soft: #2a1f45;
     --warn: #e4a73c;
     --warn-soft: #30250f;
     --err: #f27066;
@@ -122,7 +134,7 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 button.primary:hover:not(:disabled) {
@@ -269,8 +281,9 @@ pre {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
   color: #fff;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.2);
   display: grid;
   place-items: center;
   font-size: 15px;
@@ -359,7 +372,7 @@ pre {
 }
 .nav-item.active .nav-num {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .nav-num.t-ok {
@@ -595,6 +608,10 @@ pre {
   background: var(--accent-soft);
   color: var(--accent);
 }
+.b-sim {
+  background: var(--sim-soft);
+  color: var(--sim);
+}
 .method {
   font-family: var(--mono);
   font-weight: 700;
@@ -752,6 +769,9 @@ pre {
 }
 .d-accent {
   background: var(--accent);
+}
+.d-flow {
+  background: var(--sim);
 }
 .callout {
   border-radius: var(--radius);
@@ -2305,7 +2325,7 @@ button.icon {
   background: var(--info);
 }
 .co-sim .status-dot {
-  background: var(--accent);
+  background: var(--sim);
 }
 .co-blocked {
   color: var(--warn);
@@ -2339,7 +2359,7 @@ button.icon {
   border-color: transparent;
 }
 .env-tab.active {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }

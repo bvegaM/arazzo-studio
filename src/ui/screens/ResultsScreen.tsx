@@ -120,7 +120,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
           <span className="label muted">{s.label}</span>
         )}
         <span className="spacer" />
-        {s.simulated && <span className="badge b-accent">{t('common.simulated')}</span>}
+        {s.simulated && <span className="badge b-sim">{t('common.simulated')}</span>}
         {s.attempts > 1 && <span className="badge b-info">{t('results.attempt', { n: s.attempts })}</span>}
         {s.response && (
           <span className="http muted small">
@@ -384,7 +384,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
                   <button key={r.tc.id} title={r.tc.title} className={`case-nav-item ${r === current ? 'active' : ''}`} onClick={() => select(r.tc.id)}>
                     <span className={`status-dot sd-${r.state === 'done' ? r.verdict : r.state}`} />
                     <span className="grow clamp-2">{r.tc.title}</span>
-                    {r.steps.some((s) => s.simulated) && <span className="badge b-accent tiny">{t('results.simShort')}</span>}
+                    {r.steps.some((s) => s.simulated) && <span className="badge b-sim tiny">{t('results.simShort')}</span>}
                   </button>
                 ))}
             </div>
