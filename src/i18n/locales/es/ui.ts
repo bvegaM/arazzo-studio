@@ -174,6 +174,8 @@ export const ui = {
   'cases.params.resetAll': 'Restablecer todo ({n})',
   'cases.params.notSent': 'No se envía en este caso',
   'cases.params.noDefault': '(sin valor por defecto)',
+  'cases.params.editFields': 'Editar campos',
+  'cases.params.closeFields': 'Cerrar campos',
   'cases.params.defaultIs': 'Por defecto: {value}',
   'cases.params.state.default': 'Por defecto',
   'cases.params.state.changed': 'Cambiado',

@@ -1760,34 +1760,63 @@ button.icon {
   display: flex;
   flex-direction: column;
 }
+.param-item {
+  border-bottom: 1px solid var(--border);
+}
+.param-item:last-child {
+  border-bottom: none;
+}
 .param-row {
   display: grid;
   grid-template-columns: minmax(130px, 200px) minmax(0, 1fr) 130px 150px;
   gap: 12px;
   align-items: center;
   padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.param-row:last-child {
-  border-bottom: none;
 }
 .param-row input,
 .param-row select {
   padding: 5px 8px;
   font-size: 13px;
 }
-.param-row.ps-default input,
-.param-row.ps-default select {
+.ps-default > .param-row input,
+.ps-default > .param-row select {
   color: var(--muted);
 }
-.param-row.ps-changed {
+.param-item.ps-changed {
   background: color-mix(in srgb, var(--warn-soft) 55%, transparent);
 }
-.param-row.ps-omitted {
+.param-item.ps-omitted {
   background: color-mix(in srgb, var(--err-soft) 45%, transparent);
 }
-.param-row.ps-locked {
+.param-item.ps-locked {
   background: color-mix(in srgb, var(--info-soft) 50%, transparent);
+}
+.param-struct {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.param-struct-summary {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-struct button {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+.param-tree {
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
 }
 .omitted-value {
   font-size: 13px;

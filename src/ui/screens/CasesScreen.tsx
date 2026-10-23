@@ -6,8 +6,10 @@ import type { ScenariosImport } from '../../core/scenariosFile'
 import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
 import { humanizeId } from '../../core/format'
+import { fieldKind, typeLabel, valueSummary } from '../../core/schemaForm'
 import { MethodBadge } from '../components/badges'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
+import { ObjectFields, SchemaField } from '../components/SchemaField'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
 
@@ -85,6 +87,7 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
   const props = Object.entries<any>(wa.inputsSchema.properties ?? {})
   const overrides = tc.inputOverrides ?? {}
   const omitted = tc.omitInputs ?? []
+  const [expanded, setExpanded] = useState<string>()
   const changedCount = Object.values(overrides).filter((v) => v !== undefined && v !== '').length + omitted.length
   const setOverride = (name: string, value: any) => {
     const next = { ...overrides }
@@ -127,66 +130,90 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
           const state = lockedOmit || lockedSet ? 'locked' : isOmitted ? 'omitted' : hasOverride ? 'changed' : 'default'
           const listId = schema?.enum ? `enum-${wa.workflow.workflowId}-${name}` : undefined
           const disabled = state === 'locked' || state === 'omitted'
+          const structured = ['object', 'array'].includes(fieldKind(schema))
+          const open = structured && expanded === name && !disabled
           return (
-            <div className={`param-row ps-${state}`} key={name}>
-              <div className="param-name">
-                <code>{name}</code>
-                {wa.requiredInputs.includes(name) && <span className="req"> *</span>}
-                <div className="muted tiny-text">{schema?.enum ? 'enum' : (type ?? 'any')}</div>
+            <div className={`param-item ps-${state} ${open ? 'open' : ''}`} key={name}>
+              <div className="param-row">
+                <div className="param-name">
+                  <code>{name}</code>
+                  {wa.requiredInputs.includes(name) && <span className="req"> *</span>}
+                  <div className="muted tiny-text" title={type}>{typeLabel(schema)}</div>
+                </div>
+                <div className="param-value">
+                  {lockedOmit || isOmitted ? (
+                    <div className="omitted-value">{t('cases.params.notSent')}</div>
+                  ) : structured ? (
+                    <div className="param-struct">
+                      <span className="param-struct-summary" title={show(value)}>
+                        {valueSummary(value) || <span className="muted">{t('cases.params.noDefault')}</span>}
+                      </span>
+                      {!disabled && (
+                        <button className="small" aria-expanded={open} onClick={() => setExpanded(open ? undefined : name)}>
+                          {open ? t('cases.params.closeFields') : t('cases.params.editFields')}
+                        </button>
+                      )}
+                    </div>
+                  ) : type === 'boolean' && !lockedSet ? (
+                    <select value={value === undefined ? '' : String(value)} onChange={(e) => setOverride(name, e.target.value === '' ? undefined : e.target.value === 'true')}>
+                      <option value="">{t('params.noValue')}</option>
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  ) : (
+                    <input
+                      list={listId}
+                      value={show(value)}
+                      disabled={disabled}
+                      placeholder={t('cases.params.noDefault')}
+                      onChange={(e) => setOverride(name, parseValue(e.target.value, schema))}
+                    />
+                  )}
+                  {listId && (
+                    <datalist id={listId}>
+                      {schema.enum.map((v: any) => (
+                        <option key={String(v)} value={String(v)} />
+                      ))}
+                    </datalist>
+                  )}
+                  {state === 'changed' && base[name] !== undefined && (
+                    <div className="muted tiny-text">
+                      {tn('cases.params.defaultIs', { value: <code>{structured ? valueSummary(base[name]) : show(base[name])}</code> })}
+                    </div>
+                  )}
+                </div>
+                <div className="param-state">
+                  {state === 'default' && <span className="badge b-skip">{t('cases.params.state.default')}</span>}
+                  {state === 'changed' && <span className="badge b-warn">{t('cases.params.state.changed')}</span>}
+                  {state === 'omitted' && <span className="badge b-err">{t('cases.params.state.omitted')}</span>}
+                  {state === 'locked' && <span className="badge b-info" title={t('cases.params.state.lockedTitle')}>{t('cases.params.state.locked')}</span>}
+                </div>
+                <div className="param-actions">
+                  {state !== 'locked' && (
+                    <>
+                      {(state === 'changed' || state === 'omitted') && (
+                        <button className="link small" onClick={() => reset(name)}>
+                          {t('cases.params.reset')}
+                        </button>
+                      )}
+                      {state !== 'omitted' && (
+                        <button className="link small muted-link" onClick={() => toggleOmit(name)}>
+                          {t('cases.params.omit')}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="param-value">
-                {lockedOmit || isOmitted ? (
-                  <div className="omitted-value">{t('cases.params.notSent')}</div>
-                ) : type === 'boolean' && !lockedSet ? (
-                  <select value={value === undefined ? '' : String(value)} onChange={(e) => setOverride(name, e.target.value === '' ? undefined : e.target.value === 'true')}>
-                    <option value="">{t('params.noValue')}</option>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
-                ) : (
-                  <input
-                    list={listId}
-                    value={show(value)}
-                    disabled={disabled}
-                    placeholder={t('cases.params.noDefault')}
-                    onChange={(e) => setOverride(name, parseValue(e.target.value, schema))}
-                  />
-                )}
-                {listId && (
-                  <datalist id={listId}>
-                    {schema.enum.map((v: any) => (
-                      <option key={String(v)} value={String(v)} />
-                    ))}
-                  </datalist>
-                )}
-                {state === 'changed' && base[name] !== undefined && (
-                  <div className="muted tiny-text">
-                    {tn('cases.params.defaultIs', { value: <code>{show(base[name])}</code> })}
-                  </div>
-                )}
-              </div>
-              <div className="param-state">
-                {state === 'default' && <span className="badge b-skip">{t('cases.params.state.default')}</span>}
-                {state === 'changed' && <span className="badge b-warn">{t('cases.params.state.changed')}</span>}
-                {state === 'omitted' && <span className="badge b-err">{t('cases.params.state.omitted')}</span>}
-                {state === 'locked' && <span className="badge b-info" title={t('cases.params.state.lockedTitle')}>{t('cases.params.state.locked')}</span>}
-              </div>
-              <div className="param-actions">
-                {state !== 'locked' && (
-                  <>
-                    {(state === 'changed' || state === 'omitted') && (
-                      <button className="link small" onClick={() => reset(name)}>
-                        {t('cases.params.reset')}
-                      </button>
-                    )}
-                    {state !== 'omitted' && (
-                      <button className="link small muted-link" onClick={() => toggleOmit(name)}>
-                        {t('cases.params.omit')}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
+              {open && (
+                <div className="param-tree">
+                  {fieldKind(schema) === 'object' ? (
+                    <ObjectFields schema={schema} value={value} onChange={(v) => setOverride(name, v)} />
+                  ) : (
+                    <SchemaField name={name} schema={schema} required={wa.requiredInputs.includes(name)} value={value} onChange={(v) => setOverride(name, v)} depth={1} />
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

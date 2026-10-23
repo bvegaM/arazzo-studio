@@ -175,6 +175,8 @@ export const ui: Record<keyof typeof es, string> = {
   'cases.params.resetAll': 'Reset all ({n})',
   'cases.params.notSent': 'Not sent in this case',
   'cases.params.noDefault': '(no default value)',
+  'cases.params.editFields': 'Edit fields',
+  'cases.params.closeFields': 'Close fields',
   'cases.params.defaultIs': 'Default: {value}',
   'cases.params.state.default': 'Default',
   'cases.params.state.changed': 'Changed',
