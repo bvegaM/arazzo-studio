@@ -1,5 +1,7 @@
 # Arazzo Studio
 
+[English](README.md) · **Español**
+
 Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/arazzo/latest.html) contra APIs reales. Todo corre en el navegador: los contratos, las credenciales y las respuestas no salen de tu máquina.
 
 ## Flujo
@@ -14,7 +16,7 @@ Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/
    - Parámetros por caso: todos los casos parten de los **valores por defecto** del paso 3 y en cada caso puedes cambiar u omitir cualquier valor. Los escenarios por respuesta se pueden pasar a "API real" dándoles los datos que provocan esa respuesta, y puedes crear casos nuevos con datos propios y una expectativa (status, `code` del body y/o acción del Arazzo). Solo se ejecutan los casos que se pueden cumplir con sus datos.
    - Generadores para que los casos se puedan repetir: `{{email}}`, `{{cpf}}`, `{{rut}}`, `{{uuid}}`, `{{numero:8}}`, `{{fecha}}`, `{{timestamp}}`.
    - **Importar / exportar escenarios** en YAML (bases por workflow + datos de cada caso) para versionarlos junto al Arazzo.
-5. **Resultados**: entrada y salida de cada petición (con **Copiar como cURL** para reproducirla; los secretos quedan como `<secret>` salvo que elijas copiarlos), criterios evaluados (esperado contra obtenido), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
+5. **Resultados**: entrada y salida de cada petición (con **Copiar como cURL** para reproducirla; los secretos quedan como `<secret>` salvo que elijas copiarlos), criterios evaluados con una comparación campo a campo de lo esperado contra lo recibido (y el campo resaltado en la respuesta), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. Mientras corre, se ve el caso actual, el progreso por resultado y el tiempo restante. Si la API no responde, un panel guía qué revisar (URL, https/http, CORS) con los headers CORS exactos que hacen falta. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
 
 ## Sesión guardada
 
@@ -28,6 +30,8 @@ Para agregar un texto: añade la clave en `src/i18n/locales/es/` y su traducció
 
 ## Uso local
 
+Requiere **Node.js 20.19+ o 22.12+** (lo pide Vite 8).
+
 ```bash
 npm install
 npm run dev          # http://localhost:5173
@@ -40,7 +44,7 @@ npm run mock         # API de tarjetas en http://localhost:4010
 npm run mock:bug     # misma API, pero con errores de contrato a propósito
 ```
 
-En la app, pulsa **Cargar ejemplo de tarjetas**, usa cualquier token como credencial y `4321` como `last4Digits`.
+En la app, pulsa **Probar con el ejemplo de tarjetas**, usa cualquier token como credencial y `4321` como `last4Digits`.
 
 ### Tests
 
@@ -99,3 +103,7 @@ Reglas de dependencia: `ui` y `app` usan `core`; `core` no importa nada de `ui`,
 La ejecución HTTP está detrás de `HttpExecutor` (`src/core/http.ts`). Hay dos implementaciones: `fetch` (API real) y el simulador (`src/core/simulator.ts`).
 
 `npm run typecheck` verifica tipos de la app, la config y los tests.
+
+## Licencia
+
+[MIT](LICENSE) © bvegam
