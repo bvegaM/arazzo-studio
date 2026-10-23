@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
-import type { ParsedFile, Project } from '../core/loader'
-import { isRemote } from '../core/loader'
-import { ActionBar, PageHeader, Section } from './kit'
+import type { ParsedFile, Project } from '../../core/loader'
+import { isRemote } from '../../core/loader'
+import { ActionBar, PageHeader, Section } from '../components/kit'
 
 interface Props {
   files: ParsedFile[]

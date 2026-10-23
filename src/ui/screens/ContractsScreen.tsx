@@ -1,7 +1,7 @@
-import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../core/analyze'
-import { IssueBadge, MethodBadge } from './common'
-import { ActionBar, Metric, MoreText, PageHeader, Section } from './kit'
-import { WorkflowGraph } from './WorkflowGraph'
+import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
+import { IssueBadge, MethodBadge } from '../components/badges'
+import { ActionBar, Metric, MoreText, PageHeader, Section } from '../components/kit'
+import { WorkflowGraph } from '../components/WorkflowGraph'
 
 interface Props {
   analysis: ProjectAnalysis

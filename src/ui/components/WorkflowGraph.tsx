@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { Issue, ResolvedStep, WorkflowAnalysis } from '../core/analyze'
-import { MethodBadge } from './common'
-import { requirementsFromCriteria, statusesInCriteria } from '../core/criteria'
-import type { Action } from '../core/types'
+import type { Issue, ResolvedStep, WorkflowAnalysis } from '../../core/analyze'
+import { MethodBadge } from './badges'
+import { requirementsFromCriteria, statusesInCriteria } from '../../core/criteria'
+import type { Action } from '../../core/types'
 import { Pill } from './kit'
 
 type StepNodeData = { rs: ResolvedStep; index: number; issues: Issue[] }

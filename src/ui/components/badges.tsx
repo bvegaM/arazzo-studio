@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { IssueLevel } from '../core/analyze'
-import type { StepStatus } from '../core/runner'
-import { VERDICT_LABEL, type Verdict } from '../core/testcases'
+import type { IssueLevel } from '../../core/analyze'
+import type { StepStatus } from '../../core/runner'
+import { VERDICT_LABEL, type Verdict } from '../../core/testcases'
 
 export function MethodBadge({ method }: { method: string }) {
   const m = method.toLowerCase()

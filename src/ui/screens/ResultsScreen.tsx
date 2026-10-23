@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
-import { REASON_LABEL, type StepResult } from '../core/runner'
-import { dataSummary, type CaseRun, type Verdict } from '../core/testcases'
-import { maskDeep } from '../core/report'
-import { Json, MethodBadge, StatusBadge, VerdictBadge } from './common'
-import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from './kit'
+import { REASON_LABEL, type StepResult } from '../../core/runner'
+import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
+import { maskDeep } from '../../core/report'
+import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
+import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
 
 interface Props {
   runs: CaseRun[]

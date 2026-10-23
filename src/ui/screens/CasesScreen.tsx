@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react'
-import type { ProjectAnalysis, WorkflowAnalysis } from '../core/analyze'
-import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, type TestCase } from '../core/testcases'
-import type { ScenariosImport } from '../core/scenariosFile'
-import { TEMPLATE_HELP } from '../core/templates'
-import { statusesInCriteria } from '../core/criteria'
-import { MethodBadge } from './common'
-import { ActionBar, Chevron, PageHeader, Section, Segmented } from './kit'
+import type { ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
+import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, type TestCase } from '../../core/testcases'
+import type { ScenariosImport } from '../../core/scenariosFile'
+import { TEMPLATE_HELP } from '../../core/templates'
+import { statusesInCriteria } from '../../core/criteria'
+import { MethodBadge } from '../components/badges'
+import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
 
-export type { RunMode }
 
 interface Props {
   analysis: ProjectAnalysis

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react'
-import type { ProjectAnalysis } from '../core/analyze'
-import type { Project } from '../core/loader'
-import type { SecurityScheme } from '../core/openapi'
-import { ActionBar, PageHeader, Section } from './kit'
+import type { ProjectAnalysis } from '../../core/analyze'
+import type { Project } from '../../core/loader'
+import type { SecurityScheme } from '../../core/openapi'
+import { ActionBar, PageHeader, Section } from '../components/kit'
 
 interface Props {
   project: Project
