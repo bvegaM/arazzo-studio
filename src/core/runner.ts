@@ -30,6 +30,8 @@ export function reasonLabel(category: ReasonCategory): string {
 export interface Reason {
   category: ReasonCategory
   message: string
+  /** Detalle de las fallas de red, para poder dar ayuda específica. */
+  code?: 'network' | 'no-server' | 'cancelled'
 }
 
 export interface StepResult {
@@ -260,6 +262,7 @@ async function executeOperationStep(
   if (!server) {
     result.reason = {
       category: 'red',
+      code: 'no-server',
       message: t('run.noServer', { source: op.sourceName }),
     }
     return result
@@ -274,8 +277,10 @@ async function executeOperationStep(
       path: op.path,
     })
   } catch (e) {
+    const cancelled = opts.signal?.aborted
     result.reason = {
       category: 'red',
+      code: e instanceof NetworkError ? (cancelled ? 'cancelled' : 'network') : undefined,
       message: e instanceof NetworkError ? e.message : t('run.unexpected', { error: (e as Error).message }),
     }
     return result
@@ -405,7 +410,7 @@ export async function runWorkflow(
   while (i < wa.steps.length) {
     if (opts.signal?.aborted) {
       status = 'failed'
-      failure = { category: 'red', message: t('run.cancelled') }
+      failure = { category: 'red', code: 'cancelled', message: t('run.cancelled') }
       break
     }
     if (++executions > MAX_EXECUTIONS) {

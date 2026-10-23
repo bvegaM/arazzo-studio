@@ -211,6 +211,7 @@ describe('ejecución contra el mock', () => {
       inputs: { cardId: 'CARD-1000' },
     })
     expect(run.steps[0].reason?.category).toBe('red')
+    expect(run.steps[0].reason?.code).toBe('network')
   })
 })
 
