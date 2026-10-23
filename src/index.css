@@ -1651,6 +1651,96 @@ td code {
   border-radius: 8px;
   padding: 7px 10px;
 }
+/* Ayuda de conexión / CORS */
+.conn-help {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+}
+.conn-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.conn-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.conn-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.conn-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--warn);
+}
+.conn-steps {
+  margin: 14px 0 0;
+  padding-left: 46px;
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+}
+.conn-steps li {
+  display: grid;
+  gap: 3px;
+}
+.conn-steps li::marker {
+  font-weight: 700;
+  color: var(--warn);
+}
+.conn-steps li > span {
+  color: var(--muted);
+}
+.conn-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.conn-links a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.conn-code {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+}
+.conn-code pre {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  font-size: 12px;
+}
+.conn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding-left: 46px;
+}
+@media (max-width: 600px) {
+  .conn-steps,
+  .conn-actions {
+    padding-left: 18px;
+  }
+  .conn-code {
+    flex-direction: column;
+  }
+}
+
 /* Comparación esperado / recibido */
 .note-diff {
   display: grid;

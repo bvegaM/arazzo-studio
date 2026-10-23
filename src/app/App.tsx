@@ -78,7 +78,7 @@ export default function App() {
               confirmed={studio.confirmed}
               setConfirmed={studio.setConfirmed}
               running={studio.running}
-              onRun={studio.runAll}
+              onRun={() => studio.runAll()}
               onBack={() => goTo(Screen.Params)}
             />
           )}
@@ -87,7 +87,9 @@ export default function App() {
               runs={studio.runs}
               running={studio.running}
               onCancel={studio.cancelRun}
-              onRerun={studio.runAll}
+              onRerun={() => studio.runAll()}
+              onRunSimulated={() => studio.runAll('simulado')}
+              onEditEnvironment={() => goTo(Screen.Params)}
               onExport={studio.exportReport}
               onBack={() => goTo(Screen.Cases)}
             />

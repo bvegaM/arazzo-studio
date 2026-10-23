@@ -9,12 +9,16 @@ import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../co
 import { t } from '../../i18n'
 import { copyText } from '../../lib/browser'
 import { JsonView, MismatchList } from '../components/Diff'
+import { ConnectionHelp } from '../components/ConnectionHelp'
 
 interface Props {
   runs: CaseRun[]
   running: boolean
   onCancel: () => void
   onRerun: () => void
+  /** Reintenta todo en simulación (salida rápida cuando la API no responde). */
+  onRunSimulated: () => void
+  onEditEnvironment: () => void
   onExport: (format: 'html' | 'json') => void
   onBack: () => void
 }
@@ -247,7 +251,10 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
   )
 }
 
-export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBack }: Props) {
+export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport, onBack }: Props) {
+  // Pasos que no llegaron a la API (servidor caído, URL errónea o CORS).
+  const unreachable = runs.flatMap((r) => r.steps.filter((s) => s.reason?.code === 'network' && s.request).map((s) => s.request!))
+  const unreachableCases = runs.filter((r) => r.steps.some((s) => s.reason?.code === 'network')).length
   const [selectedId, setSelectedId] = useState<string>()
   const [filter, setFilter] = useState<Filter>('all')
   // En pantallas angostas los grupos empiezan plegados para no empujar el detalle hacia abajo.
@@ -312,6 +319,8 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
           <div style={{ width: `${(done.length / runs.length) * 100}%` }} />
         </div>
       )}
+
+      <ConnectionHelp requests={unreachable} caseCount={unreachableCases} onSimulate={onRunSimulated} onEditEnvironment={onEditEnvironment} />
 
       <div className="results-layout">
         <aside className="case-nav">

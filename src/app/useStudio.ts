@@ -256,9 +256,11 @@ export function useStudio() {
     goTo(Screen.Load)
   }
 
-  async function runAll() {
+  /** Ejecuta los casos elegidos; con `runMode` se fuerza un modo (ej. reintentar en simulación). */
+  async function runAll(runMode: RunMode = mode) {
     if (!project || !analysis) return
-    const selectedCases = testCases.filter((c) => c.enabled && runnability(c, mode).ok)
+    if (runMode !== mode) setMode(runMode)
+    const selectedCases = testCases.filter((c) => c.enabled && runnability(c, runMode).ok)
     setRuns(selectedCases.map((tc) => ({ tc, state: 'pending', steps: [] })))
     goTo(Screen.Results)
     setRunEnv({ name: activeEnv.name, servers })
@@ -273,7 +275,7 @@ export function useStudio() {
       update({ state: 'running' })
       const live: CaseRun['steps'] = []
       const wf = project.arazzo.workflows.find((w) => w.workflowId === tc.workflowId)
-      const simulate = isSimulated(tc, mode)
+      const simulate = isSimulated(tc, runMode)
       const inputsUsed = applyCaseInputs(tc, inputs[tc.workflowId] ?? {})
       update({ inputsUsed, simulated: simulate })
       const result = await runWorkflow(project, analysis, tc.workflowId, {
