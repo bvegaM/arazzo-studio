@@ -141,10 +141,10 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
                     <td className="muted">{r.description}</td>
                     <td>
                       {r.kind === 'sin-manejo' ? (
-                        <span className="badge b-err">❌ {t('contracts.unhandled')}</span>
+                        <span className="badge b-err">✕ {t('contracts.unhandled')}</span>
                       ) : (
                         <span className="badge b-ok wrap">
-                          ✅ {r.kind === 'exito' ? t('contracts.success') : t('contracts.action')}: {r.handledBy.join(', ')}
+                          ✓ {r.kind === 'exito' ? t('contracts.success') : t('contracts.action')}: {r.handledBy.join(', ')}
                         </span>
                       )}
                     </td>
@@ -208,7 +208,7 @@ function IssuesSection({ title, issues, defaultOpen }: { title: string; issues: 
       defaultOpen={defaultOpen ?? (errs > 0 || warns > 0)}
       badges={
         issues.length === 0 ? (
-          <span className="badge b-ok">✅ {t('contracts.noIssues')}</span>
+          <span className="badge b-ok">✓ {t('contracts.noIssues')}</span>
         ) : (
           <>
             {errs > 0 && <span className="badge b-err">{t('nav.errors', { n: errs })}</span>}

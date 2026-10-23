@@ -10,10 +10,10 @@ export function MethodBadge({ method }: { method: string }) {
 }
 
 const STATUS: Record<StepStatus, { cls: string; icon: string }> = {
-  success: { cls: 'b-ok', icon: '✅' },
-  warning: { cls: 'b-warn', icon: '⚠️' },
-  failed: { cls: 'b-err', icon: '❌' },
-  skipped: { cls: 'b-skip', icon: '⏭️' },
+  success: { cls: 'b-ok', icon: '✓' },
+  warning: { cls: 'b-warn', icon: '⚠' },
+  failed: { cls: 'b-err', icon: '✕' },
+  skipped: { cls: 'b-skip', icon: '↷' },
 }
 
 export function StatusBadge({ status }: { status: StepStatus }) {
@@ -21,7 +21,7 @@ export function StatusBadge({ status }: { status: StepStatus }) {
 }
 
 const VERDICT_CLS: Record<Verdict, string> = { passed: 'b-ok', failed: 'b-err', inconclusive: 'b-warn' }
-const VERDICT_ICON: Record<Verdict, string> = { passed: '✅', failed: '❌', inconclusive: '❔' }
+const VERDICT_ICON: Record<Verdict, string> = { passed: '✓', failed: '✕', inconclusive: '?' }
 
 export function VerdictBadge({ verdict }: { verdict: Verdict }) {
   return (

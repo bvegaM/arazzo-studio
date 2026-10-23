@@ -95,7 +95,7 @@ export function ParamsScreen(p: Props) {
             {missingRequired.length ? (
               <span className="badge b-err">{t('params.missingRequired', { n: missingRequired.length })}</span>
             ) : (
-              <span className="badge b-ok">✅ {t('params.requiredComplete')}</span>
+              <span className="badge b-ok">✓ {t('params.requiredComplete')}</span>
             )}
             {invalid.length > 0 && <span className="badge b-warn">{t('params.invalidN', { n: invalid.length })}</span>}
           </>

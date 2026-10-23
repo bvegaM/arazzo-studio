@@ -89,7 +89,7 @@ function EndNode({ data }: NodeProps<Node<EndNodeData>>) {
   return (
     <div className="end-node">
       <Handle type="target" position={Position.Top} id="top" />
-      <strong>✅ {t('graph.end')}</strong>
+      <strong>✓ {t('graph.end')}</strong>
       {data.outputs.length > 0 && <div className="meta">{t('graph.outputs', { outputs: data.outputs.join(', ') })}</div>}
     </div>
   )
