@@ -1581,6 +1581,19 @@ td code {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-head .label + .spacer {
+  display: none;
+}
+@media (min-width: 601px) {
+  .step-head {
+    flex-wrap: nowrap;
+  }
 }
 .step-head .http .ok {
   color: var(--ok);
@@ -1688,7 +1701,7 @@ td code {
     padding: 12px 16px;
   }
   .results-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .case-nav {
     position: static;
@@ -1716,11 +1729,28 @@ td code {
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .filters .pill {
-  justify-content: center;
-  padding: 5px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+.filters .pill .grow {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filters .pill .count {
+  font-variant-numeric: tabular-nums;
+}
+.filters .pill .status-dot {
+  flex-shrink: 0;
 }
 .more-text {
   margin: 0 0 12px;

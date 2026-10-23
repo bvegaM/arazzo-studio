@@ -80,7 +80,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
         )}
         <span className="spacer" />
         {s.simulated && <span className="badge b-accent">{t('common.simulated')}</span>}
-        {s.attempts > 1 && <span className="badge b-info">Intento {s.attempts}</span>}
+        {s.attempts > 1 && <span className="badge b-info">{t('results.attempt', { n: s.attempts })}</span>}
         {s.response && (
           <span className="http muted small">
             <strong className={s.response.status < 400 ? 'ok' : 'err'}>{s.response.status}</strong> · {s.response.durationMs} ms
@@ -131,7 +131,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                           <code>{c.context ? `${c.context} ~ ${c.condition}` : c.condition}</code>
                           {c.type !== 'simple' && <span className="muted small"> ({c.type})</span>}
                         </td>
-                        <td>{c.passed ? <span className="badge b-ok">✅ {t('crit.badge.passed')}</span> : <span className="badge b-err">❌ {t('crit.badge.failed')}</span>}</td>
+                        <td>{c.passed ? <span className="badge b-ok">✓ {t('crit.badge.passed')}</span> : <span className="badge b-err">✕ {t('crit.badge.failed')}</span>}</td>
                         <td>{c.detail}</td>
                       </tr>
                     ))}
@@ -177,7 +177,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
               (!s.response ? (
                 <Empty>{t('results.nothingToValidate')}</Empty>
               ) : s.contractIssues.length === 0 ? (
-                <span className="badge b-ok">✅ {t('report.contractOk')}</span>
+                <span className="badge b-ok">✓ {t('report.contractOk')}</span>
               ) : (
                 <ul className="issues">
                   {s.contractIssues.map((c, i) => (
@@ -304,17 +304,14 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
         <aside className="case-nav">
           <div className="filters">
             <Pill active={filter === 'all'} onClick={() => setFilter('all')}>
-              {t('cases.all')} <span className="count">{runs.length}</span>
+              <span className="grow">{t('cases.all')}</span> <span className="count">{runs.length}</span>
             </Pill>
-            <Pill active={filter === 'failed'} onClick={() => setFilter('failed')}>
-              ❌ <span className="count">{count('failed')}</span>
-            </Pill>
-            <Pill active={filter === 'inconclusive'} onClick={() => setFilter('inconclusive')}>
-              ❔ <span className="count">{count('inconclusive')}</span>
-            </Pill>
-            <Pill active={filter === 'passed'} onClick={() => setFilter('passed')}>
-              ✅ <span className="count">{count('passed')}</span>
-            </Pill>
+            {(['failed', 'inconclusive', 'passed'] as const).map((v) => (
+              <Pill key={v} active={filter === v} onClick={() => setFilter(v)}>
+                <span className={`status-dot sd-${v}`} aria-hidden="true" />
+                <span className="grow">{t(`results.filter.${v}`)}</span> <span className="count">{count(v)}</span>
+              </Pill>
+            ))}
           </div>
           {groups.length === 0 && <Empty>{t('results.noMatches')}</Empty>}
           {groups.map(([wf, list]) => (
@@ -330,7 +327,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
                 list.map((r) => (
                   <button key={r.tc.id} title={r.tc.title} className={`case-nav-item ${r === current ? 'active' : ''}`} onClick={() => select(r.tc.id)}>
                     <span className={`status-dot sd-${r.state === 'done' ? r.verdict : r.state}`} />
-                    <span className="grow clamp">{r.tc.title}</span>
+                    <span className="grow clamp-2">{r.tc.title}</span>
                     {r.steps.some((s) => s.simulated) && <span className="badge b-accent tiny">{t('results.simShort')}</span>}
                   </button>
                 ))}
@@ -346,7 +343,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
                 {current.verdict ? (
                   <VerdictBadge verdict={current.verdict} />
                 ) : (
-                  <span className="badge b-skip">{current.state === 'running' ? `⏳ ${t('results.runningState')}` : t('results.pendingState')}</span>
+                  <span className="badge b-skip">{current.state === 'running' ? `⋯ ${t('results.runningState')}` : t('results.pendingState')}</span>
                 )}
               </div>
               <div className="kv">
