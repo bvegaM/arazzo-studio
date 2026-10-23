@@ -11,6 +11,8 @@ export interface ReportParams {
   arazzoTitle: string
   arazzoFile?: string
   generatedAt: Date
+  /** Nombre del ambiente contra el que se corrió (DEV, QA…). */
+  environment?: string
   servers: Record<string, string>
   cases: ReportCase[]
 }
@@ -201,7 +203,7 @@ footer{margin-top:30px;font-size:12px;color:var(--muted)}
 <div class="card"><div class="n ${count('inconclusive') ? 'warn' : ''}">${count('inconclusive')}</div><div class="l">${t('report.inconclusive')}</div></div>
 <div class="card"><div class="n">${runs.filter((r) => r.simulated).length}</div><div class="l">${t('report.simulated')}</div></div>
 </div>
-<h2>${t('report.environment')}</h2>
+<h2>${t('report.environment')}${p.environment ? `: ${esc(p.environment)}` : ''}</h2>
 <div class="panel"><table><tr><th>${t('report.source')}</th><th>${t('report.baseUrl')}</th></tr>${Object.entries(p.servers)
     .map(([k, v]) => `<tr><td><code>${esc(k)}</code></td><td><code>${esc(v || '—')}</code></td></tr>`)
     .join('')}</table></div>
@@ -222,6 +224,7 @@ export function buildJsonReport(p: ReportParams & { info?: unknown }): string {
     generadoEl: p.generatedAt.toISOString(),
     arazzo: p.info,
     ambiente: p.servers,
+    ambienteNombre: p.environment,
     casos: p.cases.map((r) => ({
       id: r.tc.id,
       titulo: r.tc.title,
