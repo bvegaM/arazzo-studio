@@ -217,6 +217,7 @@ export const core: Record<keyof typeof es, string> = {
   'scen.noCase': '{where}: case "{id}" does not exist. The Arazzo may have changed.',
   'scen.noStep': '{where}: "espera.paso" is missing.',
   'scen.caseN': 'Case {n}',
+  'scen.summary': '{bases} base(s), {created} new case(s), {updated} updated case(s).',
 
   'tpl.email': 'unique email',
   'tpl.cpf': 'valid CPF',

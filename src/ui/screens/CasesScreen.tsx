@@ -7,7 +7,8 @@ import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
 import { MethodBadge } from '../components/badges'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
-
+import { t } from '../../i18n'
+import { tn } from '../../i18n/react'
 
 interface Props {
   analysis: ProjectAnalysis
@@ -49,7 +50,7 @@ function TriCheckbox({ list, setMany }: { list: TestCase[]; setMany: Props['setM
       checked={on === list.length && list.length > 0}
       onChange={(e) => setMany(list.map((c) => c.id), e.target.checked)}
       onClick={(e) => e.stopPropagation()}
-      title="Seleccionar todos"
+      title={t('cases.selectAll')}
     />
   )
 }
@@ -104,13 +105,13 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
   return (
     <div className="case-params">
       <div className="case-params-head">
-        <strong>Parámetros de este caso</strong>
+        <strong>{t('cases.params.title')}</strong>
         <span className="muted small grow">
-          Empiezan con los valores por defecto del paso 3. Lo que cambies aquí solo aplica a este caso.
+          {t('cases.params.hint')}
         </span>
         {changedCount > 0 && (
           <button className="link small" onClick={() => onChange({ inputOverrides: {}, omitInputs: undefined })}>
-            Restablecer todo ({changedCount})
+            {t('cases.params.resetAll', { n: changedCount })}
           </button>
         )}
       </div>
@@ -134,10 +135,10 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
               </div>
               <div className="param-value">
                 {lockedOmit || isOmitted ? (
-                  <div className="omitted-value">No se envía en este caso</div>
+                  <div className="omitted-value">{t('cases.params.notSent')}</div>
                 ) : type === 'boolean' && !lockedSet ? (
                   <select value={value === undefined ? '' : String(value)} onChange={(e) => setOverride(name, e.target.value === '' ? undefined : e.target.value === 'true')}>
-                    <option value="">(sin valor)</option>
+                    <option value="">{t('params.noValue')}</option>
                     <option value="true">true</option>
                     <option value="false">false</option>
                   </select>
@@ -146,7 +147,7 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
                     list={listId}
                     value={show(value)}
                     disabled={disabled}
-                    placeholder="(sin valor por defecto)"
+                    placeholder={t('cases.params.noDefault')}
                     onChange={(e) => setOverride(name, parseValue(e.target.value, schema))}
                   />
                 )}
@@ -159,27 +160,27 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
                 )}
                 {state === 'changed' && base[name] !== undefined && (
                   <div className="muted tiny-text">
-                    Por defecto: <code>{show(base[name])}</code>
+                    {tn('cases.params.defaultIs', { value: <code>{show(base[name])}</code> })}
                   </div>
                 )}
               </div>
               <div className="param-state">
-                {state === 'default' && <span className="badge b-skip">Por defecto</span>}
-                {state === 'changed' && <span className="badge b-warn">Cambiado</span>}
-                {state === 'omitted' && <span className="badge b-err">Omitido</span>}
-                {state === 'locked' && <span className="badge b-info" title="Este valor es lo que prueba el caso">Lo define el caso</span>}
+                {state === 'default' && <span className="badge b-skip">{t('cases.params.state.default')}</span>}
+                {state === 'changed' && <span className="badge b-warn">{t('cases.params.state.changed')}</span>}
+                {state === 'omitted' && <span className="badge b-err">{t('cases.params.state.omitted')}</span>}
+                {state === 'locked' && <span className="badge b-info" title={t('cases.params.state.lockedTitle')}>{t('cases.params.state.locked')}</span>}
               </div>
               <div className="param-actions">
                 {state !== 'locked' && (
                   <>
                     {(state === 'changed' || state === 'omitted') && (
                       <button className="link small" onClick={() => reset(name)}>
-                        Restablecer
+                        {t('cases.params.reset')}
                       </button>
                     )}
                     {state !== 'omitted' && (
                       <button className="link small muted-link" onClick={() => toggleOmit(name)}>
-                        Omitir
+                        {t('cases.params.omit')}
                       </button>
                     )}
                   </>
@@ -190,10 +191,10 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
         })}
       </div>
       <div className="muted small template-help">
-        Generadores (un valor nuevo en cada corrida):{' '}
-        {templateHelp().map((t) => (
-          <span key={t.token} title={t.description}>
-            <code>{t.token}</code>{' '}
+        {t('cases.params.generators')}{' '}
+        {templateHelp().map((g) => (
+          <span key={g.token} title={g.description}>
+            <code>{g.token}</code>{' '}
           </span>
         ))}
       </div>
@@ -212,16 +213,16 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
       <div className="body">
         <div className="row">
           <strong>{c.title}</strong>
-          {c.expectation.type === 'success' && <span className="badge b-ok">Se espera éxito</span>}
-          {c.expectation.type === 'failure' && <span className="badge b-err">Se espera rechazo</span>}
-          <span className={`badge ${simulated ? 'b-accent' : 'b-info'}`}>{simulated ? 'Simulado' : 'API real'}</span>
-          {custom > 0 && <span className="badge b-warn">{custom} parámetro(s) cambiado(s)</span>}
+          {c.expectation.type === 'success' && <span className="badge b-ok">{t('cases.expectSuccess')}</span>}
+          {c.expectation.type === 'failure' && <span className="badge b-err">{t('cases.expectFailure')}</span>}
+          <span className={`badge ${simulated ? 'b-accent' : 'b-info'}`}>{simulated ? t('common.simulated') : t('common.realApi')}</span>
+          {custom > 0 && <span className="badge b-warn">{t('cases.changedParams', { n: custom })}</span>}
           <span className="spacer" />
           {c.scenario && (
             <Segmented
               options={[
-                { id: 'simulado', label: 'Simulado' },
-                { id: 'real', label: 'API real' },
+                { id: 'simulado', label: t('common.simulated') },
+                { id: 'real', label: t('common.realApi') },
               ]}
               value={c.dataMode ?? 'simulado'}
               onChange={(m) => {
@@ -231,19 +232,19 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
             />
           )}
           <button className="small" onClick={() => setEditing(!editing)}>
-            {editing ? 'Cerrar parámetros' : 'Parámetros'}
+            {editing ? t('cases.closeParams') : t('report.params')}
           </button>
           {c.origin === 'datos' && (
-            <button className="small danger" onClick={() => ctx.removeCase(c.id)} title="Eliminar caso">
-              Eliminar
+            <button className="small danger" onClick={() => ctx.removeCase(c.id)} title={t('cases.deleteTitle')}>
+              {t('cases.delete')}
             </button>
           )}
         </div>
         <div className="muted small">{c.expectation.text}</div>
         <div className="small data-line">
-          <span className="muted">Parámetros:</span> <code>{dataSummary(c)}</code>
+          <span className="muted">{t('report.params')}:</span> <code>{dataSummary(c)}</code>
         </div>
-        {!run.ok && <div className="small blocked-reason">⚠ No se ejecutará: {run.reason}</div>}
+        {!run.ok && <div className="small blocked-reason">⚠ {t('cases.wontRun', { reason: run.reason })}</div>}
         {editing && <CaseParams wa={ctx.wa} base={ctx.base} tc={c} onChange={(patch) => ctx.updateCase(c.id, patch)} />}
       </div>
     </div>
@@ -262,9 +263,9 @@ function CaseGroup({ title, hint, list, defaultOpen, ctx, extra }: { title: stri
         <Chevron open={open} />
         <strong>{title}</strong>
         <span className="badge b-skip">
-          {ready}/{list.length} listos
+          {t('cases.readyOf', { ready, total: list.length })}
         </span>
-        {blocked > 0 && <span className="badge b-warn">{blocked} sin poder ejecutarse</span>}
+        {blocked > 0 && <span className="badge b-warn">{t('cases.blocked', { n: blocked })}</span>}
         <span className="muted small grow">{hint}</span>
       </div>
       {open && (
@@ -311,13 +312,13 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
       <div className="field-grid">
         <div className="field">
           <label>
-            <span>Nombre del caso</span>
+            <span>{t('cases.new.name')}</span>
           </label>
-          <input value={title} placeholder="Ej.: Cuenta ya existente" onChange={(e) => setTitle(e.target.value)} />
+          <input value={title} placeholder={t('cases.new.namePlaceholder')} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="field">
           <label>
-            <span>Paso que se verifica</span>
+            <span>{t('cases.new.step')}</span>
           </label>
           <select value={stepId} onChange={(e) => setStepId(e.target.value)}>
             {opSteps.map((s) => (
@@ -329,10 +330,10 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
         </div>
         <div className="field">
           <label>
-            <span>Acción esperada (opcional)</span>
+            <span>{t('cases.new.action')}</span>
           </label>
           <select value={actionName} onChange={(e) => pickAction(e.target.value)}>
-            <option value="">(ninguna)</option>
+            <option value="">{t('cases.new.none')}</option>
             {actions.map((a) => (
               <option key={a.name} value={a.name}>
                 {a.name} ({a.type})
@@ -342,24 +343,24 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
         </div>
         <div className="field">
           <label>
-            <span>Status esperado</span>
-            <span className="type">documentados: {documented.join(', ') || '—'}</span>
+            <span>{t('cases.new.status')}</span>
+            <span className="type">{t('cases.new.documented', { statuses: documented.join(', ') || '—' })}</span>
           </label>
-          <input value={statuses} placeholder="Ej.: 200 o 200, 201" onChange={(e) => setStatuses(e.target.value)} />
+          <input value={statuses} placeholder={t('cases.new.statusPlaceholder')} onChange={(e) => setStatuses(e.target.value)} />
         </div>
         <div className="field">
           <label>
-            <span>Code esperado en el body (opcional)</span>
+            <span>{t('cases.new.code')}</span>
           </label>
-          <input value={code} placeholder="Ej.: ACCOUNT_ALREADY_EXISTS" onChange={(e) => setCode(e.target.value)} />
+          <input value={code} placeholder={t('cases.new.codePlaceholder')} onChange={(e) => setCode(e.target.value)} />
         </div>
       </div>
       <div className="sub-head" style={{ marginTop: 14 }}>
-        Parámetros del caso
+        {t('cases.new.params')}
       </div>
       <CaseParams wa={wa} base={base} tc={params} onChange={setParams} />
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-        <button onClick={onCancel}>Cancelar</button>
+        <button onClick={onCancel}>{t('common.cancel')}</button>
         <button
           className="primary"
           disabled={!valid}
@@ -378,7 +379,7 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
             })
           }
         >
-          Agregar caso
+          {t('cases.new.add')}
         </button>
       </div>
     </div>
@@ -395,13 +396,12 @@ function WorkflowCases({ wa, list, p }: { wa: WorkflowAnalysis; list: TestCase[]
   return (
     <div className="case-groups">
       <div className="callout info small">
-        Todos los casos usan los <strong>valores por defecto</strong> del paso 3. En <strong>Parámetros</strong> de cada caso puedes cambiar u omitir
-        cualquier valor solo para ese caso.
+        {tn('cases.groupsHint', { defaults: <strong>{t('cases.groupsHint.defaults')}</strong>, params: <strong>{t('report.params')}</strong> })}
       </div>
-      <CaseGroup title="Camino feliz" hint="definido en el Arazzo" list={general.filter((c) => c.origin === 'arazzo')} defaultOpen ctx={ctx} />
+      <CaseGroup title={t('tc.happy.title')} hint={t('cases.group.happyHint')} list={general.filter((c) => c.origin === 'arazzo')} defaultOpen ctx={ctx} />
       <CaseGroup
-        title="Casos con datos propios"
-        hint="tus propias combinaciones de parámetros para escenarios concretos · contra la API real"
+        title={t('cases.group.own')}
+        hint={t('cases.group.ownHint')}
         list={own}
         defaultOpen
         ctx={ctx}
@@ -418,16 +418,16 @@ function WorkflowCases({ wa, list, p }: { wa: WorkflowAnalysis; list: TestCase[]
             />
           ) : (
             <button className="add-case" onClick={() => setAdding(true)}>
-              + Nuevo caso con datos
+              {t('cases.new.button')}
             </button>
           )
         }
       />
-      <CaseGroup title="Validación de datos" hint="inputs faltantes o inválidos, derivados del schema · necesitan la API real" list={general.filter((c) => c.origin === 'schema')} defaultOpen={false} ctx={ctx} />
-      <CaseGroup title="Seguridad" hint="sin credenciales · necesita la API real" list={general.filter((c) => c.origin === 'security')} defaultOpen={false} ctx={ctx} />
+      <CaseGroup title={t('cases.group.data')} hint={t('cases.group.dataHint')} list={general.filter((c) => c.origin === 'schema')} defaultOpen={false} ctx={ctx} />
+      <CaseGroup title={t('cases.group.security')} hint={t('cases.group.securityHint')} list={general.filter((c) => c.origin === 'security')} defaultOpen={false} ctx={ctx} />
       <CaseGroup
-        title="Escenarios por respuesta"
-        hint="uno por acción onFailure/onSuccess · simulados, o contra la API real si les das datos"
+        title={t('cases.group.scenarios')}
+        hint={t('cases.group.scenariosHint')}
         list={scenarios}
         defaultOpen={false}
         ctx={ctx}
@@ -453,12 +453,12 @@ export function CasesScreen(p: Props) {
     <>
       <PageHeader
         step={4}
-        title="Casos de prueba"
-        description="Cada caso usa los valores por defecto del paso 3 más los cambios que le hagas en Parámetros. Solo se ejecutan los casos que se pueden cumplir con sus datos."
+        title={t('cases.title')}
+        description={t('cases.description')}
         actions={
           <div className="row">
-            <button onClick={() => fileInput.current?.click()}>Importar escenarios</button>
-            <button onClick={p.onExportScenarios}>Exportar escenarios</button>
+            <button onClick={() => fileInput.current?.click()}>{t('cases.import')}</button>
+            <button onClick={p.onExportScenarios}>{t('cases.export')}</button>
             <input
               ref={fileInput}
               type="file"
@@ -477,10 +477,10 @@ export function CasesScreen(p: Props) {
       {importResult && (
         <div className={`callout ${importResult.errors.length ? 'warn' : 'info'} small`}>
           <div className="row">
-            <strong>Escenarios importados:</strong> {importResult.summary}
+            <strong>{t('cases.imported')}</strong> {importResult.summary}
             <span className="spacer" />
             <button className="link" onClick={() => setImportResult(undefined)}>
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
           {importResult.errors.map((e) => (
@@ -491,17 +491,17 @@ export function CasesScreen(p: Props) {
 
       <div className="mode-card">
         <div>
-          <strong>Casos generales contra</strong>
+          <strong>{t('cases.mode.title')}</strong>
           <div className="muted small">
             {p.mode === 'real'
-              ? 'Usan el ambiente configurado en parámetros.'
-              : 'Responden con los ejemplos del contrato. Los casos de rechazo y los de datos propios no se ejecutan en simulación.'}
+              ? t('cases.mode.realHint')
+              : t('cases.mode.simHint')}
           </div>
         </div>
         <Segmented
           options={[
-            { id: 'real', label: 'API real' },
-            { id: 'simulado', label: 'Simulación' },
+            { id: 'real', label: t('common.realApi') },
+            { id: 'simulado', label: t('cases.mode.simulation') },
           ]}
           value={p.mode}
           onChange={p.setMode}
@@ -517,14 +517,14 @@ export function CasesScreen(p: Props) {
             title={w.workflow.workflowId}
             subtitle={w.workflow.summary}
             defaultOpen={i === 0}
-            badges={<span className={`badge ${wfReady ? 'b-accent' : 'b-skip'}`}>{wfReady} listos</span>}
+            badges={<span className={`badge ${wfReady ? 'b-accent' : 'b-skip'}`}>{t('cases.readyN', { n: wfReady })}</span>}
             actions={
               <>
                 <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), true)}>
-                  Todos
+                  {t('cases.all')}
                 </button>
                 <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), false)}>
-                  Ninguno
+                  {t('cases.none')}
                 </button>
               </>
             }
@@ -536,11 +536,11 @@ export function CasesScreen(p: Props) {
 
       {mutating.length > 0 && (
         <div className="callout warn small">
-          <strong>Estos pasos modifican datos en el ambiente configurado:</strong>
+          <strong>{t('cases.mutating')}</strong>
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {mutating.map(({ wf, s }) => (
               <li key={wf + s.step.stepId}>
-                <MethodBadge method={s.op!.method} /> <code>{(p.servers[s.op!.sourceName] || '(sin servidor)') + s.op!.path}</code>{' '}
+                <MethodBadge method={s.op!.method} /> <code>{(p.servers[s.op!.sourceName] || t('cases.noServer')) + s.op!.path}</code>{' '}
                 <span className="muted">
                   · {wf} / {s.step.stepId}
                 </span>
@@ -549,17 +549,22 @@ export function CasesScreen(p: Props) {
           </ul>
           <label>
             <input type="checkbox" className="check" checked={p.confirmed} onChange={(e) => p.setConfirmed(e.target.checked)} />
-            Entiendo que se crearán o modificarán datos en ese ambiente
+            {t('cases.confirm')}
           </label>
         </div>
       )}
 
       <ActionBar
-        left={<button onClick={p.onBack}>← Volver</button>}
-        info={`${ready.length} listos${simulatedCount ? ` (${simulatedCount} simulados)` : ''}${blocked ? ` · ${blocked} seleccionados no se pueden ejecutar` : ''}`}
+        left={<button onClick={p.onBack}>{t('common.back')}</button>}
+        info={[
+          t('cases.readyN', { n: ready.length }) + (simulatedCount ? ` ${t('cases.simulatedN', { n: simulatedCount })}` : ''),
+          blocked ? t('cases.selectedBlocked', { n: blocked }) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
         right={
           <button className="primary" disabled={!canRun} onClick={p.onRun}>
-            {p.running ? 'Ejecutando…' : `Ejecutar ${ready.length} caso(s) →`}
+            {p.running ? t('cases.running') : t('cases.run', { n: ready.length })}
           </button>
         }
       />

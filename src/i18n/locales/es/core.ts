@@ -216,6 +216,7 @@ export const core = {
   'scen.noCase': '{where}: no existe el caso "{id}". Puede que el Arazzo haya cambiado.',
   'scen.noStep': '{where}: falta "espera.paso".',
   'scen.caseN': 'Caso {n}',
+  'scen.summary': '{bases} base(s), {created} caso(s) nuevos, {updated} caso(s) actualizados.',
 
   'tpl.email': 'email único',
   'tpl.cpf': 'CPF válido',

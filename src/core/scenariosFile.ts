@@ -130,6 +130,6 @@ export function importScenarios(text: string, current: TestCase[], workflowIds: 
     bases,
     cases,
     errors,
-    summary: `${Object.keys(bases).length} base(s), ${created} caso(s) nuevos, ${updated} caso(s) actualizados.`,
+    summary: t('scen.summary', { bases: Object.keys(bases).length, created, updated }),
   }
 }
