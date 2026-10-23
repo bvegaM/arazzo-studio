@@ -5,7 +5,7 @@ import type { Project } from '../../core/loader'
 import type { SecurityScheme } from '../../core/openapi'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
-import { missingInputs } from '../../core/schemaForm'
+import { leavesFirst, missingInputs } from '../../core/schemaForm'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 import { SchemaField } from '../components/SchemaField'
 
@@ -30,7 +30,7 @@ function credHint(type: SecurityScheme['type']): string {
 
 export function ParamsScreen(p: Props) {
   const wa = p.analysis.workflows.find((w) => w.workflow.workflowId === p.selected) ?? p.analysis.workflows[0]
-  const props = Object.entries<any>(wa?.inputsSchema.properties ?? {})
+  const props = leavesFirst(Object.entries<any>(wa?.inputsSchema.properties ?? {}))
   const values = p.inputs[wa?.workflow.workflowId] ?? {}
   const required = props.filter(([n]) => wa.requiredInputs.includes(n))
   const optional = props.filter(([n]) => !wa.requiredInputs.includes(n))
