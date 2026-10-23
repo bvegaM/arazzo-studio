@@ -15,6 +15,12 @@ Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/
    - **Importar / exportar escenarios** en YAML (bases por workflow + datos de cada caso) para versionarlos junto al Arazzo.
 5. **Resultados**: entrada y salida de cada petición, criterios evaluados (esperado contra obtenido), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
 
+## Idiomas
+
+La interfaz está en **español** e **inglés**. El idioma inicial se toma del navegador y se puede cambiar en la barra lateral (se recuerda para la próxima visita). También se traducen los mensajes del motor y el reporte HTML. Los archivos de escenarios mantienen sus claves (`bases`, `casos`, `espera`…) en cualquier idioma, para que sigan siendo compatibles. Los generadores aceptan también `{{number:8}}` y `{{date}}`.
+
+Para agregar un texto: añade la clave en `src/i18n/locales/es/` y su traducción en `src/i18n/locales/en/`. TypeScript avisa si falta alguna.
+
 ## Uso local
 
 ```bash
@@ -74,6 +80,7 @@ src/
     loader, analyze, openapi, expressions, criteria, runner, testcases,
     contract, simulator, report, scenariosFile, templates,
     jsonPointer, format, http, types
+  i18n/               traducciones (es, en), t() y el hook useLocale
   lib/browser.ts      utilidades del navegador (descargas, lectura de archivos)
   ui/
     components/       piezas reutilizables (kit, badges, WorkflowGraph)
@@ -81,7 +88,7 @@ src/
 examples              contrato, Arazzo y mock de ejemplo
 ```
 
-Reglas de dependencia: `ui` y `app` usan `core`; `core` no importa nada de `ui`, `app` ni `lib`. El diagrama (React Flow) se carga bajo demanda para aligerar el bundle inicial.
+Reglas de dependencia: `ui` y `app` usan `core`; `core` no importa nada de `ui`, `app` ni `lib` (solo `i18n`, que no depende de React). El diagrama (React Flow) se carga bajo demanda para aligerar el bundle inicial.
 
 La ejecución HTTP está detrás de `HttpExecutor` (`src/core/http.ts`). Hay dos implementaciones: `fetch` (API real) y el simulador (`src/core/simulator.ts`).
 
