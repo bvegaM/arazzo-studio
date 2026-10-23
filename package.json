@@ -2,6 +2,8 @@
   "name": "arazzo-studio",
   "private": true,
   "version": "0.1.0",
+  "description": "Run and test Arazzo workflows against real APIs, right in the browser.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
