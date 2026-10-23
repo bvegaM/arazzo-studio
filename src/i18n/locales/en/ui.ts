@@ -283,6 +283,8 @@ export const ui: Record<keyof typeof es, string> = {
   'results.back': '← Back to cases',
   'results.progress': '{done} of {total} cases run.',
   'results.progressRunning': '{done} of {total} cases run…',
+  'results.runningCase': 'Running case {n} of {total}',
+  'results.eta': '≈ {s} s left',
   'results.rerun': 'Run again',
   'results.download': 'Download report',
   'results.pending': 'Pending',

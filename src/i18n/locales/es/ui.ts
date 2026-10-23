@@ -282,6 +282,8 @@ export const ui = {
   'results.back': '← Volver a los casos',
   'results.progress': '{done} de {total} casos ejecutados.',
   'results.progressRunning': '{done} de {total} casos ejecutados…',
+  'results.runningCase': 'Ejecutando caso {n} de {total}',
+  'results.eta': '≈ {s} s restantes',
   'results.rerun': 'Volver a ejecutar',
   'results.download': 'Descargar reporte',
   'results.pending': 'Pendientes',

@@ -63,6 +63,36 @@ function CurlActions({ request }: { request: CurlRequest }) {
   )
 }
 
+/** Progreso de la ejecución: caso actual, barra por resultado y tiempo restante estimado. */
+function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void }) {
+  const done = runs.filter((r) => r.state === 'done')
+  const current = runs.find((r) => r.state === 'running')
+  const position = done.length + (current ? 1 : 0)
+  const share = (n: number) => `${(n / runs.length) * 100}%`
+  const by = (v: Verdict) => done.filter((r) => r.verdict === v).length
+  const avgMs = done.length ? done.reduce((n, r) => n + (r.result?.durationMs ?? 0), 0) / done.length : 0
+  const leftSec = Math.round((avgMs * (runs.length - done.length)) / 1000)
+  return (
+    <div className="run-progress" role="status" aria-live="polite">
+      <div className="run-progress-head">
+        <span className="spinner" aria-hidden="true" />
+        <div className="grow">
+          <strong>{t('results.runningCase', { n: position, total: runs.length })}</strong>
+          {current && <span className="run-progress-case">{current.tc.title}</span>}
+        </div>
+        {done.length > 0 && leftSec > 0 && <span className="muted small">{t('results.eta', { s: leftSec })}</span>}
+        <button onClick={onCancel}>{t('common.cancel')}</button>
+      </div>
+      <div className="run-bar" aria-hidden="true">
+        <span className="rb-passed" style={{ width: share(by('passed')) }} />
+        <span className="rb-failed" style={{ width: share(by('failed')) }} />
+        <span className="rb-inconclusive" style={{ width: share(by('inconclusive')) }} />
+        {current && <span className="rb-running" style={{ width: share(1) }} />}
+      </div>
+    </div>
+  )
+}
+
 function StepCard({ s, index }: { s: StepResult; index: number }) {
   const [open, setOpen] = useState(s.status === 'failed' || s.status === 'warning')
   const [tab, setTab] = useState<StepTab>('resumen')
@@ -256,6 +286,14 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
   const unreachable = runs.flatMap((r) => r.steps.filter((s) => s.reason?.code === 'network' && s.request).map((s) => s.request!))
   const unreachableCases = runs.filter((r) => r.steps.some((s) => s.reason?.code === 'network')).length
   const [selectedId, setSelectedId] = useState<string>()
+  // Mientras corre, el detalle sigue al caso en ejecución hasta que el usuario elige otro.
+  const [userPicked, setUserPicked] = useState(false)
+  const [wasRunning, setWasRunning] = useState(running)
+  if (running !== wasRunning) {
+    // Al empezar otra ejecución se vuelve a seguir el caso en curso.
+    setWasRunning(running)
+    if (running) setUserPicked(false)
+  }
   const [filter, setFilter] = useState<Filter>('all')
   // En pantallas angostas los grupos empiezan plegados para no empujar el detalle hacia abajo.
   const narrow = typeof window !== 'undefined' && window.innerWidth < 960
@@ -265,6 +303,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
   const detailRef = useRef<HTMLDivElement>(null)
   const select = (id: string) => {
     setSelectedId(id)
+    setUserPicked(true)
     if (window.innerWidth < 960) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
   }
   const done = runs.filter((r) => r.state === 'done')
@@ -275,7 +314,8 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
     for (const r of visible) map.set(r.tc.workflowId, [...(map.get(r.tc.workflowId) ?? []), r])
     return [...map.entries()]
   }, [visible])
-  const current = runs.find((r) => r.tc.id === selectedId) ?? visible[0] ?? runs[0]
+  const runningCase = running && !userPicked ? runs.find((r) => r.state === 'running') : undefined
+  const current = runningCase ?? runs.find((r) => r.tc.id === selectedId) ?? visible[0] ?? runs[0]
 
   if (!runs.length) {
     return (
@@ -294,9 +334,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
         title={t('nav.results')}
         description={t(running ? 'results.progressRunning' : 'results.progress', { done: done.length, total: runs.length })}
         actions={
-          running ? (
-            <button onClick={onCancel}>{t('common.cancel')}</button>
-          ) : (
+          running ? undefined : (
             <div className="row">
               <button onClick={onRerun}>{t('results.rerun')}</button>
               <button onClick={() => onExport('json')}>JSON</button>
@@ -314,11 +352,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
         <Metric label={t('report.inconclusive')} value={count('inconclusive')} tone={count('inconclusive') ? 'warn' : undefined} />
         <Metric label={t('results.pending')} value={runs.length - done.length} />
       </div>
-      {running && (
-        <div className="progress">
-          <div style={{ width: `${(done.length / runs.length) * 100}%` }} />
-        </div>
-      )}
+      {running && <RunProgress runs={runs} onCancel={onCancel} />}
 
       <ConnectionHelp requests={unreachable} caseCount={unreachableCases} onSimulate={onRunSimulated} onEditEnvironment={onEditEnvironment} />
 

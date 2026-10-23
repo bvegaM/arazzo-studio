@@ -1451,16 +1451,80 @@ td code {
 }
 
 /* ---------- Resultados ---------- */
-.progress {
-  height: 4px;
+.run-progress {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.run-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.run-progress-head .grow {
+  display: grid;
+  min-width: 0;
+}
+.run-progress-case {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spinner {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.run-bar {
+  display: flex;
+  height: 8px;
   border-radius: 99px;
   background: var(--surface-3);
   overflow: hidden;
 }
-.progress > div {
+.run-bar > span {
   height: 100%;
-  background: var(--accent);
-  transition: width 0.2s;
+  transition: width 0.3s ease;
+}
+.rb-passed {
+  background: var(--ok);
+}
+.rb-failed {
+  background: var(--err);
+}
+.rb-inconclusive {
+  background: var(--warn);
+}
+.rb-running {
+  background: repeating-linear-gradient(-45deg, var(--accent) 0 6px, color-mix(in srgb, var(--accent) 55%, transparent) 6px 12px);
+  background-size: 17px 17px;
+  animation: stripes 0.8s linear infinite;
+}
+@keyframes stripes {
+  to {
+    background-position: 17px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .rb-running {
+    animation: none;
+  }
 }
 .results-layout {
   display: grid;
