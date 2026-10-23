@@ -856,27 +856,55 @@ td code {
   max-height: 320px;
   overflow-y: auto;
 }
+.wp-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.wp-row:hover {
+  background: var(--surface-2);
+}
+.wp-row.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.wp-row.active .wp-name {
+  color: var(--accent);
+}
+.wp-row.excluded .wp-item {
+  opacity: 0.5;
+}
+.wp-check {
+  margin-left: 10px;
+  cursor: pointer;
+}
 .wp-item {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 8px;
   background: none;
   text-align: left;
 }
 .wp-item:hover:not(:disabled) {
-  background: var(--surface-2);
   border-color: transparent;
 }
-.wp-item.active {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+.wp-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
 }
-.wp-item.active .wp-name {
-  color: var(--accent);
+.wp-select .wp-none {
+  color: var(--err);
+  font-weight: 600;
 }
 .wp-text {
   flex: 1;
