@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Campo de formulario que sigue el JSON Schema: los objetos se abren en sus propiedades y las listas en elementos.
 import { useState, type ReactNode } from 'react'
-import { exampleValue, fieldKind, isEmptyValue, leavesFirst, missingPaths, normalizeSchema, schemaType, setKey, valueSummary } from '../../core/schemaForm'
-import { t, type MessageKey } from '../../i18n'
+import { exampleValue, fieldKind, isEmptyValue, leavesFirst, missingPaths, normalizeSchema, schemaType, setKey, typeLabel, valueSummary } from '../../core/schemaForm'
+import { t } from '../../i18n'
 import { Chevron, Segmented } from './kit'
 
 interface Props {
@@ -23,15 +23,6 @@ export function SchemaField(p: Props) {
   if (kind === 'object') return <ObjectField {...p} schema={s} />
   if (kind === 'array') return <ArrayField {...p} schema={s} />
   return <LeafField {...p} schema={s} />
-}
-
-/** Nombre del tipo en lenguaje normal; el tipo técnico queda en el tooltip. */
-function typeLabel(schema: any): string {
-  const kind = fieldKind(schema)
-  const raw = schemaType(schema)
-  const key = kind === 'enum' || kind === 'json' ? kind : (raw ?? 'any')
-  const label = t(`params.type.${key}` as MessageKey)
-  return schema?.format ? `${label} · ${schema.format}` : label
 }
 
 function TypeTag({ schema }: { schema: any }) {
@@ -119,7 +110,6 @@ function ObjectField({ name, schema, required, value, onChange, checkRequired = 
   // Dentro de un objeto opcional vacío no se marcan sus obligatorios.
   const check = checkRequired && (required || obj !== undefined)
   const missing = check ? (obj ? missingPaths(schema, obj).length : required ? 1 : 0) : 0
-  const childRequired: string[] = schema.required ?? []
   return (
     <Group
       name={name}
@@ -133,21 +123,31 @@ function ObjectField({ name, schema, required, value, onChange, checkRequired = 
       extra={extra}
       markRequired={markRequired}
     >
-      <div className="field-grid">
-        {leavesFirst(Object.entries<any>(schema.properties)).map(([k, child]) => (
-          <SchemaField
-            key={k}
-            name={k}
-            schema={child}
-            required={childRequired.includes(k)}
-            value={obj?.[k]}
-            checkRequired={check}
-            depth={depth + 1}
-            onChange={(v) => onChange(setKey(obj, k, v))}
-          />
-        ))}
-      </div>
+      <ObjectFields schema={schema} value={obj} onChange={onChange} checkRequired={check} depth={depth + 1} />
     </Group>
+  )
+}
+
+/** Las propiedades de un objeto como campos: simples en grilla y grupos a lo ancho. */
+export function ObjectFields({ schema, value, onChange, checkRequired = true, depth = 1 }: { schema: any; value: any; onChange: (v: any) => void; checkRequired?: boolean; depth?: number }) {
+  const s = normalizeSchema(schema)
+  const obj = value && typeof value === 'object' && !Array.isArray(value) ? value : undefined
+  const required: string[] = s.required ?? []
+  return (
+    <div className="field-grid">
+      {leavesFirst(Object.entries<any>(s.properties ?? {})).map(([k, child]) => (
+        <SchemaField
+          key={k}
+          name={k}
+          schema={child}
+          required={required.includes(k)}
+          value={obj?.[k]}
+          checkRequired={checkRequired}
+          depth={depth}
+          onChange={(v) => onChange(setKey(obj, k, v))}
+        />
+      ))}
+    </div>
   )
 }
 

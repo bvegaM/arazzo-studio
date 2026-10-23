@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Ayudas para editar valores según un JSON Schema campo a campo (objetos anidados y listas).
+import { t, type MessageKey } from '../i18n'
 
 export type FieldKind = 'enum' | 'boolean' | 'number' | 'string' | 'object' | 'array' | 'json'
 
@@ -101,4 +102,13 @@ export function valueSummary(value: any, max = 3): string {
   const parts = Object.entries(value).filter(([, v]) => !isEmptyValue(v))
   const text = parts.slice(0, max).map(([k, v]) => `${k}: ${show(v)}`).join(' · ')
   return parts.length > max ? `${text} · …` : text
+}
+
+/** Nombre del tipo en lenguaje normal; el tipo técnico queda en el tooltip. */
+export function typeLabel(schema: any): string {
+  const kind = fieldKind(schema)
+  const raw = schemaType(schema)
+  const key = kind === 'enum' || kind === 'json' ? kind : (raw ?? 'any')
+  const label = t(`params.type.${key}` as MessageKey)
+  return schema?.format ? `${label} · ${schema.format}` : label
 }
