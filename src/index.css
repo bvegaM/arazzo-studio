@@ -1036,6 +1036,50 @@ td code {
 .req {
   color: var(--err);
 }
+.field-grid > .field-group {
+  grid-column: 1 / -1;
+}
+.field-group {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px 12px;
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+.field-group > legend {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 0 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.field-group > .hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.field-group.missing {
+  border-color: color-mix(in srgb, var(--err) 60%, var(--border));
+}
+.array-items {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.array-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.array-item > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.array-item > button {
+  margin-top: 24px;
+}
 .toggle-more {
   margin: 16px 0 10px;
   font-weight: 600;

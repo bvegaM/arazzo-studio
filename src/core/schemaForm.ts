@@ -34,7 +34,7 @@ export function fieldKind(schema: any): FieldKind {
   if (type === 'boolean') return 'boolean'
   if (type === 'number' || type === 'integer') return 'number'
   if (type === 'object') return s.properties && Object.keys(s.properties).length ? 'object' : 'json'
-  if (type === 'array') return 'array'
+  if (type === 'array') return s.items ? 'array' : 'json'
   return 'string'
 }
 
