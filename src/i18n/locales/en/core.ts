@@ -32,6 +32,7 @@ export const core: Record<keyof typeof es, string> = {
   'reason.output': 'Output not captured',
 
   'format.noValue': 'no value',
+  'format.justNow': 'just now',
   'http.cors': 'Could not connect: the API does not allow CORS from this origin or is unreachable. Check the CORS configuration and the environment URL.',
 
   'load.parse': 'Could not read as YAML or JSON: {error}',

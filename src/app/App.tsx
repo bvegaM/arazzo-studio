@@ -26,6 +26,9 @@ export default function App() {
               onFetchRemote={studio.fetchRemote}
               onExample={studio.loadExample}
               onReset={studio.reset}
+              savedSession={studio.savedSession}
+              onRestore={studio.restoreSession}
+              onDiscard={studio.discardSession}
               onNext={() => goTo(Screen.Contracts)}
             />
           )}

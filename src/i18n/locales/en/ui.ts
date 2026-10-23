@@ -2,7 +2,6 @@ import type { ui as es } from '../es/ui'
 
 export const ui: Record<keyof typeof es, string> = {
   'brand.sub': 'Workflow testing',
-  'sidebar.privacy': 'Everything runs in your browser. Nothing is sent to a server of ours.',
   'sidebar.language': 'Language',
   'nav.load': 'Load',
   'nav.files': '{n} file(s)',
@@ -111,6 +110,11 @@ export const ui: Record<keyof typeof es, string> = {
   'params.cred.other': 'Unsupported security type; it will be ignored',
   'params.noValue': '(no value)',
   'params.invalidJson': 'Invalid JSON',
+  'session.title': 'You have an unfinished session',
+  'session.noCredentials': 'Credentials are not saved for security: you will need to paste them again.',
+  'session.continue': 'Continue where I left off',
+  'session.discard': 'Discard',
+  'sidebar.privacy': 'Everything runs in your browser. Your session is saved only on this device, without credentials.',
   'env.defaultName': 'My environment',
   'env.add': 'New',
   'env.newName': 'New environment',
@@ -160,7 +164,7 @@ export const ui: Record<keyof typeof es, string> = {
   'params.type.json': 'free JSON',
   'params.type.any': 'any value',
   'params.pattern': 'Pattern: {pattern}',
-  'params.description': 'These values are used in every test case. In step 4 you can change or omit them per case. They stay in this browser tab.',
+  'params.description': 'These values are used in every test case. In step 4 you can change or omit them per case. They are saved on this device; credentials only while the tab is open.',
   'params.inputsTitle': 'Default inputs of "{workflow}"',
   'params.missingRequired': '{n} required missing',
   'params.requiredComplete': 'Required complete',

@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import type { ParsedFile, Project } from '../../core/loader'
 import { isRemote } from '../../core/loader'
+import type { SavedSession } from '../../core/session'
+import { timeAgo } from '../../core/format'
 import { t } from '../../i18n'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 
@@ -14,6 +16,35 @@ interface Props {
   onExample: () => void
   onReset: () => void
   onNext: () => void
+  savedSession?: SavedSession
+  onRestore: () => void
+  onDiscard: () => void
+}
+
+/** Aviso para continuar la sesión anterior: qué era, cuándo fue y qué no se guardó. */
+function ResumeBanner({ session, onRestore, onDiscard }: { session: SavedSession; onRestore: () => void; onDiscard: () => void }) {
+  return (
+    <div className="resume" role="region" aria-label={t('session.title')}>
+      <div className="resume-icon" aria-hidden="true">
+        ↺
+      </div>
+      <div className="resume-text">
+        <strong>{t('session.title')}</strong>
+        <span>
+          {session.title ?? session.files[0].name} · {t('nav.files', { n: session.files.length })} · {timeAgo(new Date(session.savedAt))}
+        </span>
+        <span className="muted small">{t('session.noCredentials')}</span>
+      </div>
+      <div className="resume-actions">
+        <button className="primary" onClick={onRestore}>
+          {t('session.continue')}
+        </button>
+        <button className="ghost" onClick={onDiscard}>
+          {t('session.discard')}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 const KIND_LABEL = { arazzo: 'Arazzo', openapi: 'OpenAPI' }
@@ -32,6 +63,8 @@ export function LoadScreen(p: Props) {
         description={t('load.description')}
         actions={p.files.length > 0 && <button onClick={p.onReset}>{t('load.reset')}</button>}
       />
+
+      {p.savedSession && !p.project && <ResumeBanner session={p.savedSession} onRestore={p.onRestore} onDiscard={p.onDiscard} />}
 
       <div
         className={`dropzone ${over ? 'over' : ''} ${p.files.length ? 'compact' : ''}`}

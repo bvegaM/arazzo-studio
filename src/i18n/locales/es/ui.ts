@@ -1,7 +1,6 @@
 // Textos de la interfaz (src/app y src/ui).
 export const ui = {
   'brand.sub': 'Pruebas de workflows',
-  'sidebar.privacy': 'Todo corre en tu navegador. Nada se envía a un servidor propio.',
   'sidebar.language': 'Idioma',
   'nav.load': 'Cargar',
   'nav.files': '{n} archivo(s)',
@@ -110,6 +109,11 @@ export const ui = {
   'params.cred.other': 'Tipo de seguridad no soportado; se ignorará',
   'params.noValue': '(sin valor)',
   'params.invalidJson': 'JSON inválido',
+  'session.title': 'Tienes una sesión sin terminar',
+  'session.noCredentials': 'Las credenciales no se guardan por seguridad: tendrás que pegarlas de nuevo.',
+  'session.continue': 'Continuar donde quedé',
+  'session.discard': 'Descartar',
+  'sidebar.privacy': 'Todo corre en tu navegador. Tu sesión se guarda solo en este equipo, sin credenciales.',
   'env.defaultName': 'Mi ambiente',
   'env.add': 'Nuevo',
   'env.newName': 'Nuevo ambiente',
@@ -159,7 +163,7 @@ export const ui = {
   'params.type.json': 'JSON libre',
   'params.type.any': 'cualquier valor',
   'params.pattern': 'Patrón: {pattern}',
-  'params.description': 'Estos valores se usan en todos los casos de prueba. En el paso 4 puedes cambiarlos u omitirlos en cada caso. Se quedan en esta pestaña del navegador.',
+  'params.description': 'Estos valores se usan en todos los casos de prueba. En el paso 4 puedes cambiarlos u omitirlos en cada caso. Se guardan en este equipo; las credenciales, solo mientras la pestaña está abierta.',
   'params.inputsTitle': 'Inputs por defecto de "{workflow}"',
   'params.missingRequired': 'Faltan {n} obligatorio(s)',
   'params.requiredComplete': 'Obligatorios completos',

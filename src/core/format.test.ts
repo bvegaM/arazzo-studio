@@ -23,7 +23,7 @@ describe('timeAgo', () => {
     setLocale('es')
     expect(timeAgo(new Date('2026-10-23T10:00:00Z'), now)).toBe('hace 2 horas')
     expect(timeAgo(new Date('2026-10-22T12:00:00Z'), now)).toBe('ayer')
-    expect(timeAgo(new Date('2026-10-23T11:59:40Z'), now)).toBe('este minuto')
+    expect(timeAgo(new Date('2026-10-23T11:59:40Z'), now)).toBe('hace un momento')
     setLocale('en')
     expect(timeAgo(new Date('2026-10-23T11:55:00Z'), now)).toBe('5 minutes ago')
     setLocale('es')

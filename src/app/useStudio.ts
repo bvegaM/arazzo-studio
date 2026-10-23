@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Estado de la app y acciones del flujo (cargar, configurar, ejecutar, exportar).
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { attachSource, buildProject, fetchRemoteSource, parseFile, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
 import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
@@ -21,7 +21,9 @@ import {
 import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
 import { fillServers, newEnvironment, uniqueName, type Environment } from '../core/environments'
+import { readSavedSession, toSavedSession, type SavedSession } from '../core/session'
 import { download, readTextFiles } from '../lib/browser'
+import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
 import { EXAMPLE_FILES } from './example'
@@ -31,9 +33,17 @@ export type Screen = (typeof Screen)[keyof typeof Screen]
 
 type Inputs = Record<string, Record<string, any>>
 
+const SESSION_KEY = 'session'
+
 export function useStudio() {
   const [screen, setScreenState] = useState<Screen>(Screen.Load)
   const [files, setFiles] = useState<ParsedFile[]>([])
+  // Texto original de lo cargado, para poder guardar la sesión y reconstruirla.
+  const [texts, setTexts] = useState<LoadedFile[]>([])
+  const [attachments, setAttachments] = useState<SavedSession['attachments']>([])
+  const [remotes, setRemotes] = useState<string[]>([])
+  // Sesión anterior encontrada al abrir, a la espera de que el usuario decida si la continúa.
+  const [savedSession, setSavedSession] = useState<SavedSession>()
   const [project, setProject] = useState<Project>()
   const [analysis, setAnalysis] = useState<ProjectAnalysis>()
   const [errors, setErrors] = useState<string[]>([])
@@ -125,9 +135,15 @@ export function useStudio() {
   }
 
   function loadFiles(loaded: LoadedFile[], replace: boolean) {
+    setSavedSession(undefined) // empezar algo nuevo descarta la sesión anterior
     const parsed = loaded.map(parseFile)
     const all = replace ? parsed : [...files.filter((f) => !parsed.some((p) => p.name === f.name)), ...parsed]
     setFiles(all)
+    setTexts((prev) => (replace ? loaded : [...prev.filter((f) => !loaded.some((l) => l.name === f.name)), ...loaded]))
+    if (replace) {
+      setAttachments([])
+      setRemotes([])
+    }
     const { project: p, errors: e } = buildProject(all)
     applyProject(p)
     setErrors(e)
@@ -143,17 +159,92 @@ export function useStudio() {
 
   async function attachFile(sourceName: string, f: File) {
     if (!project) return
-    const [parsed] = (await readTextFiles([f])).map(parseFile)
+    const [loaded] = await readTextFiles([f])
+    const parsed = parseFile(loaded)
     setFiles((prev) => [...prev.filter((x) => x.name !== parsed.name), parsed])
+    setAttachments((prev) => [...prev.filter((a) => a.source !== sourceName), { source: sourceName, file: loaded }])
     applyProject(attachSource(project, sourceName, parsed))
   }
 
   async function fetchRemote(sourceName: string) {
-    if (project) applyProject(await fetchRemoteSource(project, sourceName))
+    if (!project) return
+    const next = await fetchRemoteSource(project, sourceName)
+    if (next.sources.find((s) => s.name === sourceName)?.status === 'loaded') setRemotes((prev) => [...new Set([...prev, sourceName])])
+    applyProject(next)
+  }
+
+  // Al abrir, busca una sesión anterior para ofrecer continuarla.
+  useEffect(() => {
+    storeGet(SESSION_KEY).then((value) => {
+      const saved = readSavedSession(value)
+      if (saved) setSavedSession(saved)
+    })
+  }, [])
+
+  // Guarda la sesión poco después de cada cambio (sin credenciales ni valores sensibles).
+  useEffect(() => {
+    if (!project || savedSession) return
+    const timer = setTimeout(() => {
+      const session = toSavedSession({
+        title: project.arazzo.info?.title,
+        files: texts,
+        attachments,
+        remotes,
+        inputs,
+        cases,
+        skipped,
+        selected,
+        mode,
+        screen,
+        environments: envs.list,
+        activeEnv: envs.active,
+      })
+      void storeSet(SESSION_KEY, session)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [project, savedSession, texts, attachments, remotes, inputs, cases, skipped, selected, mode, screen, envs])
+
+  /** Continúa la sesión guardada: vuelve a armar el proyecto y recupera las elecciones del usuario. */
+  async function restoreSession() {
+    const saved = savedSession
+    if (!saved) return
+    setSavedSession(undefined)
+    setInputs(saved.inputs)
+    setCases(saved.cases)
+    setSkipped(saved.skipped)
+    setSelected(saved.selected)
+    setMode(saved.mode)
+    if (saved.environments.length) {
+      const list = saved.environments.map((e) => ({ ...e, credentials: {} }))
+      setEnvs({ list, active: list.some((e) => e.id === saved.activeEnv) ? saved.activeEnv : list[0].id })
+    }
+    const parsed = saved.files.map(parseFile)
+    const attached = saved.attachments.map((a) => ({ source: a.source, parsed: parseFile(a.file) }))
+    setTexts(saved.files)
+    setAttachments(saved.attachments)
+    setFiles([...parsed, ...attached.map((a) => a.parsed)])
+    const built = buildProject(parsed)
+    let p = built.project
+    if (p) for (const a of attached) p = attachSource(p, a.source, a.parsed)
+    if (p) for (const r of saved.remotes) p = await fetchRemoteSource(p, r)
+    setRemotes(saved.remotes)
+    applyProject(p)
+    setErrors(built.errors)
+    // Los resultados no se guardan: si estaba en el paso 5, vuelve a los casos.
+    goTo(p ? (Math.min(saved.screen, Screen.Cases) as Screen) : Screen.Load)
+  }
+
+  function discardSession() {
+    setSavedSession(undefined)
+    void storeDelete(SESSION_KEY)
   }
 
   function reset() {
     setFiles([])
+    setTexts([])
+    setAttachments([])
+    setRemotes([])
+    void storeDelete(SESSION_KEY)
     applyProject(undefined)
     setErrors([])
     setInputs({})
@@ -295,6 +386,9 @@ export function useStudio() {
     setConfirmed,
     runs,
     running,
+    savedSession,
+    restoreSession,
+    discardSession,
     addFiles,
     attachFile,
     fetchRemote,

@@ -31,6 +31,7 @@ export const core = {
   'reason.output': 'Output no capturado',
 
   'format.noValue': 'sin valor',
+  'format.justNow': 'hace un momento',
   'http.cors': 'No se pudo conectar: la API no permite CORS desde este origen o no es accesible. Verifica la configuración de CORS y la URL del ambiente.',
 
   'load.parse': 'No se pudo leer como YAML o JSON: {error}',

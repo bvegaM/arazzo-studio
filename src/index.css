@@ -1864,6 +1864,41 @@ button.icon {
   gap: 12px;
   justify-content: flex-end;
 }
+/* Continuar sesión */
+.resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.resume-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+}
+.resume-text {
+  flex: 1;
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+}
+.resume-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* Ambientes */
 .env-bar {
   display: flex;
