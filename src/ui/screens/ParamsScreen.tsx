@@ -3,6 +3,8 @@ import { useState } from 'react'
 import type { ProjectAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
 import type { SecurityScheme } from '../../core/openapi'
+import { t } from '../../i18n'
+import { tn } from '../../i18n/react'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 
 interface Props {
@@ -20,13 +22,8 @@ interface Props {
   onNext: () => void
 }
 
-const CRED_HINT: Record<SecurityScheme['type'], string> = {
-  bearer: 'Token Bearer (se envía como Authorization: Bearer …)',
-  basic: 'usuario:contraseña (se codifica en Base64)',
-  apiKey: 'API key',
-  oauth2: 'Access token de OAuth2 (se envía como Bearer)',
-  openIdConnect: 'Access token de OpenID Connect (se envía como Bearer)',
-  other: 'Tipo de seguridad no soportado; se ignorará',
+function credHint(type: SecurityScheme['type']): string {
+  return t(`params.cred.${type}`)
 }
 
 const isEmpty = (v: any) => v === undefined || v === ''
@@ -40,7 +37,7 @@ function InputField({ name, schema, required, value, onChange }: { name: string;
   if (schema?.enum) {
     control = (
       <select value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}>
-        <option value="">(sin valor)</option>
+        <option value="">{t('params.noValue')}</option>
         {schema.enum.map((v: any) => (
           <option key={String(v)} value={v}>
             {String(v)}
@@ -51,7 +48,7 @@ function InputField({ name, schema, required, value, onChange }: { name: string;
   } else if (type === 'boolean') {
     control = (
       <select value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}>
-        <option value="">(sin valor)</option>
+        <option value="">{t('params.noValue')}</option>
         <option value="true">true</option>
         <option value="false">false</option>
       </select>
@@ -73,7 +70,7 @@ function InputField({ name, schema, required, value, onChange }: { name: string;
             onChange(JSON.parse(raw))
             setJsonError(undefined)
           } catch {
-            setJsonError('JSON inválido')
+            setJsonError(t('params.invalidJson'))
           }
         }}
       />
@@ -82,7 +79,7 @@ function InputField({ name, schema, required, value, onChange }: { name: string;
     control = <input type="text" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)} />
   }
 
-  const hint = jsonError ?? [schema?.description, schema?.pattern && `Patrón: ${schema.pattern}`].filter(Boolean).join(' · ')
+  const hint = jsonError ?? [schema?.description, schema?.pattern && t('params.pattern', { pattern: schema.pattern })].filter(Boolean).join(' · ')
   return (
     <div className={`field ${required && isEmpty(value) ? 'missing' : ''}`}>
       <label>
@@ -127,8 +124,8 @@ export function ParamsScreen(p: Props) {
     <>
       <PageHeader
         step={3}
-        title="Valores por defecto"
-        description="Estos valores se usan en todos los casos de prueba. En el paso 4 puedes cambiarlos u omitirlos en cada caso. Se quedan en esta pestaña del navegador."
+        title={t('nav.defaults')}
+        description={t('params.description')}
       />
 
       {p.analysis.workflows.length > 1 && (
@@ -139,7 +136,7 @@ export function ParamsScreen(p: Props) {
             return (
               <button key={w.workflow.workflowId} className={w === wa ? 'active' : ''} onClick={() => p.onSelect(w.workflow.workflowId)}>
                 <span className="wp-title">{w.workflow.workflowId}</span>
-                <span className="wp-meta">{miss > 0 ? <span className="badge b-err">Faltan {miss}</span> : <span className="badge b-ok">✅ Completo</span>}</span>
+                <span className="wp-meta">{miss > 0 ? <span className="badge b-err">{t('nav.missing', { n: miss })}</span> : <span className="badge b-ok">✅ {t('params.complete')}</span>}</span>
               </button>
             )
           })}
@@ -147,33 +144,33 @@ export function ParamsScreen(p: Props) {
       )}
 
       <Section
-        title={`Inputs por defecto de "${wa?.workflow.workflowId}"`}
+        title={t('params.inputsTitle', { workflow: wa?.workflow.workflowId })}
         defaultOpen
         tone={missingRequired.length ? 'err' : undefined}
         badges={
           missingRequired.length ? (
-            <span className="badge b-err">Faltan {missingRequired.length} obligatorio(s)</span>
+            <span className="badge b-err">{t('params.missingRequired', { n: missingRequired.length })}</span>
           ) : (
-            <span className="badge b-ok">✅ Obligatorios completos</span>
+            <span className="badge b-ok">✅ {t('params.requiredComplete')}</span>
           )
         }
       >
         {props.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            Este workflow no declara inputs.
+            {t('params.noInputs')}
           </p>
         ) : (
           <>
             {required.length > 0 && (
               <>
-                <div className="sub-head">Obligatorios ({required.length})</div>
+                <div className="sub-head">{t('params.required', { n: required.length })}</div>
                 <div className="field-grid">{required.map(field)}</div>
               </>
             )}
             {optional.length > 0 && (
               <>
                 <button className="link toggle-more" onClick={() => setShowOptional(!showOptional)}>
-                  {showOptional ? '▾ Ocultar' : '▸ Mostrar'} opcionales ({optional.length})
+                  {showOptional ? t('params.hideOptional', { n: optional.length }) : t('params.showOptional', { n: optional.length })}
                 </button>
                 {showOptional && <div className="field-grid">{optional.map(field)}</div>}
               </>
@@ -183,21 +180,21 @@ export function ParamsScreen(p: Props) {
       </Section>
 
       <Section
-        title="Credenciales"
+        title={t('params.credentials')}
         defaultOpen={p.analysis.credentials.length > 0 && credsFilled < p.analysis.credentials.length}
         badges={
           p.analysis.credentials.length === 0 ? (
-            <span className="badge b-skip">No declaradas en los contratos</span>
+            <span className="badge b-skip">{t('params.credsNotDeclared')}</span>
           ) : (
             <span className={`badge ${credsFilled === p.analysis.credentials.length ? 'b-ok' : 'b-warn'}`}>
-              {credsFilled}/{p.analysis.credentials.length} completas
+              {t('params.credsFilled', { filled: credsFilled, total: p.analysis.credentials.length })}
             </span>
           )
         }
       >
         {p.analysis.credentials.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            Los contratos no declaran <code>securitySchemes</code>. Si la autenticación va en headers o en un paso del workflow, se toma de los inputs.
+            {tn('params.noSchemes', { schemes: <code>securitySchemes</code> })}
           </p>
         ) : (
           <div className="field-grid">
@@ -214,11 +211,11 @@ export function ParamsScreen(p: Props) {
                   type="password"
                   autoComplete="off"
                   value={p.credentials[c.key] ?? ''}
-                  placeholder={c.type === 'basic' ? 'usuario:contraseña' : 'Pega aquí el valor'}
+                  placeholder={c.type === 'basic' ? t('params.basicPlaceholder') : t('params.pastePlaceholder')}
                   onChange={(e) => p.setCredential(c.key, e.target.value)}
                 />
                 <div className="hint">
-                  {CRED_HINT[c.type]} · fuente {c.sourceName}
+                  {credHint(c.type)} · {t('graph.source', { source: c.sourceName })}
                 </div>
               </div>
             ))}
@@ -226,29 +223,29 @@ export function ParamsScreen(p: Props) {
         )}
       </Section>
 
-      <Section title="Ambiente" badges={<span className="badge b-skip">{loadedSources.length} URL(s) base</span>} subtitle={loadedSources.map((s) => p.servers[s.name]).filter(Boolean).join(' · ')}>
+      <Section title={t('report.environment')} badges={<span className="badge b-skip">{t('params.baseUrls', { n: loadedSources.length })}</span>} subtitle={loadedSources.map((s) => p.servers[s.name]).filter(Boolean).join(' · ')}>
         <div className="field-grid">
           {loadedSources.map((s) => (
             <div className="field" key={s.name}>
               <label>
                 <span>{s.name}</span>
-                <span className="type">URL base</span>
+                <span className="type">{t('report.baseUrl')}</span>
               </label>
-              <input type="url" value={p.servers[s.name] ?? ''} placeholder="https://api.midominio.com" onChange={(e) => p.setServer(s.name, e.target.value)} />
+              <input type="url" value={p.servers[s.name] ?? ''} placeholder={t('params.urlPlaceholder')} onChange={(e) => p.setServer(s.name, e.target.value)} />
             </div>
           ))}
         </div>
         <p className="muted small" style={{ marginBottom: 0 }}>
-          Para ejecutar contra la API real, esta debe permitir CORS desde <code>{window.location.origin}</code>.
+          {tn('params.corsHint', { origin: <code>{window.location.origin}</code> })}
         </p>
       </Section>
 
       <ActionBar
-        left={<button onClick={p.onBack}>← Volver</button>}
-        info={missingRequired.length ? `Faltan: ${missingRequired.join(', ')}` : undefined}
+        left={<button onClick={p.onBack}>{t('common.back')}</button>}
+        info={missingRequired.length ? t('params.missingList', { names: missingRequired.join(', ') }) : undefined}
         right={
           <button className="primary" onClick={p.onNext}>
-            Elegir casos de prueba →
+            {t('params.next')}
           </button>
         }
       />

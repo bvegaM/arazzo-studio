@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
 import { t } from '../../i18n'
+import { useLocale } from '../../i18n/react'
 import { IssueBadge, MethodBadge } from '../components/badges'
 import { ActionBar, Empty, Metric, MoreText, PageHeader, Section } from '../components/kit'
 
@@ -74,6 +75,7 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
 }
 
 function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
+  const locale = useLocale()
   const rows = wa.coverage.flatMap((c) => c.rows)
   const handled = rows.filter((r) => r.kind !== 'sin-manejo').length
   const errs = count(wa.issues, 'error')
@@ -89,7 +91,8 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
       >
         {wa.workflow.description && <MoreText text={wa.workflow.description} />}
         <Suspense fallback={<Empty>{t('contracts.loadingDiagram')}</Empty>}>
-          <WorkflowGraph wa={wa} />
+          {/* Se vuelve a montar al cambiar de idioma para regenerar los textos del grafo. */}
+          <WorkflowGraph key={locale} wa={wa} />
         </Suspense>
       </Section>
 

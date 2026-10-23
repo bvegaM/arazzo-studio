@@ -6,6 +6,7 @@ import { MethodBadge } from './badges'
 import { requirementsFromCriteria, statusesInCriteria } from '../../core/criteria'
 import type { Action } from '../../core/types'
 import { Pill } from './kit'
+import { t } from '../../i18n'
 
 type StepNodeData = { rs: ResolvedStep; index: number; issues: Issue[] }
 
@@ -21,7 +22,7 @@ function StepNode({ data }: NodeProps<Node<StepNodeData>>) {
       <Handle type="source" position={Position.Left} id="act-out" style={{ top: '50%' }} />
       <div className="title">
         <span className="muted">{index + 1}.</span> {rs.step.stepId}
-        {rs.mutating && <span className="badge b-warn" title="Modifica datos">modifica datos</span>}
+        {rs.mutating && <span className="badge b-warn" title={t('graph.mutatingTitle')}>{t('graph.mutating')}</span>}
       </div>
       {rs.op ? (
         <div className="path">
@@ -31,14 +32,18 @@ function StepNode({ data }: NodeProps<Node<StepNodeData>>) {
         <div className="path">{rs.label}</div>
       )}
       <div className="meta">
-        {rs.op ? `${rs.op.operationId ?? 'sin operationId'} · fuente ${rs.op.sourceName}` : rs.kind === 'workflow' ? 'Sub-workflow' : 'Operación no encontrada'}
+        {rs.op
+          ? `${rs.op.operationId ?? t('graph.noOperationId')} · ${t('graph.source', { source: rs.op.sourceName })}`
+          : rs.kind === 'workflow'
+            ? 'Sub-workflow'
+            : t('reason.operacion')}
       </div>
       {rs.step.successCriteria?.length ? (
         <div className="meta">
-          Éxito: <code>{rs.step.successCriteria.map((c) => c.condition).join(' y ')}</code>
+          {t('graph.success')}: <code>{rs.step.successCriteria.map((c) => c.condition).join(t('graph.and'))}</code>
         </div>
       ) : null}
-      {errors.length > 0 && <div className="meta" style={{ color: 'var(--err)' }}>{errors.length} error(es)</div>}
+      {errors.length > 0 && <div className="meta" style={{ color: 'var(--err)' }}>{t('nav.errors', { n: errors.length })}</div>}
       <Handle type="source" position={Position.Bottom} id="bottom" />
     </div>
   )
@@ -51,6 +56,8 @@ interface ActionRow {
   name: string
   effect: string
   kind: 'end' | 'goto' | 'retry' | 'none'
+  /** Paso al que salta un goto. */
+  target?: string
 }
 type ActionsNodeData = { rows: ActionRow[] }
 
@@ -61,7 +68,7 @@ function ActionsNode({ data }: NodeProps<Node<ActionsNodeData>>) {
   return (
     <div className="actions-node">
       <Handle type="target" position={Position.Right} id="in" style={{ top: ACTIONS_HEAD / 2 }} />
-      <div className="actions-head">Según la respuesta</div>
+      <div className="actions-head">{t('graph.byResponse')}</div>
       {data.rows.map((r, i) => (
         <div className={`action-row ${r.trigger === 'sin-manejo' ? 'unhandled' : ''}`} key={i} style={{ height: ROW_H }}>
           {r.kind === 'goto' && <Handle type="source" position={Position.Left} id={`g${i}`} style={{ top: ACTIONS_HEAD + i * ROW_H + ROW_H / 2 }} />}
@@ -82,8 +89,8 @@ function EndNode({ data }: NodeProps<Node<EndNodeData>>) {
   return (
     <div className="end-node">
       <Handle type="target" position={Position.Top} id="top" />
-      <strong>✅ Fin del workflow</strong>
-      {data.outputs.length > 0 && <div className="meta">Outputs: {data.outputs.join(', ')}</div>}
+      <strong>✅ {t('graph.end')}</strong>
+      {data.outputs.length > 0 && <div className="meta">{t('graph.outputs', { outputs: data.outputs.join(', ') })}</div>}
     </div>
   )
 }
@@ -106,25 +113,26 @@ function actionRows(rs: ResolvedStep, wa: WorkflowAnalysis): ActionRow[] {
       const kind = (a.type ?? 'none') as ActionRow['kind']
       rows.push({
         trigger,
-        statuses: statuses.length ? statuses.join(' | ') : trigger === 'onSuccess' ? 'éxito' : 'otro error',
+        statuses: statuses.length ? statuses.join(' | ') : trigger === 'onSuccess' ? t('graph.successShort') : t('graph.otherError'),
         detail,
-        name: a.name ?? a.type ?? '(sin nombre)',
+        name: a.name ?? a.type ?? t('common.unnamed'),
         effect:
           a.type === 'end'
-            ? trigger === 'onSuccess' ? 'fin ✓' : 'fin ✕'
+            ? `${t('graph.effect.end')} ${trigger === 'onSuccess' ? '✓' : '✕'}`
             : a.type === 'goto'
-              ? `ir a ${a.stepId ?? a.workflowId}`
+              ? t('graph.effect.goto', { target: a.stepId ?? a.workflowId ?? '' })
               : a.type === 'retry'
-                ? `reintenta${a.retryLimit ? ` ×${a.retryLimit}` : ''}`
+                ? `${t('graph.effect.retry')}${a.retryLimit ? ` ×${a.retryLimit}` : ''}`
                 : '',
         kind,
+        target: a.type === 'goto' ? a.stepId : undefined,
       })
     }
   }
   const cov = wa.coverage.find((c) => c.stepId === rs.step.stepId)
   for (const r of cov?.rows ?? []) {
     if (r.kind === 'sin-manejo') {
-      rows.push({ trigger: 'sin-manejo', statuses: r.status, detail: '', name: 'sin acción', effect: 'falla', kind: 'none' })
+      rows.push({ trigger: 'sin-manejo', statuses: r.status, detail: '', name: t('graph.noAction'), effect: t('graph.effect.fail'), kind: 'none' })
     }
   }
   return rows
@@ -156,9 +164,8 @@ function buildGraph(wa: WorkflowAnalysis, opts: { actions: boolean; data: boolea
         style: { stroke: 'var(--err)' },
       })
       rows.forEach((r, i) => {
-        if (r.kind !== 'goto') return
-        const target = r.effect.replace(/^ir a /, '')
-        if (!wa.steps.some((s) => s.step.stepId === target)) return
+        const target = r.target
+        if (r.kind !== 'goto' || !target || !wa.steps.some((s) => s.step.stepId === target)) return
         edges.push({
           id: `goto-${rs.step.stepId}-${i}`,
           source: id,
@@ -185,7 +192,7 @@ function buildGraph(wa: WorkflowAnalysis, opts: { actions: boolean; data: boolea
       sourceHandle: 'bottom',
       target: wa.steps[i + 1].step.stepId,
       targetHandle: 'top',
-      label: 'éxito',
+      label: t('graph.successShort'),
       labelStyle: { fill: 'var(--ok)', fontSize: 11 },
       labelBgStyle: { fill: 'var(--surface)' },
       markerEnd: { type: MarkerType.ArrowClosed },
@@ -200,7 +207,7 @@ function buildGraph(wa: WorkflowAnalysis, opts: { actions: boolean; data: boolea
       sourceHandle: 'bottom',
       target: '__end',
       targetHandle: 'top',
-      label: 'éxito',
+      label: t('graph.successShort'),
       labelStyle: { fill: 'var(--ok)', fontSize: 11 },
       labelBgStyle: { fill: 'var(--surface)' },
       markerEnd: { type: MarkerType.ArrowClosed },
@@ -239,16 +246,16 @@ export function WorkflowGraph({ wa }: { wa: WorkflowAnalysis }) {
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
-        <span className="muted small">Mostrar:</span>
+        <span className="muted small">{t('graph.show')}</span>
         <Pill active={showActions} onClick={() => setShowActions(!showActions)}>
-          <span className="dot d-err" /> Acciones según la respuesta {actionCount > 0 && <span className="count">{actionCount}</span>}
+          <span className="dot d-err" /> {t('graph.actionsToggle')} {actionCount > 0 && <span className="count">{actionCount}</span>}
         </Pill>
         <Pill active={showData} onClick={() => setShowData(!showData)}>
-          <span className="dot d-accent" /> Flujo de datos {wa.dataEdges.length > 0 && <span className="count">{wa.dataEdges.length}</span>}
+          <span className="dot d-accent" /> {t('graph.dataToggle')} {wa.dataEdges.length > 0 && <span className="count">{wa.dataEdges.length}</span>}
         </Pill>
         <span className="spacer" />
         <span className="legend small muted">
-          <span className="dot d-ok" /> éxito <span className="dot d-warn" /> goto
+          <span className="dot d-ok" /> {t('graph.successShort')} <span className="dot d-warn" /> goto
         </span>
       </div>
       <div className="graph">
