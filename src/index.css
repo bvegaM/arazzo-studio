@@ -1574,6 +1574,12 @@ td code {
 .tab-body {
   padding-top: 12px;
 }
+.curl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
 .io {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

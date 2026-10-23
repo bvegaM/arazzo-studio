@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
-import { reasonLabel, type StepResult } from '../../core/runner'
+import { realRequest, reasonLabel, type StepResult } from '../../core/runner'
+import { hasMaskedValues, toCurl, type CurlRequest } from '../../core/curl'
 import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
 import { maskDeep } from '../../core/report'
 import { humanizeId } from '../../core/format'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
 import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
 import { t } from '../../i18n'
+import { copyText } from '../../lib/browser'
 
 interface Props {
   runs: CaseRun[]
@@ -25,6 +27,35 @@ function headersText(h: Record<string, string>) {
   return Object.entries(h)
     .map(([k, v]) => `${k}: ${v}`)
     .join('\n')
+}
+
+/** Botón que copia un texto y confirma por un momento que se copió. */
+function CopyButton({ text, label, title, primary }: { text: () => string; label: string; title?: string; primary?: boolean }) {
+  const [state, setState] = useState<'idle' | 'ok' | 'err'>('idle')
+  return (
+    <button
+      className={`small ${primary ? '' : 'ghost'}`}
+      title={title}
+      onClick={async () => {
+        setState((await copyText(text())) ? 'ok' : 'err')
+        setTimeout(() => setState('idle'), 1600)
+      }}
+    >
+      {state === 'ok' ? `✓ ${t('results.copied')}` : state === 'err' ? t('results.copyFailed') : label}
+    </button>
+  )
+}
+
+/** Copiar como cURL: con los secretos como <secret> y, si están disponibles, con los valores reales. */
+function CurlActions({ request }: { request: CurlRequest }) {
+  const real = realRequest(request)
+  const canReveal = real !== request && hasMaskedValues(request)
+  return (
+    <div className="curl-actions">
+      <CopyButton primary text={() => toCurl(request)} label={t('results.copyCurl')} title={canReveal ? t('results.copyCurlSafeHint') : undefined} />
+      {canReveal && <CopyButton text={() => toCurl(real)} label={t('results.copyCurlReal')} title={t('results.copyCurlRealHint')} />}
+    </div>
+  )
 }
 
 function StepCard({ s, index }: { s: StepResult; index: number }) {
@@ -111,16 +142,19 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
               ))}
             {tab === 'peticion' &&
               (s.request ? (
-                <div className="io">
-                  <div>
-                    <h4>{t('results.lineHeaders')}</h4>
-                    <pre>{`${s.request.method} ${s.request.url}\n${headersText(s.request.headers)}`}</pre>
+                <>
+                  <CurlActions request={s.request} />
+                  <div className="io">
+                    <div>
+                      <h4>{t('results.lineHeaders')}</h4>
+                      <pre>{`${s.request.method} ${s.request.url}\n${headersText(s.request.headers)}`}</pre>
+                    </div>
+                    <div>
+                      <h4>Body</h4>
+                      <Json value={s.request.body} />
+                    </div>
                   </div>
-                  <div>
-                    <h4>Body</h4>
-                    <Json value={s.request.body} />
-                  </div>
-                </div>
+                </>
               ) : (
                 <Empty>{t('results.noRequest')}</Empty>
               ))}

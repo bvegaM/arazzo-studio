@@ -239,6 +239,12 @@ export const ui: Record<keyof typeof es, string> = {
   'cases.running': 'Running…',
   'cases.run': 'Run {n} case(s) →',
 
+  'results.copyCurl': 'Copy as cURL',
+  'results.copyCurlReal': 'Copy with credentials',
+  'results.copyCurlSafeHint': 'Tokens and keys stay as <secret> so you can share it',
+  'results.copyCurlRealHint': 'Includes your real credentials: do not share it',
+  'results.copied': 'Copied',
+  'results.copyFailed': 'Could not copy',
   'results.noCriteria': 'No criteria evaluated.',
   'results.lineHeaders': 'Line and headers',
   'results.noRequest': 'No request was sent.',

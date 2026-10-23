@@ -238,6 +238,12 @@ export const ui = {
   'cases.running': 'Ejecutando…',
   'cases.run': 'Ejecutar {n} caso(s) →',
 
+  'results.copyCurl': 'Copiar como cURL',
+  'results.copyCurlReal': 'Copiar con credenciales',
+  'results.copyCurlSafeHint': 'Los tokens y claves quedan como <secret> para que puedas compartirlo',
+  'results.copyCurlRealHint': 'Incluye tus credenciales reales: no lo compartas',
+  'results.copied': 'Copiado',
+  'results.copyFailed': 'No se pudo copiar',
   'results.noCriteria': 'Sin criterios evaluados.',
   'results.lineHeaders': 'Línea y headers',
   'results.noRequest': 'No se envió petición.',

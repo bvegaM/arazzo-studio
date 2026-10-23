@@ -1,4 +1,4 @@
-// Utilidades del navegador (descargas y lectura de archivos), sin lógica de la app.
+// Utilidades del navegador (descargas, archivos y portapapeles), sin lógica de la app.
 
 export interface TextFile {
   name: string
@@ -17,4 +17,22 @@ export function download(text: string, name: string, type: string) {
 
 export function readTextFiles(files: File[]): Promise<TextFile[]> {
   return Promise.all(files.map(async (f) => ({ name: f.name, text: await f.text() })))
+}
+
+/** Copia texto al portapapeles; usa un textarea temporal si la API no está disponible. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const area = document.createElement('textarea')
+    area.value = text
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const ok = document.execCommand('copy')
+    area.remove()
+    return ok
+  }
 }
