@@ -63,9 +63,26 @@ Otras limitaciones del navegador: no se pueden enviar cookies ni el header `Host
 ## Estructura
 
 ```
-src/core   motor independiente de la UI (carga, análisis, expresiones, criterios, runner, casos, contrato)
-src/ui     pantallas en React
-examples   contrato, Arazzo y mock de ejemplo
+src/
+  main.tsx            punto de entrada
+  app/                composición de la app
+    App.tsx           enruta entre pantallas
+    useStudio.ts      estado y acciones del flujo (cargar, ejecutar, exportar)
+    Sidebar.tsx       navegación lateral con el resumen de cada paso
+    example.ts        ejemplo de tarjetas incluido
+  core/               motor independiente de la UI (sin React ni DOM)
+    loader, analyze, openapi, expressions, criteria, runner, testcases,
+    contract, simulator, report, scenariosFile, templates,
+    jsonPointer, format, http, types
+  lib/browser.ts      utilidades del navegador (descargas, lectura de archivos)
+  ui/
+    components/       piezas reutilizables (kit, badges, WorkflowGraph)
+    screens/          una pantalla por paso del flujo
+examples              contrato, Arazzo y mock de ejemplo
 ```
 
+Reglas de dependencia: `ui` y `app` usan `core`; `core` no importa nada de `ui`, `app` ni `lib`. El diagrama (React Flow) se carga bajo demanda para aligerar el bundle inicial.
+
 La ejecución HTTP está detrás de `HttpExecutor` (`src/core/http.ts`). Hay dos implementaciones: `fetch` (API real) y el simulador (`src/core/simulator.ts`).
+
+`npm run typecheck` verifica tipos de la app, la config y los tests.
