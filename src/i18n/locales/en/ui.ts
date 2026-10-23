@@ -111,6 +111,8 @@ export const ui: Record<keyof typeof es, string> = {
   'params.cred.other': 'Unsupported security type; it will be ignored',
   'params.noValue': '(no value)',
   'params.invalidJson': 'Invalid JSON',
+  'params.invalidN': '{n} to review',
+  'params.invalidList': 'Not matching the contract: {names}',
   'picker.include': 'Test “{name}”',
   'picker.testing': '{n} of {total} will be tested',
   'picker.all': 'All',

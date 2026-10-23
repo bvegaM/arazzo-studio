@@ -6,7 +6,7 @@ import type { SecurityScheme } from '../../core/openapi'
 import { humanizeId } from '../../core/format'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
-import { leavesFirst, missingInputs } from '../../core/schemaForm'
+import { invalidPaths, leavesFirst, missingInputs } from '../../core/schemaForm'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 import { SchemaField } from '../components/SchemaField'
 import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
@@ -38,12 +38,18 @@ export function ParamsScreen(p: Props) {
   const optional = props.filter(([n]) => !wa.requiredInputs.includes(n))
   const [showOptional, setShowOptional] = useState(false)
   const missingRequired = missingInputs(wa?.inputsSchema, values)
+  const invalid = invalidPaths(wa?.inputsSchema, values)
   const loadedSources = p.project.sources.filter((s) => s.status === 'loaded')
   const credsFilled = p.analysis.credentials.filter((c) => p.credentials[c.key]).length
 
   const pickerItems: PickerItem[] = p.analysis.workflows.map((w) => {
-    const miss = missingInputs(w.inputsSchema, p.inputs[w.workflow.workflowId]).length
-    return { id: w.workflow.workflowId, summary: w.workflow.summary, tone: miss ? 'err' : 'ok', meta: miss ? t('nav.missing', { n: miss }) : undefined }
+    const vals = p.inputs[w.workflow.workflowId]
+    const miss = missingInputs(w.inputsSchema, vals).length
+    const bad = invalidPaths(w.inputsSchema, vals).length
+    const base = { id: w.workflow.workflowId, summary: w.workflow.summary }
+    if (miss) return { ...base, tone: 'err', meta: t('nav.missing', { n: miss }) }
+    if (bad) return { ...base, tone: 'warn', meta: t('params.invalidN', { n: bad }) }
+    return { ...base, tone: 'ok' }
   })
 
   const field = ([name, schema]: [string, any]) => (
@@ -77,13 +83,16 @@ export function ParamsScreen(p: Props) {
       <Section
         title={t('params.inputsTitle', { workflow: humanizeId(wa?.workflow.workflowId ?? '') })}
         defaultOpen
-        tone={missingRequired.length ? 'err' : undefined}
+        tone={missingRequired.length ? 'err' : invalid.length ? 'warn' : undefined}
         badges={
-          missingRequired.length ? (
-            <span className="badge b-err">{t('params.missingRequired', { n: missingRequired.length })}</span>
-          ) : (
-            <span className="badge b-ok">✅ {t('params.requiredComplete')}</span>
-          )
+          <>
+            {missingRequired.length ? (
+              <span className="badge b-err">{t('params.missingRequired', { n: missingRequired.length })}</span>
+            ) : (
+              <span className="badge b-ok">✅ {t('params.requiredComplete')}</span>
+            )}
+            {invalid.length > 0 && <span className="badge b-warn">{t('params.invalidN', { n: invalid.length })}</span>}
+          </>
         }
       >
         {props.length === 0 ? (
@@ -173,7 +182,13 @@ export function ParamsScreen(p: Props) {
 
       <ActionBar
         left={<button onClick={p.onBack}>{t('common.back')}</button>}
-        info={missingRequired.length ? t('params.missingList', { names: missingRequired.join(', ') }) : undefined}
+        info={
+          missingRequired.length
+            ? t('params.missingList', { names: missingRequired.join(', ') })
+            : invalid.length
+              ? t('params.invalidList', { names: invalid.join(', ') })
+              : undefined
+        }
         right={
           <button className="primary" onClick={p.onNext}>
             {t('params.next')}

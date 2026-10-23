@@ -110,6 +110,8 @@ export const ui = {
   'params.cred.other': 'Tipo de seguridad no soportado; se ignorará',
   'params.noValue': '(sin valor)',
   'params.invalidJson': 'JSON inválido',
+  'params.invalidN': '{n} por revisar',
+  'params.invalidList': 'No cumplen el contrato: {names}',
   'picker.include': 'Probar «{name}»',
   'picker.testing': 'Se probarán {n} de {total}',
   'picker.all': 'Todos',

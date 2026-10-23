@@ -1158,6 +1158,22 @@ td code {
 .field-grid > .fg {
   grid-column: 1 / -1;
 }
+.field-warning {
+  font-size: 12px;
+  color: var(--warn);
+  margin: 4px 0 0;
+}
+.field-warning::before {
+  content: '⚠ ';
+}
+.field.invalid input,
+.field.invalid select,
+.arr-value.invalid input {
+  border-color: color-mix(in srgb, var(--warn) 60%, var(--border));
+}
+.arr-value > input {
+  width: 100%;
+}
 .field-error {
   font-size: 12px;
   color: var(--err);

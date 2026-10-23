@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Campo de formulario que sigue el JSON Schema: los objetos se abren en sus propiedades y las listas en elementos.
 import { useState, type ReactNode } from 'react'
-import { exampleValue, fieldKind, isEmptyValue, leavesFirst, missingPaths, normalizeSchema, schemaType, setKey, typeLabel, valueSummary } from '../../core/schemaForm'
+import { exampleValue, fieldKind, invalidPaths, isEmptyValue, leavesFirst, missingPaths, normalizeSchema, schemaType, setKey, typeLabel, validateValue, valueSummary } from '../../core/schemaForm'
 import { t } from '../../i18n'
 import { Chevron, Segmented } from './kit'
 
@@ -50,6 +50,7 @@ function Group({
   schema,
   typeText,
   missing,
+  invalid,
   empty,
   summary,
   depth,
@@ -62,6 +63,8 @@ function Group({
   schema: any
   typeText: string
   missing: number
+  /** Valores dentro del grupo que no cumplen el esquema. */
+  invalid: number
   empty: boolean
   summary: string
   depth: number
@@ -73,6 +76,8 @@ function Group({
   const status =
     missing > 0 ? (
       <span className="badge b-err">{t('params.missingN', { n: missing })}</span>
+    ) : invalid > 0 ? (
+      <span className="badge b-warn">{t('params.invalidN', { n: invalid })}</span>
     ) : empty ? (
       !required && <span className="badge b-skip">{t('params.groupEmpty')}</span>
     ) : (
@@ -117,6 +122,7 @@ function ObjectField({ name, schema, required, value, onChange, checkRequired = 
       schema={schema}
       typeText={t('params.type.object')}
       missing={missing}
+      invalid={obj ? invalidPaths(schema, obj).length : 0}
       empty={!obj}
       summary={valueSummary(obj)}
       depth={depth}
@@ -169,11 +175,13 @@ function ArrayField({ name, schema, required, value, onChange, checkRequired = t
       schema={schema}
       typeText={`${t('params.type.array')} · ${t('params.itemCount', { n: list.length })}`}
       missing={missing}
+      invalid={invalidPaths(schema, list).length}
       empty={!list.length}
       summary={valueSummary(list)}
       depth={depth}
     >
       {list.length === 0 && <p className="fg-empty">{t('params.noItems')}</p>}
+      {validateValue(schema, list) && <p className="field-warning">{validateValue(schema, list)}</p>}
       <div className="arr-items">
         {list.map((item, i) =>
           groupItems ? (
@@ -199,7 +207,10 @@ function ArrayField({ name, schema, required, value, onChange, checkRequired = t
           ) : (
             <div className="arr-row" key={i}>
               <span className="arr-index">{i + 1}</span>
-              <LeafControl schema={itemSchema} value={item} onChange={(v) => setItem(i, v)} label={t('params.item', { n: i + 1 })} />
+              <div className={`arr-value ${validateValue(itemSchema, item) ? 'invalid' : ''}`}>
+                <LeafControl schema={itemSchema} value={item} onChange={(v) => setItem(i, v)} label={t('params.item', { n: i + 1 })} invalid={!!validateValue(itemSchema, item)} />
+                {validateValue(itemSchema, item) && <div className="field-warning">{validateValue(itemSchema, item)}</div>}
+              </div>
               <RemoveButton onClick={() => remove(i)} />
             </div>
           ),
@@ -290,11 +301,14 @@ function JsonControl({ value, onChange, label, onError }: { value: any; onChange
 function LeafField({ name, schema, required, value, onChange, checkRequired = true }: Props) {
   const [jsonError, setJsonError] = useState<string>()
   const missing = checkRequired && required && isEmptyValue(value)
-  const hint = [schema?.description, schema?.pattern && t('params.pattern', { pattern: schema.pattern })].filter(Boolean).join(' · ')
   const error = jsonError ?? (missing ? t('params.requiredMsg') : undefined)
+  const warning = error ? undefined : validateValue(schema, value)
+  // Si el aviso ya nombra el patrón, no se repite en la ayuda.
+  const showPattern = schema?.pattern && !warning?.includes(schema.pattern)
+  const hint = [schema?.description, showPattern && t('params.pattern', { pattern: schema.pattern })].filter(Boolean).join(' · ')
 
   return (
-    <div className={`field ${missing || jsonError ? 'missing' : ''}`}>
+    <div className={`field ${missing || jsonError ? 'missing' : warning ? 'invalid' : ''}`}>
       <label>
         <span>
           {name} {required && <span className="req">*</span>}
@@ -304,9 +318,10 @@ function LeafField({ name, schema, required, value, onChange, checkRequired = tr
       {fieldKind(schema) === 'json' ? (
         <JsonControl value={value} onChange={onChange} label={name} onError={setJsonError} />
       ) : (
-        <LeafControl schema={schema} value={value} onChange={onChange} label={name} invalid={!!error} />
+        <LeafControl schema={schema} value={value} onChange={onChange} label={name} invalid={!!(error || warning)} />
       )}
       {error && <div className="field-error">{error}</div>}
+      {warning && <div className="field-warning">{warning}</div>}
       {hint && (
         <div className="hint clamp" title={hint}>
           {hint}

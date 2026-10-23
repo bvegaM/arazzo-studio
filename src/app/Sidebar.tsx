@@ -1,4 +1,4 @@
-import { missingInputs } from '../core/schemaForm'
+import { invalidPaths, missingInputs } from '../core/schemaForm'
 import { runnability } from '../core/testcases'
 import { LOCALES, t } from '../i18n'
 import { Segmented } from '../ui/components/kit'
@@ -21,7 +21,9 @@ function navItems(s: Studio): NavItem[] {
   const { project, analysis, testAnalysis, files, inputs, testCases: cases, mode, runs, running } = s
   const allIssues = analysis ? [...analysis.issues, ...analysis.workflows.flatMap((w) => w.issues)] : []
   const errorCount = allIssues.filter((i) => i.level === 'error').length
-  const missing = testAnalysis ? testAnalysis.workflows.reduce((n, w) => n + missingInputs(w.inputsSchema, inputs[w.workflow.workflowId]).length, 0) : 0
+  const countAll = (fn: (schema: any, values: any) => string[]) => testAnalysis?.workflows.reduce((n, w) => n + fn(w.inputsSchema, inputs[w.workflow.workflowId] ?? {}).length, 0) ?? 0
+  const missing = countAll(missingInputs)
+  const invalid = countAll(invalidPaths)
   const done = runs.filter((r) => r.state === 'done')
   const failedRuns = done.filter((r) => r.verdict === 'failed').length
   const passedRuns = done.filter((r) => r.verdict === 'passed').length
@@ -29,7 +31,7 @@ function navItems(s: Studio): NavItem[] {
   return [
     { label: t('nav.load'), sub: project ? t('nav.files', { n: files.length }) : t('nav.noFiles'), tone: project ? (project.sources.some((x) => x.status !== 'loaded') ? 'err' : 'ok') : undefined },
     { label: t('nav.contracts'), sub: analysis ? (errorCount ? t('nav.errors', { n: errorCount }) : workflowsLabel(testAnalysis?.workflows.length ?? 0, analysis.workflows.length)) : '—', tone: analysis ? (errorCount ? 'err' : 'ok') : undefined },
-    { label: t('nav.defaults'), sub: analysis ? (missing ? t('nav.missing', { n: missing }) : t('nav.complete')) : '—', tone: analysis ? (missing ? 'warn' : 'ok') : undefined },
+    { label: t('nav.defaults'), sub: analysis ? (missing ? t('nav.missing', { n: missing }) : invalid ? t('params.invalidN', { n: invalid }) : t('nav.complete')) : '—', tone: analysis ? (missing || invalid ? 'warn' : 'ok') : undefined },
     { label: t('nav.cases'), sub: analysis ? t('nav.ready', { n: cases.filter((c) => c.enabled && runnability(c, mode).ok).length }) : '—' },
     { label: t('nav.results'), sub: runs.length ? (running ? t('nav.running', { done: done.length, total: runs.length }) : t('nav.passed', { passed: passedRuns, total: runs.length })) : '—', tone: runs.length && !running ? (failedRuns ? 'err' : inconclusiveRuns ? 'warn' : 'ok') : undefined },
   ]
