@@ -2,7 +2,7 @@
 import type { WorkflowAnalysis } from './analyze'
 import { collectReferences } from './expressions'
 import { documentedStatuses } from './openapi'
-import type { WorkflowRunResult } from './runner'
+import type { StepResult, WorkflowRunResult } from './runner'
 import { requirementsFromCriteria } from './criteria'
 import type { Scenario } from './simulator'
 import type { Action } from './types'
@@ -417,4 +417,27 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
     verdict: 'failed',
     explanation: `"${target.stepId}" respondió ${status}; se esperaba ${statusText(accepted)}.`,
   }
+}
+
+/** Estado de la ejecución de un caso. */
+export interface CaseRun {
+  tc: TestCase
+  state: 'pending' | 'running' | 'done'
+  steps: StepResult[]
+  result?: WorkflowRunResult
+  verdict?: Verdict
+  explanation?: string
+  /** Parámetros con los que corrió el caso (ya con generadores resueltos). */
+  inputsUsed?: Record<string, any>
+  simulated?: boolean
+}
+
+/** Valores iniciales de los inputs de un workflow, tomados de example/default/enum del schema. */
+export function defaultInputs(schema: any): Record<string, any> {
+  const out: Record<string, any> = {}
+  for (const [name, s] of Object.entries<any>(schema?.properties ?? {})) {
+    const v = s.example ?? s.examples?.[0] ?? s.default ?? s.enum?.[0]
+    if (v !== undefined) out[name] = v
+  }
+  return out
 }

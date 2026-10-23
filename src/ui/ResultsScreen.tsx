@@ -1,21 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
-import { REASON_LABEL, type StepResult, type WorkflowRunResult } from '../core/runner'
-import { dataSummary, type TestCase, type Verdict } from '../core/testcases'
+import { REASON_LABEL, type StepResult } from '../core/runner'
+import { dataSummary, type CaseRun, type Verdict } from '../core/testcases'
 import { maskDeep } from '../core/report'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from './common'
 import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from './kit'
-
-export interface CaseRun {
-  tc: TestCase
-  state: 'pending' | 'running' | 'done'
-  steps: StepResult[]
-  result?: WorkflowRunResult
-  verdict?: Verdict
-  explanation?: string
-  /** Parámetros con los que corrió el caso (ya con generadores resueltos). */
-  inputsUsed?: Record<string, any>
-  simulated?: boolean
-}
 
 interface Props {
   runs: CaseRun[]

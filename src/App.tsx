@@ -6,14 +6,14 @@ import { getServerUrl } from './core/openapi'
 import { fetchExecutor } from './core/http'
 import { createSimulatedExecutor } from './core/simulator'
 import { runWorkflow } from './core/runner'
-import { applyCaseInputs, evaluateCase, generateTestCases, isSimulated, runnability, type RunMode, type TestCase } from './core/testcases'
+import { applyCaseInputs, defaultInputs, evaluateCase, generateTestCases, isSimulated, runnability, type CaseRun, type RunMode, type TestCase } from './core/testcases'
 import { exportScenarios, importScenarios } from './core/scenariosFile'
 import { buildHtmlReport, maskDeep } from './core/report'
 import { LoadScreen } from './ui/LoadScreen'
 import { ContractsScreen } from './ui/ContractsScreen'
 import { ParamsScreen } from './ui/ParamsScreen'
 import { CasesScreen } from './ui/CasesScreen'
-import { ResultsScreen, type CaseRun } from './ui/ResultsScreen'
+import { ResultsScreen } from './ui/ResultsScreen'
 import exampleArazzo from '../examples/credit-cards/card-onboarding.arazzo.yaml?raw'
 import exampleOpenapi from '../examples/credit-cards/credit-cards.yaml?raw'
 
@@ -29,15 +29,6 @@ function download(text: string, name: string, type: string) {
 
 async function readFiles(files: File[]): Promise<ParsedFile[]> {
   return Promise.all(files.map(async (f) => parseFile({ name: f.name, text: await f.text() })))
-}
-
-function defaultInputs(schema: any): Record<string, any> {
-  const out: Record<string, any> = {}
-  for (const [name, s] of Object.entries<any>(schema?.properties ?? {})) {
-    const v = s.example ?? s.examples?.[0] ?? s.default ?? s.enum?.[0]
-    if (v !== undefined) out[name] = v
-  }
-  return out
 }
 
 export default function App() {
