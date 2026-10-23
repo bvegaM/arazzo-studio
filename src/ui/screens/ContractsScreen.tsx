@@ -31,9 +31,9 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
   const pickerItems: PickerItem[] = analysis.workflows.map((w) => {
     const errs = count(w.issues, 'error')
     const warns = count(w.issues, 'warning')
-    if (errs) return { id: w.workflow.workflowId, tone: 'err', meta: t('nav.errors', { n: errs }) }
-    if (warns) return { id: w.workflow.workflowId, tone: 'warn', meta: t('contracts.warningsN', { n: warns }) }
-    return { id: w.workflow.workflowId, tone: 'ok', meta: stepsLabel(w.steps.length) }
+    if (errs) return { id: w.workflow.workflowId, summary: w.workflow.summary, tone: 'err', meta: t('nav.errors', { n: errs }) }
+    if (warns) return { id: w.workflow.workflowId, summary: w.workflow.summary, tone: 'warn', meta: t('contracts.warningsN', { n: warns }) }
+    return { id: w.workflow.workflowId, summary: w.workflow.summary, tone: 'ok', meta: stepsLabel(w.steps.length) }
   })
 
   return (

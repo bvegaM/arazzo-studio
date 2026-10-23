@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ProjectAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
 import type { SecurityScheme } from '../../core/openapi'
+import { humanizeId } from '../../core/format'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
 import { leavesFirst, missingInputs } from '../../core/schemaForm'
@@ -42,7 +43,7 @@ export function ParamsScreen(p: Props) {
 
   const pickerItems: PickerItem[] = p.analysis.workflows.map((w) => {
     const miss = missingInputs(w.inputsSchema, p.inputs[w.workflow.workflowId]).length
-    return { id: w.workflow.workflowId, tone: miss ? 'err' : 'ok', meta: miss ? t('nav.missing', { n: miss }) : undefined }
+    return { id: w.workflow.workflowId, summary: w.workflow.summary, tone: miss ? 'err' : 'ok', meta: miss ? t('nav.missing', { n: miss }) : undefined }
   })
 
   const field = ([name, schema]: [string, any]) => (
@@ -74,7 +75,7 @@ export function ParamsScreen(p: Props) {
       )}
 
       <Section
-        title={t('params.inputsTitle', { workflow: wa?.workflow.workflowId })}
+        title={t('params.inputsTitle', { workflow: humanizeId(wa?.workflow.workflowId ?? '') })}
         defaultOpen
         tone={missingRequired.length ? 'err' : undefined}
         badges={

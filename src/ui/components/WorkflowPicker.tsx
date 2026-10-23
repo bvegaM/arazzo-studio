@@ -1,27 +1,20 @@
-// Selector de workflow: lista ordenada en columnas iguales, estado como ícono y buscador si son muchos.
-import { Fragment, useState, type ReactNode } from 'react'
+// Selector de workflow: nombres legibles en columnas iguales, estado como ícono y buscador si son muchos.
+import { useState, type ReactNode } from 'react'
+import { humanizeId } from '../../core/format'
 import { t } from '../../i18n'
 
 export type PickerTone = 'ok' | 'warn' | 'err'
 
 export interface PickerItem {
   id: string
+  /** Descripción corta del workflow (summary del Arazzo), en una segunda línea. */
+  summary?: string
   tone: PickerTone
   /** Detalle corto a la derecha (ej. "Faltan 2" o "3 pasos"). */
   meta?: ReactNode
 }
 
 const FILTER_FROM = 7
-
-/** Corta los nombres camelCase en sus palabras para que salten de línea sin romper una palabra. */
-function breakable(id: string): ReactNode {
-  return id.split(/(?=[A-Z])|(?<=[_-])/).map((part, i) => (
-    <Fragment key={i}>
-      {i > 0 && <wbr />}
-      {part}
-    </Fragment>
-  ))
-}
 
 function StatusIcon({ tone }: { tone: PickerTone }) {
   return (
@@ -34,7 +27,7 @@ function StatusIcon({ tone }: { tone: PickerTone }) {
 export function WorkflowPicker({ items, value, onChange, summary }: { items: PickerItem[]; value: string; onChange: (id: string) => void; summary: ReactNode }) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
-  const shown = q ? items.filter((i) => i.id.toLowerCase().includes(q)) : items
+  const shown = q ? items.filter((i) => [i.id, humanizeId(i.id), i.summary ?? ''].some((x) => x.toLowerCase().includes(q))) : items
 
   return (
     <div className="wp">
@@ -47,9 +40,12 @@ export function WorkflowPicker({ items, value, onChange, summary }: { items: Pic
       </div>
       <div className="wp-list">
         {shown.map((item) => (
-          <button key={item.id} className={`wp-item ${item.id === value ? 'active' : ''}`} aria-current={item.id === value || undefined} title={item.id} onClick={() => onChange(item.id)}>
+          <button key={item.id} className={`wp-item ${item.id === value ? 'active' : ''}`} aria-current={item.id === value || undefined} title={item.summary ? `${item.id} — ${item.summary}` : item.id} onClick={() => onChange(item.id)}>
             <StatusIcon tone={item.tone} />
-            <span className="wp-name">{breakable(item.id)}</span>
+            <span className="wp-text">
+              <span className="wp-name">{humanizeId(item.id)}</span>
+              {item.summary && <span className="wp-sub">{item.summary}</span>}
+            </span>
             {item.meta && <span className={`wp-meta wp-meta-${item.tone}`}>{item.meta}</span>}
           </button>
         ))}
