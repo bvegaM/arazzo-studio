@@ -1,7 +1,10 @@
+import { lazy, Suspense } from 'react'
 import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
 import { IssueBadge, MethodBadge } from '../components/badges'
-import { ActionBar, Metric, MoreText, PageHeader, Section } from '../components/kit'
-import { WorkflowGraph } from '../components/WorkflowGraph'
+import { ActionBar, Empty, Metric, MoreText, PageHeader, Section } from '../components/kit'
+
+// React Flow pesa bastante: se carga solo cuando se muestra el diagrama.
+const WorkflowGraph = lazy(() => import('../components/WorkflowGraph').then((m) => ({ default: m.WorkflowGraph })))
 
 interface Props {
   analysis: ProjectAnalysis
@@ -80,7 +83,9 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
         defaultOpen
       >
         {wa.workflow.description && <MoreText text={wa.workflow.description} />}
-        <WorkflowGraph wa={wa} />
+        <Suspense fallback={<Empty>Cargando diagrama…</Empty>}>
+          <WorkflowGraph wa={wa} />
+        </Suspense>
       </Section>
 
       <IssuesSection title="Validación del workflow" issues={wa.issues} defaultOpen={errs > 0 || warns > 0} />
