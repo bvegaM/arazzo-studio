@@ -21,6 +21,8 @@ import {
 import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
 import { download, readTextFiles } from '../lib/browser'
+import { setLocale, type Locale } from '../i18n'
+import { useLocale } from '../i18n/react'
 import { EXAMPLE_FILES } from './example'
 
 export const Screen = { Load: 0, Contracts: 1, Params: 2, Cases: 3, Results: 4 } as const
@@ -44,6 +46,7 @@ export function useStudio() {
   const [runs, setRuns] = useState<CaseRun[]>([])
   const [running, setRunning] = useState(false)
   const abort = useRef<AbortController | null>(null)
+  const locale = useLocale()
 
   function goTo(s: Screen) {
     setScreenState(s)
@@ -158,6 +161,13 @@ export function useStudio() {
     setRunning(false)
   }
 
+  /** Cambia el idioma y regenera el análisis y los casos para que sus textos lo sigan. */
+  function changeLocale(l: Locale) {
+    setLocale(l)
+    document.documentElement.lang = l
+    if (project) applyProject(project)
+  }
+
   function cancelRun() {
     abort.current?.abort()
   }
@@ -200,6 +210,8 @@ export function useStudio() {
   return {
     screen,
     goTo,
+    locale,
+    changeLocale,
     files,
     project,
     analysis,

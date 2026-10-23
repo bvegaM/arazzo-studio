@@ -1,2 +1,28 @@
 // Textos de la interfaz (src/app y src/ui).
-export const ui = {}
+export const ui = {
+  'brand.sub': 'Pruebas de workflows',
+  'sidebar.privacy': 'Todo corre en tu navegador. Nada se envía a un servidor propio.',
+  'sidebar.language': 'Idioma',
+  'nav.load': 'Cargar',
+  'nav.files': '{n} archivo(s)',
+  'nav.noFiles': 'Sin archivos',
+  'nav.contracts': 'Contratos',
+  'nav.errors': '{n} error(es)',
+  'nav.workflows': '{n} workflow(s)',
+  'nav.defaults': 'Valores por defecto',
+  'nav.missing': 'Faltan {n}',
+  'nav.complete': 'Completos',
+  'nav.cases': 'Casos',
+  'nav.ready': '{n} listos para ejecutar',
+  'nav.results': 'Resultados',
+  'nav.running': '{done}/{total} ejecutando…',
+  'nav.passed': '{passed}/{total} pasaron',
+
+  'kit.stepOf': 'Paso {step} de {total}',
+  'kit.more': 'Ver más',
+  'kit.less': 'Ver menos',
+  'common.empty': '(vacío)',
+  'issue.error': 'Error',
+  'issue.warning': 'Advertencia',
+  'issue.info': 'Info',
+}

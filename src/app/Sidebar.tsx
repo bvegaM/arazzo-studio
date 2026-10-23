@@ -1,4 +1,6 @@
 import { runnability } from '../core/testcases'
+import { LOCALES, t } from '../i18n'
+import { Segmented } from '../ui/components/kit'
 import type { Screen, Studio } from './useStudio'
 
 type Tone = 'ok' | 'err' | 'warn'
@@ -22,16 +24,16 @@ function navItems(s: Studio): NavItem[] {
   const passedRuns = done.filter((r) => r.verdict === 'passed').length
   const inconclusiveRuns = done.filter((r) => r.verdict === 'inconclusive').length
   return [
-    { label: 'Cargar', sub: project ? `${files.length} archivo(s)` : 'Sin archivos', tone: project ? (project.sources.some((x) => x.status !== 'loaded') ? 'err' : 'ok') : undefined },
-    { label: 'Contratos', sub: analysis ? (errorCount ? `${errorCount} error(es)` : `${analysis.workflows.length} workflow(s)`) : '—', tone: analysis ? (errorCount ? 'err' : 'ok') : undefined },
-    { label: 'Valores por defecto', sub: analysis ? (missingInputs ? `Faltan ${missingInputs}` : 'Completos') : '—', tone: analysis ? (missingInputs ? 'warn' : 'ok') : undefined },
-    { label: 'Casos', sub: analysis ? `${cases.filter((c) => c.enabled && runnability(c, mode).ok).length} listos para ejecutar` : '—' },
-    { label: 'Resultados', sub: runs.length ? (running ? `${done.length}/${runs.length} ejecutando…` : `${passedRuns}/${runs.length} pasaron`) : '—', tone: runs.length && !running ? (failedRuns ? 'err' : inconclusiveRuns ? 'warn' : 'ok') : undefined },
+    { label: t('nav.load'), sub: project ? t('nav.files', { n: files.length }) : t('nav.noFiles'), tone: project ? (project.sources.some((x) => x.status !== 'loaded') ? 'err' : 'ok') : undefined },
+    { label: t('nav.contracts'), sub: analysis ? (errorCount ? t('nav.errors', { n: errorCount }) : t('nav.workflows', { n: analysis.workflows.length })) : '—', tone: analysis ? (errorCount ? 'err' : 'ok') : undefined },
+    { label: t('nav.defaults'), sub: analysis ? (missingInputs ? t('nav.missing', { n: missingInputs }) : t('nav.complete')) : '—', tone: analysis ? (missingInputs ? 'warn' : 'ok') : undefined },
+    { label: t('nav.cases'), sub: analysis ? t('nav.ready', { n: cases.filter((c) => c.enabled && runnability(c, mode).ok).length }) : '—' },
+    { label: t('nav.results'), sub: runs.length ? (running ? t('nav.running', { done: done.length, total: runs.length }) : t('nav.passed', { passed: passedRuns, total: runs.length })) : '—', tone: runs.length && !running ? (failedRuns ? 'err' : inconclusiveRuns ? 'warn' : 'ok') : undefined },
   ]
 }
 
 export function Sidebar({ studio }: { studio: Studio }) {
-  const { project, analysis, runs, screen, goTo } = studio
+  const { project, analysis, runs, screen, goTo, locale, changeLocale } = studio
   const reachable = (i: number) => i === 0 || (!!analysis && (i < 4 || runs.length > 0))
 
   return (
@@ -40,7 +42,7 @@ export function Sidebar({ studio }: { studio: Studio }) {
         <div className="brand-mark">A</div>
         <div>
           <div>Arazzo Studio</div>
-          <div className="brand-sub">Pruebas de workflows</div>
+          <div className="brand-sub">{t('brand.sub')}</div>
         </div>
       </div>
       {project && (
@@ -59,7 +61,10 @@ export function Sidebar({ studio }: { studio: Studio }) {
           </button>
         ))}
       </nav>
-      <div className="sidebar-foot">Todo corre en tu navegador. Nada se envía a un servidor propio.</div>
+      <div className="sidebar-foot">{t('sidebar.privacy')}</div>
+      <div className="sidebar-lang" aria-label={t('sidebar.language')}>
+        <Segmented options={LOCALES.map((l) => ({ id: l.id, label: l.label }))} value={locale} onChange={changeLocale} />
+      </div>
     </aside>
   )
 }

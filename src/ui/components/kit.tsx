@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { t } from '../../i18n'
 
 /** Tarjeta plegable: el encabezado siempre visible, el contenido se muestra con un clic. */
 export function Section({
@@ -96,7 +97,7 @@ export function PageHeader({ step, title, description, actions }: { step: number
   return (
     <header className="page-head">
       <div>
-        <div className="eyebrow">Paso {step} de 5</div>
+        <div className="eyebrow">{t('kit.stepOf', { step, total: 5 })}</div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
@@ -139,7 +140,7 @@ export function MoreText({ text }: { text: string }) {
       <span className={!open && long ? 'clamp-2' : ''}>{text}</span>
       {long && (
         <button className="link small" onClick={() => setOpen(!open)}>
-          {open ? 'Ver menos' : 'Ver más'}
+          {open ? t('kit.less') : t('kit.more')}
         </button>
       )}
     </p>
