@@ -117,7 +117,7 @@ export function useStudio() {
       const wfIds = new Set(a.workflows.map((w) => w.workflow.workflowId))
       const generated = a.workflows.flatMap(generateTestCases).map((c) => {
         const old = byId.get(c.id)
-        return old ? { ...c, enabled: old.enabled, inputOverrides: old.inputOverrides, dataMode: old.dataMode } : c
+        return old ? { ...c, enabled: old.enabled, inputOverrides: old.inputOverrides, omitInputs: old.omitInputs, dataMode: old.dataMode } : c
       })
       const custom = prev.filter((c) => c.origin === 'datos' && wfIds.has(c.workflowId))
       return [...generated, ...custom]
