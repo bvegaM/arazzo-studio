@@ -111,6 +111,22 @@ export function LoadScreen(p: Props) {
         />
       </div>
 
+      {!p.files.length && (
+        <ol className="how-it-works" aria-label={t('load.how.title')}>
+          {([1, 2, 3] as const).map((n) => (
+            <li key={n}>
+              <span className="how-num" aria-hidden="true">
+                {n}
+              </span>
+              <div>
+                <strong>{t(`load.how.${n}.title`)}</strong>
+                <p>{t(`load.how.${n}.text`)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
       {p.errors.length > 0 && (
         <div className="callout err">
           {p.errors.map((e) => (
@@ -129,7 +145,7 @@ export function LoadScreen(p: Props) {
             </div>
           </div>
           <span className={`badge ${missing.length ? 'b-err' : 'b-ok'}`}>
-            {missing.length ? `❌ ${t('load.missingContracts', { n: missing.length })}` : `✅ ${t('load.contractsComplete')}`}
+            {missing.length ? `✕ ${t('load.missingContracts', { n: missing.length })}` : `✓ ${t('load.contractsComplete')}`}
           </span>
         </div>
       )}
@@ -146,7 +162,7 @@ export function LoadScreen(p: Props) {
             {sources.map((s) => (
               <li key={s.name}>
                 <span className={`badge ${s.status === 'loaded' ? 'b-ok' : 'b-err'}`}>
-                  {s.status === 'loaded' ? `✅ ${t('load.status.loaded')}` : s.status === 'missing' ? `❌ ${t('load.status.missing')}` : `❌ ${t('load.status.error')}`}
+                  {s.status === 'loaded' ? `✓ ${t('load.status.loaded')}` : s.status === 'missing' ? `✕ ${t('load.status.missing')}` : `✕ ${t('load.status.error')}`}
                 </span>
                 <div className="grow">
                   <strong>{s.name}</strong>

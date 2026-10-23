@@ -1931,6 +1931,45 @@ button.icon {
   gap: 12px;
   justify-content: flex-end;
 }
+/* Cómo funciona (paso 1 vacío) */
+.how-it-works {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+.how-it-works li {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.how-it-works strong {
+  font-size: 13.5px;
+}
+.how-it-works p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.how-num {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
 /* Continuar sesión */
 .resume {
   display: flex;
