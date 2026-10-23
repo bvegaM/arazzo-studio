@@ -8,6 +8,7 @@ import { setByPointer } from './jsonPointer'
 import { getServerUrl, operationRequestBody, type SecurityScheme } from './openapi'
 import { validateAgainstContract } from './contract'
 import { NetworkError, type HttpExecutor } from './http'
+import { t } from '../i18n'
 
 export type StepStatus = 'success' | 'warning' | 'failed' | 'skipped'
 
@@ -22,16 +23,8 @@ export type ReasonCategory =
   | 'error-api'
   | 'output'
 
-export const REASON_LABEL: Record<ReasonCategory, string> = {
-  criterio: 'Criterio no cumplido',
-  contrato: 'Respuesta fuera de contrato',
-  autenticacion: 'Autenticación',
-  red: 'Red o CORS',
-  'dato-previo': 'Dato no disponible',
-  operacion: 'Operación no encontrada',
-  dependencia: 'No ejecutado',
-  'error-api': 'Error devuelto por la API',
-  output: 'Output no capturado',
+export function reasonLabel(category: ReasonCategory): string {
+  return t(`reason.${category}`)
 }
 
 export interface Reason {
@@ -244,7 +237,7 @@ async function executeOperationStep(
   if (!server) {
     result.reason = {
       category: 'red',
-      message: `No hay URL de servidor para la fuente "${op.sourceName}". Defínela en la pantalla de parámetros.`,
+      message: t('run.noServer', { source: op.sourceName }),
     }
     return result
   }
@@ -260,7 +253,7 @@ async function executeOperationStep(
   } catch (e) {
     result.reason = {
       category: 'red',
-      message: e instanceof NetworkError ? e.message : `Error inesperado al ejecutar: ${(e as Error).message}`,
+      message: e instanceof NetworkError ? e.message : t('run.unexpected', { error: (e as Error).message }),
     }
     return result
   }
@@ -284,10 +277,10 @@ async function executeOperationStep(
     const ok = response.status >= 200 && response.status < 300
     result.criteria = [
       {
-        condition: '(implícito) respuesta 2xx',
+        condition: t('run.implicit2xx'),
         type: 'simple',
         passed: ok,
-        detail: ok ? `$statusCode = ${response.status} ✔` : `Se esperaba un 2xx, pero vale ${response.status}`,
+        detail: ok ? `$statusCode = ${response.status} ✔` : t('run.expected2xx', { status: response.status }),
       },
     ]
   }
@@ -318,14 +311,14 @@ async function executeOperationStep(
       result.status = 'warning'
       result.reason = {
         category: 'contrato',
-        message: `La API respondió ${response.status} y se cumplieron los criterios, pero la respuesta no cumple el contrato: ${result.contractIssues[0]}`,
+        message: t('run.contractWarning', { status: response.status, issue: result.contractIssues[0] }),
       }
     } else if (result.missingOutputs.some((o) => consumedOutputs.includes(o))) {
       const used = result.missingOutputs.filter((o) => consumedOutputs.includes(o))
       result.status = 'warning'
       result.reason = {
         category: 'output',
-        message: `No se pudo capturar ${used.map((o) => `"${o}"`).join(', ')} de la respuesta, y lo usan pasos posteriores.`,
+        message: t('run.outputMissing', { outputs: used.map((o) => `"${o}"`).join(', ') }),
       }
     } else result.status = 'success'
   } else {
@@ -335,21 +328,21 @@ async function executeOperationStep(
       result.reason = {
         category: 'autenticacion',
         message: opts.dropAuth
-          ? `La API respondió ${response.status}: la petición se envió sin credenciales (como pide el caso de prueba).`
-          : `La API respondió ${response.status}${msg ? ` ("${msg}")` : ''}. Revisa la credencial${names ? ` de ${names}` : ''}.`,
+          ? t('run.authDropped', { status: response.status })
+          : t(names ? 'run.authFailedOf' : 'run.authFailed', { status: response.status, msg: msg ? ` ("${msg}")` : '', names }),
       }
     } else if (relevantUnresolved.length) {
       result.reason = {
         category: 'dato-previo',
-        message: `No se pudo resolver ${relevantUnresolved.join(', ')}; la petición se envió incompleta y la API respondió ${response.status}${msg ? ` ("${msg}")` : ''}.`,
+        message: t('run.unresolved', { refs: relevantUnresolved.join(', '), status: response.status, msg: msg ? ` ("${msg}")` : '' }),
       }
     } else if (response.status >= 400) {
       result.reason = {
         category: 'error-api',
-        message: `La API respondió ${response.status} ${response.statusText}${msg ? `: "${msg}"` : ''}. ${failedCriterion?.detail ?? ''}`.trim(),
+        message: t('run.apiError', { status: `${response.status} ${response.statusText}`.trim(), msg: msg ? `: "${msg}"` : '', detail: failedCriterion?.detail ?? '' }).trim(),
       }
     } else {
-      result.reason = { category: 'criterio', message: failedCriterion?.detail ?? 'Un criterio no se cumplió.' }
+      result.reason = { category: 'criterio', message: failedCriterion?.detail ?? t('run.criterionFailed') }
     }
   }
   return result
@@ -389,12 +382,12 @@ export async function runWorkflow(
   while (i < wa.steps.length) {
     if (opts.signal?.aborted) {
       status = 'failed'
-      failure = { category: 'red', message: 'La ejecución fue cancelada.' }
+      failure = { category: 'red', message: t('run.cancelled') }
       break
     }
     if (++executions > MAX_EXECUTIONS) {
       status = 'failed'
-      failure = { category: 'criterio', message: 'Se detuvo la ejecución: posible ciclo infinito de acciones goto/retry.' }
+      failure = { category: 'criterio', message: t('run.loop') }
       break
     }
     const rs = wa.steps[i]
@@ -413,7 +406,7 @@ export async function runWorkflow(
         missingOutputs: [],
         contractIssues: [],
         unresolved: [],
-        reason: { category: 'operacion', message: `No se encontró la operación "${rs.label}" en los contratos cargados.` },
+        reason: { category: 'operacion', message: t('run.opNotFound', { op: rs.label }) },
       }
     } else if (rs.kind === 'workflow') {
       const subInputs: Record<string, any> = {}
@@ -445,11 +438,13 @@ export async function runWorkflow(
         unresolved: [],
         subRun: sub,
         reason: !sub
-          ? { category: 'criterio', message: 'Demasiados niveles de sub-workflows anidados.' }
+          ? { category: 'criterio', message: t('run.tooDeep') }
           : sub.status === 'failed'
             ? {
                 category: 'dependencia',
-                message: `El sub-workflow "${rs.subWorkflowId}" falló${failedStep ? ` en el paso "${failedStep.stepId}": ${failedStep.reason?.message ?? ''}` : '.'}`,
+                message: failedStep
+                  ? t('run.subFailedAt', { workflow: rs.subWorkflowId ?? '', step: failedStep.stepId, reason: failedStep.reason?.message ?? '' })
+                  : t('run.subFailed', { workflow: rs.subWorkflowId ?? '' }),
               }
             : undefined,
       }
@@ -480,7 +475,7 @@ export async function runWorkflow(
       ? chooseAction(project, step.onSuccess ?? wf.successActions, ctx)
       : chooseAction(project, step.onFailure ?? wf.failureActions, ctx)
     if (action) {
-      result.actionName = action.name ?? action.type ?? '(sin nombre)'
+      result.actionName = action.name ?? action.type ?? t('common.unnamed')
       result.actionType = action.type
       actions.push({ stepId: step.stepId, name: result.actionName, type: action.type ?? '' })
     }
@@ -491,24 +486,24 @@ export async function runWorkflow(
       const done = retries[step.stepId] ?? 0
       if (done < limit) {
         retries[step.stepId] = done + 1
-        result.action = `Reintento ${done + 1} de ${limit} (acción "${action.name ?? 'retry'}")`
+        result.action = t('run.action.retry', { n: done + 1, limit, action: action.name ?? 'retry' })
         const wait = Math.min((action.retryAfter ?? 0) * 1000, opts.maxRetryWaitMs ?? 10000)
         if (wait > 0) await new Promise((r) => setTimeout(r, wait))
         continue
       }
-      result.action = `Se agotaron los ${limit} reintentos`
+      result.action = t('run.action.retriesExhausted', { limit })
     }
 
     if (action?.type === 'goto') {
       if (action.stepId) {
         const target = wa.steps.findIndex((s) => s.step.stepId === action.stepId)
         if (target >= 0) {
-          result.action = `Va al paso "${action.stepId}" (acción "${action.name ?? 'goto'}")`
+          result.action = t('run.action.goto', { step: action.stepId, action: action.name ?? 'goto' })
           i = target
           continue
         }
       } else if (action.workflowId && workflowById(project, action.workflowId)) {
-        result.action = `Continúa en el workflow "${action.workflowId}"`
+        result.action = t('run.action.gotoWorkflow', { workflow: action.workflowId })
         const sub = await runWorkflow(project, analysis, action.workflowId, { ...opts, onStep: undefined }, depth + 1)
         result.subRun = sub
         status = sub.status
@@ -518,7 +513,7 @@ export async function runWorkflow(
     }
 
     if (action?.type === 'end') {
-      result.action = `Fin del workflow (acción "${action.name ?? 'end'}")`
+      result.action = t('run.action.end', { action: action.name ?? 'end' })
       if (!succeeded) {
         status = 'failed'
         failure = result.reason
@@ -553,9 +548,9 @@ export async function runWorkflow(
         status === 'failed'
           ? {
               category: 'dependencia',
-              message: failedStep ? `No se ejecutó porque el paso "${failedStep.stepId}" falló.` : 'No se ejecutó porque el workflow se detuvo.',
+              message: failedStep ? t('run.skipped.stepFailed', { step: failedStep.stepId }) : t('run.skipped.stopped'),
             }
-          : { category: 'dependencia', message: 'No se ejecutó: el flujo terminó antes por una acción end/goto.' },
+          : { category: 'dependencia', message: t('run.skipped.ended') },
     })
   }
 

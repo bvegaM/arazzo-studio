@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { REASON_LABEL, type StepResult } from '../../core/runner'
+import { reasonLabel, type StepResult } from '../../core/runner'
 import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
 import { maskDeep } from '../../core/report'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
@@ -60,7 +60,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
         <div className="step-notes">
           {s.reason && (
             <div className={`note n-${reasonTone}`}>
-              <strong>{REASON_LABEL[s.reason.category]}:</strong> {s.reason.message}
+              <strong>{reasonLabel(s.reason.category)}:</strong> {s.reason.message}
             </div>
           )}
           {(s.action || s.actionName) && <div className="note n-action">↪ {s.action ?? `Acción "${s.actionName}" (${s.actionType})`}</div>}

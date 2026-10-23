@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Archivo de escenarios: bases por workflow y casos con datos propios, para versionarlo junto al Arazzo.
 import YAML from 'yaml'
+import { t } from '../i18n'
 import { createDataCase, type TestCase } from './testcases'
 
 export interface ScenariosImport {
@@ -55,9 +56,10 @@ export function exportScenarios(params: {
     casos,
   }
   return (
-    '# Escenarios de Arazzo Studio\n' +
-    '# bases: valores por defecto por workflow. casos: lo que cambia cada caso (inputs) y lo que no envía (omitir).\n' +
-    '# Admite generadores: {{email}} {{cpf}} {{rut}} {{uuid}} {{numero:8}} {{fecha}} {{timestamp}}\n' +
+    t('scen.header')
+      .split('\n')
+      .map((l) => `# ${l}\n`)
+      .join('') +
     YAML.stringify(doc, { lineWidth: 0 })
   )
 }
@@ -69,13 +71,13 @@ export function importScenarios(text: string, current: TestCase[], workflowIds: 
   try {
     doc = YAML.parse(text)
   } catch (e) {
-    return { bases: {}, cases: current, errors: [`No se pudo leer el YAML: ${(e as Error).message}`], summary: '' }
+    return { bases: {}, cases: current, errors: [t('scen.parse', { error: (e as Error).message })], summary: '' }
   }
-  if (!doc || typeof doc !== 'object') return { bases: {}, cases: current, errors: ['El archivo está vacío.'], summary: '' }
+  if (!doc || typeof doc !== 'object') return { bases: {}, cases: current, errors: [t('scen.empty')], summary: '' }
 
   const bases: Record<string, Record<string, any>> = {}
   for (const [wf, values] of Object.entries<any>(doc.bases ?? {})) {
-    if (!workflowIds.includes(wf)) errors.push(`La base de "${wf}" se ignoró: ese workflow no existe en el Arazzo cargado.`)
+    if (!workflowIds.includes(wf)) errors.push(t('scen.baseIgnored', { workflow: wf }))
     else if (values && typeof values === 'object') bases[wf] = values
   }
 
@@ -86,13 +88,13 @@ export function importScenarios(text: string, current: TestCase[], workflowIds: 
     const where = `casos[${i}]${item?.nombre ? ` ("${item.nombre}")` : ''}`
     if (!item || typeof item !== 'object') continue
     if (!workflowIds.includes(item.workflow)) {
-      errors.push(`${where}: el workflow "${item.workflow}" no existe en el Arazzo cargado.`)
+      errors.push(t('scen.noWorkflow', { where, workflow: item.workflow }))
       continue
     }
     if (item.caso) {
       const idx = cases.findIndex((c) => c.id === item.caso)
       if (idx < 0) {
-        errors.push(`${where}: no existe el caso "${item.caso}". Puede que el Arazzo haya cambiado.`)
+        errors.push(t('scen.noCase', { where, id: item.caso }))
         continue
       }
       cases[idx] = {
@@ -106,13 +108,13 @@ export function importScenarios(text: string, current: TestCase[], workflowIds: 
     }
     const espera = item.espera ?? {}
     if (!espera.paso) {
-      errors.push(`${where}: falta "espera.paso".`)
+      errors.push(t('scen.noStep', { where }))
       continue
     }
     const statuses = (Array.isArray(espera.status) ? espera.status : espera.status !== undefined ? [espera.status] : []).map(Number)
     const created_ = createDataCase({
         workflowId: item.workflow,
-        title: item.nombre ?? `Caso ${i + 1}`,
+        title: item.nombre ?? t('scen.caseN', { n: i + 1 }),
         inputOverrides: item.inputs ?? {},
         stepId: espera.paso,
         statuses: statuses.filter((n: number) => !isNaN(n)),

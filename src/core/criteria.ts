@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { JSONPath } from 'jsonpath-plus'
 import type { Criterion } from './types'
+import * as i18n from '../i18n'
 import { evaluateExpression, type ExprContext } from './expressions'
 import { fmt } from './format'
 
@@ -136,7 +137,7 @@ class Parser {
 
   parse(): any {
     const v = this.or()
-    if (this.pos < this.tokens.length) throw new Error('Sintaxis no reconocida en la condición')
+    if (this.pos < this.tokens.length) throw new Error(i18n.t('crit.syntax'))
     return v
   }
   private peek() {
@@ -191,16 +192,16 @@ class Parser {
   }
   private primary(): any {
     const t = this.tokens[this.pos++]
-    if (!t) throw new Error('La condición termina de forma inesperada')
+    if (!t) throw new Error(i18n.t('crit.unexpectedEnd'))
     if (t.t === 'paren' && t.v === '(') {
       const v = this.or()
       const close = this.tokens[this.pos++]
-      if (close?.t !== 'paren' || close.v !== ')') throw new Error('Falta cerrar un paréntesis')
+      if (close?.t !== 'paren' || close.v !== ')') throw new Error(i18n.t('crit.paren'))
       return v
     }
     if (t.t === 'lit') return t.v
     if (t.t === 'expr') return evaluateExpression(t.v, this.ctx).value
-    throw new Error(`Token inesperado "${t.v}"`)
+    throw new Error(i18n.t('crit.token', { token: String(t.v) }))
   }
 }
 
@@ -211,14 +212,14 @@ function describe(t: Token | undefined): string {
   return String(t.v)
 }
 
-const OP_TEXT: Record<string, string> = {
-  '==': 'igual a',
-  '!=': 'distinto de',
-  '<': 'menor que',
-  '<=': 'menor o igual a',
-  '>': 'mayor que',
-  '>=': 'mayor o igual a',
-}
+const OP_KEY = {
+  '==': 'crit.op.eq',
+  '!=': 'crit.op.ne',
+  '<': 'crit.op.lt',
+  '<=': 'crit.op.le',
+  '>': 'crit.op.gt',
+  '>=': 'crit.op.ge',
+} as const
 
 export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResult {
   let type = typeof c.type === 'object' ? c.type.type : (c.type ?? 'simple')
@@ -233,29 +234,29 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
       const passed = Boolean(parser.parse())
       let detail: string
       if (parser.comparisons.length === 0) {
-        detail = passed ? 'La condición se cumple.' : 'La condición evaluó a falso o no tiene valor.'
+        detail = passed ? i18n.t('crit.passed') : i18n.t('crit.falsy')
       } else {
         const relevant = passed ? parser.comparisons : parser.comparisons.filter((x) => !x.passed)
         detail = (relevant.length ? relevant : parser.comparisons)
           .map((x) =>
             x.passed
               ? `${x.left} = ${fmt(x.leftValue)} ✔`
-              : `Se esperaba ${x.left} ${OP_TEXT[x.op]} ${fmt(x.rightValue)}, pero vale ${fmt(x.leftValue)}`,
+              : i18n.t('crit.expected', { left: x.left, op: i18n.t(OP_KEY[x.op as keyof typeof OP_KEY]), right: fmt(x.rightValue), actual: fmt(x.leftValue) }),
           )
           .join(' · ')
       }
       return { ...base, passed, detail }
     }
     const ctxValue = c.context ? evaluateExpression(c.context, ctx) : { found: false, value: undefined }
-    if (!c.context) return { ...base, passed: false, detail: `El criterio de tipo "${type}" necesita "context".` }
-    if (!ctxValue.found) return { ...base, passed: false, detail: `El contexto ${c.context} no tiene valor.` }
+    if (!c.context) return { ...base, passed: false, detail: i18n.t('crit.needsContext', { type }) }
+    if (!ctxValue.found) return { ...base, passed: false, detail: i18n.t('crit.contextEmpty', { context: c.context }) }
     if (type === 'regex') {
       const text = typeof ctxValue.value === 'string' ? ctxValue.value : JSON.stringify(ctxValue.value)
       const passed = new RegExp(c.condition).test(text)
       return {
         ...base,
         passed,
-        detail: passed ? `${c.context} cumple la expresión regular.` : `${c.context} = ${fmt(ctxValue.value)} no cumple /${c.condition}/`,
+        detail: passed ? i18n.t('crit.regexOk', { context: c.context }) : i18n.t('crit.regexFail', { context: c.context, value: fmt(ctxValue.value), regex: c.condition }),
       }
     }
     if (type === 'jsonpath') {
@@ -265,13 +266,13 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
         ...base,
         passed,
         detail: passed
-          ? `JSONPath encontró ${result.length} coincidencia(s).`
-          : `JSONPath no encontró coincidencias en ${c.context}.`,
+          ? i18n.t('crit.jsonpathOk', { n: result.length })
+          : i18n.t('crit.jsonpathNone', { context: c.context }),
       }
     }
-    return { ...base, passed: false, detail: `Tipo de criterio "${type}" no soportado todavía (XPath).` }
+    return { ...base, passed: false, detail: i18n.t('crit.unsupported', { type }) }
   } catch (e) {
-    return { ...base, passed: false, detail: `No se pudo evaluar la condición: ${(e as Error).message}` }
+    return { ...base, passed: false, detail: i18n.t('crit.error', { error: (e as Error).message }) }
   }
 }
 

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Reporte HTML autocontenido: se abre en cualquier navegador y se puede imprimir a PDF.
-import { REASON_LABEL, type StepResult } from './runner'
-import { ORIGIN_LABEL, VERDICT_LABEL, dataSummary, type CaseRun, type Verdict } from './testcases'
+import { reasonLabel, type StepResult, type StepStatus } from './runner'
+import { dataSummary, originLabel, verdictLabel, type CaseRun, type Verdict } from './testcases'
+import { getLocale, t } from '../i18n'
 
 export type ReportCase = Omit<CaseRun, 'state'>
 
@@ -37,16 +38,10 @@ function esc(v: any): string {
 }
 
 const VERDICT_CLASS: Record<Verdict, string> = { passed: 'ok', failed: 'err', inconclusive: 'warn' }
-const STEP_LABEL: Record<string, string> = {
-  success: 'Exitoso',
-  warning: 'Exitoso con advertencias',
-  failed: 'Falló',
-  skipped: 'No ejecutado',
-}
 const STEP_CLASS: Record<string, string> = { success: 'ok', warning: 'warn', failed: 'err', skipped: 'skip' }
 
 function verdictBadge(v?: Verdict): string {
-  return v ? `<span class="badge ${VERDICT_CLASS[v]}">${VERDICT_LABEL[v]}</span>` : '<span class="badge skip">Sin ejecutar</span>'
+  return v ? `<span class="badge ${VERDICT_CLASS[v]}">${verdictLabel(v)}</span>` : `<span class="badge skip">${t('report.notRun')}</span>`
 }
 
 function headers(h: Record<string, string>): string {
@@ -58,22 +53,22 @@ function headers(h: Record<string, string>): string {
 function stepHtml(s: StepResult, i: number): string {
   const parts: string[] = []
   if (s.request) {
-    parts.push(`<div class="io"><div><h5>Petición</h5><pre>${esc(`${s.request.method} ${s.request.url}\n${headers(s.request.headers)}`)}</pre>${
+    parts.push(`<div class="io"><div><h5>${t('report.request')}</h5><pre>${esc(`${s.request.method} ${s.request.url}\n${headers(s.request.headers)}`)}</pre>${
       s.request.body !== undefined ? `<pre>${esc(maskDeep(s.request.body))}</pre>` : ''
     }</div>`)
     parts.push(
       s.response
-        ? `<div><h5>Respuesta</h5><pre>${esc(`HTTP ${s.response.status} ${s.response.statusText}\n${headers(s.response.headers)}`)}</pre><pre>${esc(maskDeep(s.response.body))}</pre></div></div>`
-        : '<div><h5>Respuesta</h5><p class="muted">Sin respuesta.</p></div></div>',
+        ? `<div><h5>${t('report.response')}</h5><pre>${esc(`HTTP ${s.response.status} ${s.response.statusText}\n${headers(s.response.headers)}`)}</pre><pre>${esc(maskDeep(s.response.body))}</pre></div></div>`
+        : `<div><h5>${t('report.response')}</h5><p class="muted">${t('report.noResponse')}</p></div></div>`,
     )
   }
   if (s.criteria.length) {
     parts.push(
-      `<h5>Criterios</h5><table><tr><th>Condición</th><th>Resultado</th><th>Detalle</th></tr>${s.criteria
+      `<h5>${t('report.criteria')}</h5><table><tr><th>${t('report.condition')}</th><th>${t('report.result')}</th><th>${t('report.detail')}</th></tr>${s.criteria
         .map(
           (c) =>
             `<tr><td><code>${esc(c.context ? `${c.context} ~ ${c.condition}` : c.condition)}</code></td><td>${
-              c.passed ? '<span class="badge ok">Se cumple</span>' : '<span class="badge err">No se cumple</span>'
+              c.passed ? `<span class="badge ok">${t('crit.badge.passed')}</span>` : `<span class="badge err">${t('crit.badge.failed')}</span>`
             }</td><td>${esc(c.detail)}</td></tr>`,
         )
         .join('')}</table>`,
@@ -81,10 +76,10 @@ function stepHtml(s: StepResult, i: number): string {
   }
   if (s.response) {
     parts.push(
-      `<h5>Contrato</h5>${
+      `<h5>${t('report.contract')}</h5>${
         s.contractIssues.length
           ? `<ul>${s.contractIssues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
-          : '<p><span class="badge ok">La respuesta cumple el contrato</span></p>'
+          : `<p><span class="badge ok">${t('report.contractOk')}</span></p>`
       }`,
     )
   }
@@ -96,11 +91,11 @@ function stepHtml(s: StepResult, i: number): string {
     )
   }
   const notes = [
-    s.reason ? `<div class="note ${s.reason.category === 'contrato' || s.reason.category === 'output' ? 'warn' : s.status === 'skipped' ? 'skip' : 'err'}"><strong>${esc(REASON_LABEL[s.reason.category])}:</strong> ${esc(s.reason.message)}</div>` : '',
-    s.action || s.actionName ? `<div class="note action">↪ ${esc(s.action ?? `Acción "${s.actionName}" (${s.actionType})`)}</div>` : '',
+    s.reason ? `<div class="note ${s.reason.category === 'contrato' || s.reason.category === 'output' ? 'warn' : s.status === 'skipped' ? 'skip' : 'err'}"><strong>${esc(reasonLabel(s.reason.category))}:</strong> ${esc(s.reason.message)}</div>` : '',
+    s.action || s.actionName ? `<div class="note action">↪ ${esc(s.action ?? t('report.action', { action: s.actionName ?? '', type: s.actionType ?? '' }))}</div>` : '',
   ].join('')
-  const head = `<span class="num">${i + 1}</span><span class="badge ${STEP_CLASS[s.status]}">${STEP_LABEL[s.status]}</span> <strong>${esc(s.stepId)}</strong> <code class="muted">${esc(s.label)}</code>${
-    s.simulated ? ' <span class="badge accent">Simulado</span>' : ''
+  const head = `<span class="num">${i + 1}</span><span class="badge ${STEP_CLASS[s.status]}">${t(`step.${s.status as StepStatus}`)}</span> <strong>${esc(s.stepId)}</strong> <code class="muted">${esc(s.label)}</code>${
+    s.simulated ? ` <span class="badge accent">${t('common.simulated')}</span>` : ''
   }<span class="grow"></span>${s.response ? `<span class="muted">HTTP ${s.response.status} · ${s.response.durationMs} ms</span>` : ''}`
   if (s.status === 'skipped') return `<div class="step skipped"><div class="step-head">${head}</div>${notes}</div>`
   return `<details class="step st-${STEP_CLASS[s.status]}"${s.status === 'failed' ? ' open' : ''}><summary class="step-head">${head}</summary>${notes}<div class="step-body">${parts.join('')}</div></details>`
@@ -110,7 +105,8 @@ export function buildHtmlReport(p: ReportParams): string {
   const runs = p.cases
   const count = (v: Verdict) => runs.filter((r) => r.verdict === v).length
   const totalMs = runs.reduce((n, r) => n + (r.result?.durationMs ?? 0), 0)
-  const date = p.generatedAt.toLocaleString('es', { dateStyle: 'long', timeStyle: 'short' })
+  const locale = getLocale()
+  const date = p.generatedAt.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' })
   const workflows = [...new Set(runs.map((r) => r.tc.workflowId))]
 
   const summaryRows = runs
@@ -118,8 +114,8 @@ export function buildHtmlReport(p: ReportParams): string {
       (r, i) => `<tr class="v-${r.verdict ? VERDICT_CLASS[r.verdict] : 'skip'}">
 <td class="muted">${i + 1}</td>
 <td><a href="#caso-${i + 1}">${esc(r.tc.title)}</a><div class="muted small">${esc(r.tc.workflowId)}</div></td>
-<td class="small">${esc(ORIGIN_LABEL[r.tc.origin])}</td>
-<td class="small">${r.simulated ? 'Simulado' : 'API real'}</td>
+<td class="small">${esc(originLabel(r.tc.origin))}</td>
+<td class="small">${r.simulated ? t('common.simulated') : t('common.realApi')}</td>
 <td class="small"><code>${esc(dataSummary(r.tc))}</code></td>
 <td>${verdictBadge(r.verdict)}</td>
 </tr>`,
@@ -133,29 +129,29 @@ export function buildHtmlReport(p: ReportParams): string {
 <div class="case-head"><span class="muted">#${i + 1}</span><h3>${esc(r.tc.title)}</h3>${verdictBadge(r.verdict)}</div>
 <div class="kv">
 <span>Workflow</span><span>${esc(r.tc.workflowId)}</span>
-<span>Tipo</span><span>${esc(ORIGIN_LABEL[r.tc.origin])} · ${r.simulated ? 'Simulado con los ejemplos del contrato' : 'Contra la API real'}</span>
-<span>Esperado</span><span>${esc(r.tc.expectation.text)}</span>
-<span>Resultado</span><span>${esc(r.explanation ?? '—')}</span>
-<span>Parámetros</span><span><code>${esc(dataSummary(r.tc))}</code></span>
+<span>${t('report.type')}</span><span>${esc(originLabel(r.tc.origin))} · ${r.simulated ? t('report.simulatedLong') : t('report.realLong')}</span>
+<span>${t('report.expected')}</span><span>${esc(r.tc.expectation.text)}</span>
+<span>${t('report.result')}</span><span>${esc(r.explanation ?? '—')}</span>
+<span>${t('report.params')}</span><span><code>${esc(dataSummary(r.tc))}</code></span>
 </div>
 ${
   inputs
-    ? `<details class="inputs"><summary>Valores enviados (${Object.keys(inputs).length})</summary><table>${Object.entries(inputs)
+    ? `<details class="inputs"><summary>${t('report.sentValues', { n: Object.keys(inputs).length })}</summary><table>${Object.entries(inputs)
         .map(([k, v]) => `<tr><td><code>${esc(k)}</code></td><td><code>${esc(typeof v === 'string' ? v : JSON.stringify(v))}</code></td></tr>`)
         .join('')}</table></details>`
     : ''
 }
-<div class="steps">${r.steps.map(stepHtml).join('') || '<p class="muted">No se ejecutaron pasos.</p>'}</div>
+<div class="steps">${r.steps.map(stepHtml).join('') || `<p class="muted">${t('report.noSteps')}</p>`}</div>
 </section>`
     })
     .join('')
 
   return `<!doctype html>
-<html lang="es">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reporte · ${esc(p.arazzoTitle)}</title>
+<title>${t('report.title')} · ${esc(p.arazzoTitle)}</title>
 <style>
 :root{--bg:#f6f7f9;--surface:#fff;--surface2:#f1f3f6;--border:#e1e5ea;--text:#171b21;--muted:#5f6873;--accent:#4f46e5;--accentSoft:#eef0ff;--ok:#157f3c;--okSoft:#e4f5ea;--warn:#9a6100;--warnSoft:#fdf2de;--err:#b42318;--errSoft:#fdeae8;--skip:#59636e;--skipSoft:#edf0f3;}
 *{box-sizing:border-box}
@@ -194,25 +190,25 @@ footer{margin-top:30px;font-size:12px;color:var(--muted)}
 </head>
 <body>
 <main>
-<div class="eyebrow">Reporte de pruebas · Arazzo Studio</div>
+<div class="eyebrow">${t('report.eyebrow')}</div>
 <h1>${esc(p.arazzoTitle)}</h1>
-<div class="meta"><span>${esc(date)}</span>${p.arazzoFile ? `<span>${esc(p.arazzoFile)}</span>` : ''}<span>${workflows.length} workflow(s)</span><span>${runs.length} caso(s)</span><span>Duración total ${(totalMs / 1000).toFixed(1)} s</span></div>
-<div class="toolbar"><button onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">Expandir todo</button><button onclick="document.querySelectorAll('details').forEach(d=>d.open=false)">Contraer todo</button><button onclick="window.print()">Imprimir / guardar como PDF</button></div>
+<div class="meta"><span>${esc(date)}</span>${p.arazzoFile ? `<span>${esc(p.arazzoFile)}</span>` : ''}<span>${t('report.workflows', { n: workflows.length })}</span><span>${t('report.cases', { n: runs.length })}</span><span>${t('report.duration', { s: (totalMs / 1000).toFixed(1) })}</span></div>
+<div class="toolbar"><button onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">${t('report.expandAll')}</button><button onclick="document.querySelectorAll('details').forEach(d=>d.open=false)">${t('report.collapseAll')}</button><button onclick="window.print()">${t('report.print')}</button></div>
 <div class="cards">
-<div class="card"><div class="n ok">${count('passed')}</div><div class="l">Pasaron</div></div>
-<div class="card"><div class="n ${count('failed') ? 'err' : ''}">${count('failed')}</div><div class="l">No pasaron</div></div>
-<div class="card"><div class="n ${count('inconclusive') ? 'warn' : ''}">${count('inconclusive')}</div><div class="l">No concluyentes</div></div>
-<div class="card"><div class="n">${runs.filter((r) => r.simulated).length}</div><div class="l">Simulados</div></div>
+<div class="card"><div class="n ok">${count('passed')}</div><div class="l">${t('report.passed')}</div></div>
+<div class="card"><div class="n ${count('failed') ? 'err' : ''}">${count('failed')}</div><div class="l">${t('report.failed')}</div></div>
+<div class="card"><div class="n ${count('inconclusive') ? 'warn' : ''}">${count('inconclusive')}</div><div class="l">${t('report.inconclusive')}</div></div>
+<div class="card"><div class="n">${runs.filter((r) => r.simulated).length}</div><div class="l">${t('report.simulated')}</div></div>
 </div>
-<h2>Ambiente</h2>
-<div class="panel"><table><tr><th>Fuente</th><th>URL base</th></tr>${Object.entries(p.servers)
+<h2>${t('report.environment')}</h2>
+<div class="panel"><table><tr><th>${t('report.source')}</th><th>${t('report.baseUrl')}</th></tr>${Object.entries(p.servers)
     .map(([k, v]) => `<tr><td><code>${esc(k)}</code></td><td><code>${esc(v || '—')}</code></td></tr>`)
     .join('')}</table></div>
-<h2>Resumen de casos</h2>
-<div class="panel"><table><tr><th>#</th><th>Caso</th><th>Tipo</th><th>Ejecución</th><th>Parámetros</th><th>Resultado</th></tr>${summaryRows}</table></div>
-<h2>Detalle por caso</h2>
+<h2>${t('report.summary')}</h2>
+<div class="panel"><table><tr><th>#</th><th>${t('report.case')}</th><th>${t('report.type')}</th><th>${t('report.execution')}</th><th>${t('report.params')}</th><th>${t('report.result')}</th></tr>${summaryRows}</table></div>
+<h2>${t('report.details')}</h2>
 ${details}
-<footer>Generado por Arazzo Studio. Los valores de tokens y credenciales se muestran ocultos. Los casos simulados usan los ejemplos del contrato, no la API real.</footer>
+<footer>${t('report.footer')}</footer>
 </main>
 <script>window.addEventListener('beforeprint',()=>document.querySelectorAll('details').forEach(d=>d.open=true))</script>
 </body>
@@ -245,5 +241,5 @@ export function buildJsonReport(p: ReportParams & { info?: unknown }): string {
 export function reportFileName(title: string, date: Date, ext: string): string {
   const stamp = date.toISOString().slice(0, 16).replace(/[:T]/g, '-')
   const slug = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  return `reporte-${slug}-${stamp}.${ext}`
+  return `${t('report.filePrefix')}-${slug}-${stamp}.${ext}`
 }

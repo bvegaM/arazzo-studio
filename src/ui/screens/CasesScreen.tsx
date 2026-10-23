@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
 import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, type TestCase } from '../../core/testcases'
 import type { ScenariosImport } from '../../core/scenariosFile'
-import { TEMPLATE_HELP } from '../../core/templates'
+import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
 import { MethodBadge } from '../components/badges'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
@@ -191,7 +191,7 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
       </div>
       <div className="muted small template-help">
         Generadores (un valor nuevo en cada corrida):{' '}
-        {TEMPLATE_HELP.map((t) => (
+        {templateHelp().map((t) => (
           <span key={t.token} title={t.description}>
             <code>{t.token}</code>{' '}
           </span>

@@ -7,15 +7,12 @@ import { requirementsFromCriteria } from './criteria'
 import type { Scenario } from './simulator'
 import type { Action } from './types'
 import { resolveTemplates } from './templates'
+import { joinOr, t } from '../i18n'
 
 export type CaseOrigin = 'arazzo' | 'escenario' | 'schema' | 'security' | 'datos'
 
-export const ORIGIN_LABEL: Record<CaseOrigin, string> = {
-  datos: 'Caso con datos propios',
-  arazzo: 'Definido en el Arazzo',
-  escenario: 'Acción definida en el Arazzo',
-  schema: 'Derivado del schema de inputs',
-  security: 'Derivado de la seguridad del contrato',
+export function originLabel(origin: CaseOrigin): string {
+  return t(`origin.${origin}`)
 }
 
 export interface CaseExpectation {
@@ -55,10 +52,8 @@ export interface TestCase {
 
 export type Verdict = 'passed' | 'failed' | 'inconclusive'
 
-export const VERDICT_LABEL: Record<Verdict, string> = {
-  passed: 'Pasó',
-  failed: 'No pasó',
-  inconclusive: 'No concluyente',
+export function verdictLabel(verdict: Verdict): string {
+  return t(`verdict.${verdict}`)
 }
 
 function firstConsumer(wa: WorkflowAnalysis, input: string) {
@@ -76,15 +71,15 @@ function expectedClientErrors(wa: WorkflowAnalysis, stepId: string, preferred: n
 }
 
 function statusText(statuses: number[]): string {
-  return statuses.length ? statuses.join(' o ') : 'un 4xx'
+  return statuses.length ? joinOr(statuses) : t('tc.any4xx')
 }
 
 function invalidValueFor(schema: any): { value: any; label: string } | undefined {
   const type = Array.isArray(schema?.type) ? schema.type[0] : schema?.type
-  if (schema?.enum) return { value: 'VALOR_NO_PERMITIDO', label: 'un valor fuera del enum' }
-  if (type === 'integer' || type === 'number') return { value: 'texto-invalido', label: 'un texto en lugar de un número' }
-  if (type === 'boolean') return { value: 'no-booleano', label: 'un texto en lugar de un booleano' }
-  if (type === 'string' && schema.pattern) return { value: '###', label: `un valor que no cumple el patrón ${schema.pattern}` }
+  if (schema?.enum) return { value: 'VALOR_NO_PERMITIDO', label: t('tc.invalid.enum') }
+  if (type === 'integer' || type === 'number') return { value: 'texto-invalido', label: t('tc.invalid.number') }
+  if (type === 'boolean') return { value: 'no-booleano', label: t('tc.invalid.boolean') }
+  if (type === 'string' && schema.pattern) return { value: '###', label: t('tc.invalid.pattern', { pattern: schema.pattern }) }
   return undefined
 }
 
@@ -96,10 +91,10 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
   cases.push({
     id: id('happy'),
     workflowId: wf.workflowId,
-    title: 'Camino feliz',
+    title: t('tc.happy.title'),
     origin: 'arazzo',
-    description: 'Ejecuta todos los pasos con los inputs indicados; cada paso debe cumplir sus successCriteria.',
-    expectation: { type: 'success', text: 'Todos los pasos cumplen sus criterios.' },
+    description: t('tc.happy.description'),
+    expectation: { type: 'success', text: t('tc.happy.expectation') },
     enabled: true,
   })
 
@@ -112,15 +107,15 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
     cases.push({
       id: id(`missing-${name}`),
       workflowId: wf.workflowId,
-      title: `Sin el input obligatorio "${name}"`,
+      title: t('tc.missing.title', { name }),
       origin: 'schema',
-      description: `Omite "${name}". El primer paso que lo usa es "${consumer.step.stepId}".`,
+      description: t('tc.missing.description', { name, step: consumer.step.stepId }),
       omitInput: name,
       expectation: {
         type: 'failure',
         stepId: consumer.step.stepId,
         statuses,
-        text: `El paso "${consumer.step.stepId}" debe rechazar la petición con ${statusText(statuses)}.`,
+        text: t('tc.missing.expectation', { step: consumer.step.stepId, statuses: statusText(statuses) }),
       },
       enabled: true,
     })
@@ -134,15 +129,15 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
     cases.push({
       id: id(`invalid-${name}`),
       workflowId: wf.workflowId,
-      title: `"${name}" con ${invalid.label}`,
+      title: t('tc.invalid.title', { name, label: invalid.label }),
       origin: 'schema',
-      description: `Envía ${JSON.stringify(invalid.value)} en "${name}". El primer paso que lo usa es "${consumer.step.stepId}".`,
+      description: t('tc.invalid.description', { value: JSON.stringify(invalid.value), name, step: consumer.step.stepId }),
       setInput: { name, value: invalid.value },
       expectation: {
         type: 'failure',
         stepId: consumer.step.stepId,
         statuses,
-        text: `El paso "${consumer.step.stepId}" debe rechazar el dato con ${statusText(statuses)}.`,
+        text: t('tc.invalid.expectation', { step: consumer.step.stepId, statuses: statusText(statuses) }),
       },
       enabled: true,
     })
@@ -154,15 +149,15 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
     cases.push({
       id: id('no-auth'),
       workflowId: wf.workflowId,
-      title: 'Sin credenciales',
+      title: t('tc.noAuth.title'),
       origin: 'security',
-      description: `Ejecuta sin enviar credenciales. El primer paso protegido es "${firstSecured.step.stepId}".`,
+      description: t('tc.noAuth.description', { step: firstSecured.step.stepId }),
       dropAuth: true,
       expectation: {
         type: 'failure',
         stepId: firstSecured.step.stepId,
         statuses,
-        text: `El paso "${firstSecured.step.stepId}" debe responder 401 o 403.`,
+        text: t('tc.noAuth.expectation', { step: firstSecured.step.stepId, statuses: joinOr(statuses) }),
       },
       enabled: true,
     })
@@ -173,10 +168,10 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
 }
 
 function actionEffect(a: Action): string {
-  if (a.type === 'end') return 'terminar el workflow'
-  if (a.type === 'retry') return `reintentar el paso${a.retryLimit ? ` (hasta ${a.retryLimit} vez/veces)` : ''}`
-  if (a.type === 'goto') return a.stepId ? `ir al paso "${a.stepId}"` : `continuar en el workflow "${a.workflowId}"`
-  return 'ejecutarse'
+  if (a.type === 'end') return t('tc.effect.end')
+  if (a.type === 'retry') return a.retryLimit ? t('tc.effect.retryLimit', { limit: a.retryLimit }) : t('tc.effect.retry')
+  if (a.type === 'goto') return a.stepId ? t('tc.effect.gotoStep', { step: a.stepId }) : t('tc.effect.gotoWorkflow', { workflow: a.workflowId ?? '' })
+  return t('tc.effect.run')
 }
 
 /** Un caso por cada acción onFailure/onSuccess con criterios: se simula la respuesta que la activa. */
@@ -203,15 +198,17 @@ function scenarioCases(wa: WorkflowAnalysis): TestCase[] {
         out.push({
           id: `${wf.workflowId}::scenario-${step.stepId}-${trigger}-${name}`,
           workflowId: wf.workflowId,
-          title: `${step.stepId} responde ${status}${detail ? ` ${detail}` : ''} → ${name}`,
+          title: t('tc.scenario.title', { step: step.stepId, status, detail: detail ? ` ${detail}` : '', action: name }),
           origin: 'escenario',
-          description: `Simula que "${step.stepId}" responde ${status}${detail ? ` con ${bodyValues.map((b) => `${b.pointer.slice(1)} = ${JSON.stringify(b.value)}`).join(', ')}` : ''} usando los ejemplos del contrato. Los demás pasos responden con éxito.`,
+          description: detail
+            ? t('tc.scenario.descriptionBody', { step: step.stepId, status, body: bodyValues.map((b) => `${b.pointer.slice(1)} = ${JSON.stringify(b.value)}`).join(', ') })
+            : t('tc.scenario.description', { step: step.stepId, status }),
           scenario: { stepId: step.stepId, status, bodyValues },
           expectation: {
             type: 'action',
             stepId: step.stepId,
             actionName: name,
-            text: `El paso "${step.stepId}" debe activar la acción "${name}" (${trigger}) y ${actionEffect(action)}.`,
+            text: t('tc.scenario.expectation', { step: step.stepId, action: name, trigger, effect: actionEffect(action) }),
           },
           enabled: true,
         })
@@ -236,11 +233,11 @@ export function dataSummary(tc: TestCase): string {
   const parts: string[] = []
   const overrides = Object.entries(tc.inputOverrides ?? {}).filter(([, v]) => v !== undefined && v !== '')
   for (const [k, v] of overrides) parts.push(`${k} = ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-  if (tc.omitInput) parts.push(`sin ${tc.omitInput}`)
-  for (const k of tc.omitInputs ?? []) parts.push(`sin ${k}`)
+  if (tc.omitInput) parts.push(t('tc.summary.without', { name: tc.omitInput }))
+  for (const k of tc.omitInputs ?? []) parts.push(t('tc.summary.without', { name: k }))
   if (tc.setInput) parts.push(`${tc.setInput.name} = ${JSON.stringify(tc.setInput.value)}`)
-  if (tc.dropAuth) parts.push('sin credenciales')
-  return parts.length ? `por defecto + ${parts.join(', ')}` : 'valores por defecto'
+  if (tc.dropAuth) parts.push(t('tc.summary.noAuth'))
+  return parts.length ? t('tc.summary.defaultsPlus', { parts: parts.join(', ') }) : t('tc.summary.defaults')
 }
 
 export type RunMode = 'real' | 'simulado'
@@ -256,13 +253,13 @@ export function isSimulated(tc: TestCase, mode: RunMode): boolean {
 export function runnability(tc: TestCase, mode: RunMode): { ok: boolean; reason?: string } {
   const hasData = Object.values(tc.inputOverrides ?? {}).some((v) => v !== undefined && v !== '') || (tc.omitInputs?.length ?? 0) > 0
   if (tc.scenario && tc.dataMode === 'real' && !hasData) {
-    return { ok: false, reason: 'Para probarlo contra la API real, cambia en Parámetros los valores que provocan esta respuesta.' }
+    return { ok: false, reason: t('tc.run.needsData') }
   }
   if (tc.origin === 'datos' && mode === 'simulado') {
-    return { ok: false, reason: 'Los casos con datos propios solo tienen sentido contra la API real.' }
+    return { ok: false, reason: t('tc.run.dataOnlyReal') }
   }
   if (!tc.scenario && tc.expectation.type === 'failure' && mode === 'simulado') {
-    return { ok: false, reason: 'Necesita la API real: la simulación no valida los datos enviados.' }
+    return { ok: false, reason: t('tc.run.needsReal') }
   }
   return { ok: true }
 }
@@ -278,16 +275,16 @@ export function createDataCase(params: {
   actionName?: string
 }): TestCase {
   const parts = [
-    params.statuses.length ? `responder ${params.statuses.join(' o ')}` : '',
-    params.code ? `con code ${params.code}` : '',
-    params.actionName ? `y activar "${params.actionName}"` : '',
+    params.statuses.length ? t('tc.data.respond', { statuses: joinOr(params.statuses) }) : '',
+    params.code ? t('tc.data.withCode', { code: params.code }) : '',
+    params.actionName ? t('tc.data.andAction', { action: params.actionName }) : '',
   ].filter(Boolean)
   return {
     id: `${params.workflowId}::datos-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`,
     workflowId: params.workflowId,
     title: params.title,
     origin: 'datos',
-    description: 'Caso definido por el usuario con su propia combinación de datos.',
+    description: t('tc.data.description'),
     inputOverrides: params.inputOverrides,
     expectation: {
       type: 'response',
@@ -295,7 +292,7 @@ export function createDataCase(params: {
       statuses: params.statuses,
       code: params.code,
       actionName: params.actionName,
-      text: `El paso "${params.stepId}" debe ${parts.join(' ') || 'ejecutarse'}.`,
+      text: t('tc.data.expectation', { step: params.stepId, what: parts.join(' ') || t('tc.effect.run') }),
     },
     enabled: true,
   }
@@ -313,24 +310,29 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
         explanation: target?.response
           ? ''
           : failed
-            ? `No se llegó a una respuesta de "${e.stepId}": el flujo se detuvo en "${failed.stepId}" (${failed.reason?.message ?? ''}).`
-            : (target?.reason?.message ?? `No se ejecutó "${e.stepId}".`),
+            ? t('ev.noResponseStopped', { step: e.stepId, failed: failed.stepId, reason: failed.reason?.message ?? '' })
+            : (target?.reason?.message ?? t('ev.notRun', { step: e.stepId })),
       }
     }
     const problems: string[] = []
     const status = target.response.status
-    if (e.statuses?.length && !e.statuses.includes(status)) problems.push(`respondió ${status} y se esperaba ${e.statuses.join(' o ')}`)
+    if (e.statuses?.length && !e.statuses.includes(status)) problems.push(t('ev.problem.status', { status, expected: joinOr(e.statuses) }))
     const code = target.response.body && typeof target.response.body === 'object' ? target.response.body.code : undefined
-    if (e.code && code !== e.code) problems.push(`el code fue ${code === undefined ? '(sin code)' : `"${code}"`} y se esperaba "${e.code}"`)
+    if (e.code && code !== e.code) problems.push(t('ev.problem.code', { code: code === undefined ? t('ev.noCode') : `"${code}"`, expected: e.code }))
     const action = run.actions.find((a) => a.stepId === e.stepId)
     if (e.actionName && action?.name !== e.actionName) {
-      problems.push(action ? `se activó "${action.name}" en lugar de "${e.actionName}"` : `no se activó "${e.actionName}"`)
+      problems.push(action ? t('ev.problem.otherAction', { action: action.name, expected: e.actionName }) : t('ev.problem.noAction', { expected: e.actionName }))
     }
     return problems.length
-      ? { verdict: 'failed', explanation: `"${e.stepId}" ${problems.join('; ')}.` }
+      ? { verdict: 'failed', explanation: t('ev.problems', { step: e.stepId, problems: problems.join('; ') }) }
       : {
           verdict: 'passed',
-          explanation: `"${e.stepId}" respondió ${status}${code ? ` con code "${code}"` : ''}${action ? ` y activó "${action.name}"` : ''}, como se esperaba.`,
+          explanation: t('ev.responseOk', {
+            step: e.stepId,
+            status,
+            code: code ? t('ev.withCode', { code }) : '',
+            action: action ? t('ev.andActivated', { action: action.name }) : '',
+          }),
         }
   }
 
@@ -340,15 +342,15 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
       return {
         verdict: 'passed',
         explanation: warnings.length
-          ? `El flujo terminó bien, con advertencias en: ${warnings.map((w) => `"${w.stepId}"`).join(', ')}.`
-          : 'Todos los pasos cumplieron sus criterios.',
+          ? t('ev.successWithWarnings', { steps: warnings.map((w) => `"${w.stepId}"`).join(', ') })
+          : t('ev.allPassed'),
       }
     }
     return {
       verdict: failed?.reason?.category === 'red' ? 'inconclusive' : 'failed',
       explanation: failed
-        ? `Falló en el paso "${failed.stepId}": ${failed.reason?.message ?? ''}`
-        : (run.reason?.message ?? 'El workflow no terminó correctamente.'),
+        ? t('ev.failedAt', { step: failed.stepId, reason: failed.reason?.message ?? '' })
+        : (run.reason?.message ?? t('ev.workflowFailed')),
     }
   }
 
@@ -361,30 +363,31 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
       return {
         verdict: 'inconclusive',
         explanation: failedBefore
-          ? `No se llegó a "${stepId}": el flujo se detuvo en "${failedBefore.stepId}" (${failedBefore.reason?.message ?? ''}). ${
-              run.steps.some((s) => s.simulated)
-                ? 'Revisa que los pasos anteriores cumplan sus criterios con los ejemplos del contrato.'
-                : 'Revisa los parámetros del caso: los pasos anteriores deben poder completarse.'
-            }`
-          : `No se llegó a ejecutar "${stepId}".`,
+          ? t('ev.notReached', {
+              step: stepId ?? '',
+              failed: failedBefore.stepId,
+              reason: failedBefore.reason?.message ?? '',
+              hint: run.steps.some((s) => s.simulated) ? t('ev.hint.simulated') : t('ev.hint.real'),
+            })
+          : t('ev.notExecuted', { step: stepId ?? '' }),
       }
     }
-    const then = run.status === 'success' ? 'El workflow terminó con éxito.' : 'El workflow terminó con error.'
+    const then = run.status === 'success' ? t('ev.endedOk') : t('ev.endedError')
     if (triggered && triggered.name === tc.expectation.actionName) {
       return {
         verdict: 'passed',
-        explanation: `Con la respuesta ${first.response?.status ?? ''}, "${stepId}" activó "${triggered.name}" (${triggered.type}), como se esperaba. ${then}`,
+        explanation: t('ev.action.ok', { status: first.response?.status ?? '', step: stepId ?? '', action: triggered.name, type: triggered.type, then }),
       }
     }
     if (triggered) {
       return {
         verdict: 'failed',
-        explanation: `Con la respuesta ${first.response?.status ?? ''}, "${stepId}" activó "${triggered.name}" en lugar de "${tc.expectation.actionName}". Revisa el orden o los criterios de las acciones: se usa la primera cuyos criterios se cumplen.`,
+        explanation: t('ev.action.other', { status: first.response?.status ?? '', step: stepId ?? '', action: triggered.name, expected: tc.expectation.actionName ?? '' }),
       }
     }
     return {
       verdict: 'failed',
-      explanation: `Con la respuesta ${first.response?.status ?? ''}, ninguna acción de "${stepId}" coincidió, así que no se activó "${tc.expectation.actionName}". Revisa sus criterios.`,
+      explanation: t('ev.action.none', { status: first.response?.status ?? '', step: stepId ?? '', expected: tc.expectation.actionName ?? '' }),
     }
   }
 
@@ -395,27 +398,27 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
     return {
       verdict: 'inconclusive',
       explanation: failed
-        ? `El flujo se detuvo antes, en "${failed.stepId}" (${failed.reason?.message ?? ''}), así que no se pudo comprobar "${tc.expectation.stepId}".`
-        : `No se llegó a ejecutar "${tc.expectation.stepId}".`,
+        ? t('ev.stoppedBefore', { failed: failed.stepId, reason: failed.reason?.message ?? '', step: tc.expectation.stepId ?? '' })
+        : t('ev.notExecuted', { step: tc.expectation.stepId ?? '' }),
     }
   }
   if (!target.response) {
-    return { verdict: 'inconclusive', explanation: target.reason?.message ?? 'No hubo respuesta de la API.' }
+    return { verdict: 'inconclusive', explanation: target.reason?.message ?? t('ev.noApiResponse') }
   }
   const status = target.response.status
   const ok = accepted.length ? accepted.includes(status) : status >= 400 && status < 500
   if (ok) {
-    return { verdict: 'passed', explanation: `"${target.stepId}" rechazó la petición con ${status}, como se esperaba.` }
+    return { verdict: 'passed', explanation: t('ev.rejectedOk', { step: target.stepId, status }) }
   }
   if (status >= 200 && status < 300) {
     return {
       verdict: 'failed',
-      explanation: `"${target.stepId}" aceptó la petición (${status}) cuando debía rechazarla con ${statusText(accepted)}.`,
+      explanation: t('ev.acceptedWrongly', { step: target.stepId, status, expected: statusText(accepted) }),
     }
   }
   return {
     verdict: 'failed',
-    explanation: `"${target.stepId}" respondió ${status}; se esperaba ${statusText(accepted)}.`,
+    explanation: t('ev.wrongStatus', { step: target.stepId, status, expected: statusText(accepted) }),
   }
 }
 

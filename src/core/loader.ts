@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import YAML from 'yaml'
 import type { ArazzoDoc } from './types'
+import { t } from '../i18n'
 
 export interface LoadedFile {
   name: string
@@ -39,7 +40,7 @@ export function parseFile(file: LoadedFile): ParsedFile {
     const doc = YAML.parse(file.text, { maxAliasCount: -1 })
     return { name: file.name, kind: detectKind(doc), doc }
   } catch (e) {
-    return { name: file.name, kind: 'unknown', error: `No se pudo leer como YAML o JSON: ${(e as Error).message}` }
+    return { name: file.name, kind: 'unknown', error: t('load.parse', { error: (e as Error).message }) }
   }
 }
 
@@ -71,11 +72,11 @@ export function buildProject(files: ParsedFile[]): { project?: Project; errors: 
 
   const arazzoFiles = files.filter((f) => f.kind === 'arazzo')
   if (arazzoFiles.length === 0) {
-    errors.push('No se encontró ningún archivo Arazzo (debe tener el campo "arazzo" en la raíz).')
+    errors.push(t('load.noArazzo'))
     return { errors }
   }
   if (arazzoFiles.length > 1) {
-    errors.push(`Se subieron ${arazzoFiles.length} archivos Arazzo; se usará "${arazzoFiles[0].name}".`)
+    errors.push(t('load.manyArazzo', { n: arazzoFiles.length, name: arazzoFiles[0].name }))
   }
   const main = arazzoFiles[0]
   const arazzo = main.doc as ArazzoDoc
@@ -118,7 +119,7 @@ export function attachSource(project: Project, sourceName: string, file: ParsedF
       s.name === sourceName
         ? file.kind === 'openapi'
           ? { ...s, status: 'loaded', doc: file.doc, fileName: file.name, error: undefined }
-          : { ...s, status: 'error', error: file.error ?? `"${file.name}" no parece un OpenAPI.` }
+          : { ...s, status: 'error', error: file.error ?? t('load.notOpenapi', { name: file.name }) }
         : s,
     ),
   }
@@ -136,8 +137,8 @@ export async function fetchRemoteSource(project: Project, sourceName: string): P
   } catch (e) {
     const msg =
       e instanceof TypeError
-        ? 'No se pudo descargar: el servidor no permite CORS o no es accesible. Descárgalo y súbelo manualmente.'
-        : `No se pudo descargar: ${(e as Error).message}`
+        ? t('load.fetchCors')
+        : t('load.fetchError', { error: (e as Error).message })
     return {
       ...project,
       sources: project.sources.map((s) => (s.name === sourceName ? { ...s, status: 'error', error: msg } : s)),

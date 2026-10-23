@@ -9,6 +9,10 @@ import { fetchExecutor } from './http'
 import { runWorkflow } from './runner'
 import { applyCaseInputs, evaluateCase, generateTestCases } from './testcases'
 import { createSimulatedExecutor } from './simulator'
+import { setLocale } from '../i18n'
+
+// Los textos esperados están en español; el idioma por defecto depende del entorno.
+setLocale('es')
 
 const dir = new URL('../../examples/credit-cards/', import.meta.url)
 const files = ['card-onboarding.arazzo.yaml', 'credit-cards.yaml'].map((name) =>

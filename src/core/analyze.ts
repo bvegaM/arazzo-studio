@@ -17,6 +17,7 @@ import {
 } from './openapi'
 import { collectReferences } from './expressions'
 import { statusesInCriteria } from './criteria'
+import { t } from '../i18n'
 
 export type IssueLevel = 'error' | 'warning' | 'info'
 
@@ -99,22 +100,22 @@ export function analyzeProject(project: Project): ProjectAnalysis {
   const a = project.arazzo
 
   if (!/^1\./.test(String(a.arazzo))) {
-    issues.push({ level: 'warning', message: `Versión de Arazzo "${a.arazzo}" no reconocida; se espera 1.x.` })
+    issues.push({ level: 'warning', message: t('an.version', { version: String(a.arazzo) }) })
   }
-  if (!a.info?.title) issues.push({ level: 'warning', message: 'Falta info.title en el documento Arazzo.' })
-  if (!a.sourceDescriptions?.length) issues.push({ level: 'error', message: 'El Arazzo no declara sourceDescriptions.' })
+  if (!a.info?.title) issues.push({ level: 'warning', message: t('an.noTitle') })
+  if (!a.sourceDescriptions?.length) issues.push({ level: 'error', message: t('an.noSources') })
   for (const s of project.sources) {
     if (s.type !== 'openapi') {
-      issues.push({ level: 'warning', message: `La fuente "${s.name}" es de tipo "${s.type}"; solo se ejecutan contratos OpenAPI.` })
+      issues.push({ level: 'warning', message: t('an.sourceType', { name: s.name, type: s.type }) })
     } else if (s.status !== 'loaded') {
-      issues.push({ level: 'error', message: `Falta el contrato de la fuente "${s.name}" (${s.url}).` })
+      issues.push({ level: 'error', message: t('an.sourceMissing', { name: s.name, url: s.url }) })
     }
   }
-  if (!a.workflows?.length) issues.push({ level: 'error', message: 'El Arazzo no tiene workflows.' })
+  if (!a.workflows?.length) issues.push({ level: 'error', message: t('an.noWorkflows') })
 
   const wfIds = new Set<string>()
   for (const wf of a.workflows ?? []) {
-    if (wfIds.has(wf.workflowId)) issues.push({ level: 'error', message: `workflowId duplicado: "${wf.workflowId}".` })
+    if (wfIds.has(wf.workflowId)) issues.push({ level: 'error', message: t('an.dupWorkflow', { id: wf.workflowId }) })
     wfIds.add(wf.workflowId)
   }
 
@@ -141,10 +142,10 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
   const sources = new Map<string, string>()
 
   ;(wf.steps ?? []).forEach((step, index) => {
-    if (stepIds.has(step.stepId)) add('error', `stepId duplicado: "${step.stepId}".`, step.stepId)
+    if (stepIds.has(step.stepId)) add('error', t('an.dupStep', { id: step.stepId }), step.stepId)
     const kinds = [step.operationId, step.operationPath, step.workflowId].filter(Boolean).length
     if (kinds !== 1) {
-      add('error', 'Cada paso debe tener exactamente uno de: operationId, operationPath o workflowId.', step.stepId)
+      add('error', t('an.stepKind'), step.stepId)
     }
 
     const parameters = resolveParameters(project, [...(wf.parameters ?? []), ...(step.parameters ?? [])])
@@ -152,7 +153,7 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
       step,
       kind: 'unresolved',
       mutating: false,
-      label: step.operationId ?? step.operationPath ?? step.workflowId ?? '(sin operación)',
+      label: step.operationId ?? step.operationPath ?? step.workflowId ?? t('an.noOperation'),
       security: [],
       parameters,
     }
@@ -166,15 +167,15 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
           const opName = step.operationId.slice(src.length + 1)
           add(
             'warning',
-            `"${step.operationId}" no es la forma estándar de Arazzo. Se resolvió como ${matches[0].method.toUpperCase()} ${matches[0].path}; corrígelo a "$sourceDescriptions.${src}.${opName}".`,
+            t('an.looseOpId', { id: step.operationId, op: `${matches[0].method.toUpperCase()} ${matches[0].path}`, fixed: `$sourceDescriptions.${src}.${opName}` }),
             step.stepId,
           )
         }
       }
-      if (matches.length === 0) add('error', `La operación "${step.operationId}" no existe en los contratos cargados.`, step.stepId)
+      if (matches.length === 0) add('error', t('an.opMissing', { id: step.operationId }), step.stepId)
       else {
         if (matches.length > 1) {
-          add('warning', `"${step.operationId}" existe en varias fuentes; se usa "${matches[0].sourceName}". Usa la forma $sourceDescriptions.<fuente>.<operationId>.`, step.stepId)
+          add('warning', t('an.opAmbiguous', { id: step.operationId, source: matches[0].sourceName }), step.stepId)
         }
         resolved = withOperation(resolved, matches[0])
       }
@@ -186,14 +187,14 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
         if (suggestion) {
           add(
             'warning',
-            `El operationPath apunta a una ruta que no existe en el contrato; se resolvió como ${suggestion.method.toUpperCase()} ${suggestion.path}. Probablemente incluye el prefijo del servidor: corrige la ruta del puntero a "${suggestion.path}".`,
+            t('an.pathSuffix', { op: `${suggestion.method.toUpperCase()} ${suggestion.path}`, path: suggestion.path }),
             step.stepId,
           )
           resolved = withOperation(resolved, suggestion)
-        } else add('error', `No se encontró la operación de operationPath "${step.operationPath}".`, step.stepId)
+        } else add('error', t('an.pathMissing', { path: step.operationPath }), step.stepId)
       }
     } else if (step.workflowId) {
-      if (!wfIds.has(step.workflowId)) add('error', `El sub-workflow "${step.workflowId}" no existe.`, step.stepId)
+      if (!wfIds.has(step.workflowId)) add('error', t('an.subMissing', { id: step.workflowId }), step.stepId)
       else resolved = { ...resolved, kind: 'workflow', subWorkflowId: step.workflowId, label: `workflow: ${step.workflowId}` }
     }
 
@@ -204,7 +205,7 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
       if (undocumented.length && expected.length) {
         add(
           'warning',
-          `Los successCriteria esperan ${undocumented.join(', ')}, pero el contrato de ${resolved.label} solo documenta ${documented.join(', ') || 'ninguna respuesta'}. Alinea el Arazzo o el contrato.`,
+          t('an.undocumented', { expected: undocumented.join(', '), op: resolved.label, documented: documented.join(', ') || t('an.noResponses') }),
           step.stepId,
         )
       }
@@ -217,12 +218,12 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
     const refs = collectReferences({ ...step, parameters })
     for (const r of refs.steps) {
       const targetIndex = (wf.steps ?? []).findIndex((s) => s.stepId === r.stepId)
-      if (targetIndex < 0) add('error', `Usa $steps.${r.stepId}.outputs.${r.output}, pero el paso "${r.stepId}" no existe.`, step.stepId)
-      else if (targetIndex >= index) add('warning', `Usa un output de "${r.stepId}", que se ejecuta después.`, step.stepId)
+      if (targetIndex < 0) add('error', t('an.refStepMissing', { step: r.stepId, output: r.output }), step.stepId)
+      else if (targetIndex >= index) add('warning', t('an.refLater', { step: r.stepId }), step.stepId)
       else {
         const producer = wf.steps[targetIndex]
         if (!producer.outputs || !(r.output in producer.outputs)) {
-          add('error', `Usa $steps.${r.stepId}.outputs.${r.output}, pero "${r.stepId}" no declara ese output.`, step.stepId)
+          add('error', t('an.refOutputMissing', { step: r.stepId, output: r.output }), step.stepId)
         }
         if (!dataEdges.some((e) => e.fromStep === r.stepId && e.toStep === step.stepId && e.output === r.output)) {
           dataEdges.push({ fromStep: r.stepId, toStep: step.stepId, output: r.output })
@@ -230,34 +231,34 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
       }
     }
     for (const input of refs.inputs) {
-      if (!inputProps.includes(input)) add('warning', `Usa $inputs.${input}, que no está definido en inputs del workflow.`, step.stepId)
+      if (!inputProps.includes(input)) add('warning', t('an.refInputMissing', { input }), step.stepId)
     }
     const mislabeled = [
       ...checkCriteria(step.successCriteria, 'successCriteria', (l, m) => add(l, m, step.stepId)),
       ...[...(step.onSuccess ?? []), ...(step.onFailure ?? [])].flatMap((action) =>
-        checkCriteria(action.criteria, `los criterios de la acción "${action.name ?? action.type}"`, (l, m) => add(l, m, step.stepId)),
+        checkCriteria(action.criteria, t('an.actionCriteria', { action: action.name ?? action.type ?? '' }), (l, m) => add(l, m, step.stepId)),
       ),
     ]
     if (mislabeled.length) {
       add(
         'warning',
-        `${mislabeled.length} condición(es) están marcadas como "type: jsonpath" pero son condiciones simples (por ejemplo "${mislabeled[0]}"). Se evaluarán como simples; quita "type: jsonpath" y "context" en ellas.`,
+        t('an.mislabeled', { n: mislabeled.length, example: mislabeled[0] }),
         step.stepId,
       )
     }
     if (!step.successCriteria?.length) {
-      add('info', 'Sin successCriteria: se considerará exitoso cualquier respuesta 2xx.', step.stepId)
+      add('info', t('an.noCriteria'), step.stepId)
     }
     for (const action of [...(step.onSuccess ?? []), ...(step.onFailure ?? [])]) {
       if (action.type !== 'retry' && (action.retryLimit !== undefined || action.retryAfter !== undefined)) {
         add(
           'warning',
-          `La acción "${action.name ?? action.type}" es de tipo ${action.type} y define retryLimit/retryAfter, que solo aplican a type: retry. Con ${action.type} no hay límite de repeticiones.`,
+          t('an.retryFields', { action: action.name ?? action.type ?? '', type: action.type ?? '' }),
           step.stepId,
         )
       }
       if (action.type === 'goto' && action.stepId && !(wf.steps ?? []).some((s) => s.stepId === action.stepId)) {
-        add('error', `La acción "${action.name ?? 'goto'}" apunta al paso inexistente "${action.stepId}".`, step.stepId)
+        add('error', t('an.gotoMissing', { action: action.name ?? 'goto', step: action.stepId }), step.stepId)
       }
     }
 
@@ -301,12 +302,12 @@ function checkOperationCoverage(r: ResolvedStep, add: (l: IssueLevel, m: string,
     const provided = r.parameters.some(
       (sp) => String(sp.name).toLowerCase() === String(p.name).toLowerCase() && (!sp.in || sp.in === p.in),
     )
-    if (!provided) add('warning', `El contrato exige el parámetro ${p.in} "${p.name}" y el paso no lo envía.`, r.step.stepId)
+    if (!provided) add('warning', t('an.paramMissing', { in: p.in, name: p.name }), r.step.stepId)
   }
   const body = operationRequestBody(op)
-  if (body?.required && !r.step.requestBody) add('warning', 'El contrato exige un body y el paso no define requestBody.', r.step.stepId)
+  if (body?.required && !r.step.requestBody) add('warning', t('an.bodyMissing'), r.step.stepId)
   if (r.parameters.some((p) => p.in === 'cookie')) {
-    add('warning', 'El navegador no permite enviar cookies manualmente; los parámetros cookie se omitirán.', r.step.stepId)
+    add('warning', t('an.cookies'), r.step.stepId)
   }
 }
 
@@ -324,7 +325,7 @@ function checkCriteria(criteria: Criterion[] | undefined, where: string, add: (l
   if (codes.length > 1) {
     add(
       'error',
-      `En ${where} hay ${codes.length} condiciones $statusCode == (${codes.join(', ')}). Arazzo exige que se cumplan todas a la vez, así que nunca se cumplirán. Únelas en una sola: "${codes.map((c) => `$statusCode == ${c}`).join(' || ')}".`,
+      t('an.statusAnd', { where, n: codes.length, codes: codes.join(', '), fixed: codes.map((c) => `$statusCode == ${c}`).join(' || ') }),
     )
   }
   return criteria
@@ -345,8 +346,8 @@ function stepCoverage(rs: ResolvedStep, wf: Workflow): StepCoverage {
       const isSuccess = successStatuses.length ? successStatuses.includes(n) : /^2/.test(code)
       const actions = (isSuccess ? successActions : failureActions)
         .filter((a) => statusesInCriteria(a.criteria).includes(n))
-        .map((a) => a.name ?? a.type ?? '(sin nombre)')
-      const catchAll = (isSuccess ? successActions : failureActions).filter((a) => !a.criteria?.length).map((a) => `${a.name ?? a.type} (sin criterios)`)
+        .map((a) => a.name ?? a.type ?? t('common.unnamed'))
+      const catchAll = (isSuccess ? successActions : failureActions).filter((a) => !a.criteria?.length).map((a) => t('an.noCriteriaAction', { action: a.name ?? a.type ?? '' }))
       const handledBy = isSuccess ? ['successCriteria', ...actions] : actions.length ? actions : catchAll
       return {
         status: code,

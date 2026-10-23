@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { IssueLevel } from '../../core/analyze'
 import type { StepStatus } from '../../core/runner'
-import { VERDICT_LABEL, type Verdict } from '../../core/testcases'
+import { verdictLabel, type Verdict } from '../../core/testcases'
 
 export function MethodBadge({ method }: { method: string }) {
   const m = method.toLowerCase()
@@ -25,7 +25,7 @@ const VERDICT_ICON: Record<Verdict, string> = { passed: '✅', failed: '❌', in
 export function VerdictBadge({ verdict }: { verdict: Verdict }) {
   return (
     <span className={`badge ${VERDICT_CLS[verdict]}`}>
-      {VERDICT_ICON[verdict]} {VERDICT_LABEL[verdict]}
+      {VERDICT_ICON[verdict]} {verdictLabel(verdict)}
     </span>
   )
 }

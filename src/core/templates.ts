@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Generadores de datos para que un caso se pueda repetir: un CPF o un email nuevos en cada corrida.
+import { t } from '../i18n'
 
 function randInt(max: number): number {
   return Math.floor(Math.random() * max)
@@ -49,15 +50,18 @@ export function generateRut(): string {
   return `${body}${dv}`
 }
 
-export const TEMPLATE_HELP: { token: string; description: string }[] = [
-  { token: '{{email}}', description: 'email único' },
-  { token: '{{cpf}}', description: 'CPF válido' },
-  { token: '{{rut}}', description: 'RUT chileno válido' },
-  { token: '{{uuid}}', description: 'UUID v4' },
-  { token: '{{numero:8}}', description: 'N dígitos al azar' },
-  { token: '{{fecha}}', description: 'fecha de hoy (YYYY-MM-DD)' },
-  { token: '{{timestamp}}', description: 'milisegundos actuales' },
-]
+/** Generadores disponibles, con los nombres del idioma actual ({{numero}} y {{number}} son equivalentes). */
+export function templateHelp(): { token: string; description: string }[] {
+  return [
+    { token: '{{email}}', description: t('tpl.email') },
+    { token: '{{cpf}}', description: t('tpl.cpf') },
+    { token: '{{rut}}', description: t('tpl.rut') },
+    { token: '{{uuid}}', description: 'UUID v4' },
+    { token: t('tpl.numberToken'), description: t('tpl.number') },
+    { token: t('tpl.dateToken'), description: t('tpl.date') },
+    { token: '{{timestamp}}', description: t('tpl.timestamp') },
+  ]
+}
 
 function generate(name: string, arg?: string): string | undefined {
   switch (name) {
@@ -75,8 +79,10 @@ function generate(name: string, arg?: string): string | undefined {
             return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
           })
     case 'numero':
+    case 'number':
       return digits(Math.max(1, Math.min(32, Number(arg) || 6)))
     case 'fecha':
+    case 'date':
       return new Date().toISOString().slice(0, 10)
     case 'timestamp':
       return String(Date.now())

@@ -1,5 +1,6 @@
 // Ejecución HTTP. Hoy solo usa fetch del navegador; si algún día se necesita un proxy,
 // basta con otra implementación de HttpExecutor.
+import { t } from '../i18n'
 
 export interface HttpRequest {
   method: string
@@ -49,11 +50,8 @@ export const fetchExecutor: HttpExecutor = async (req, signal) => {
     })
   } catch (e) {
     const ms = Math.round(performance.now() - started)
-    if ((e as Error).name === 'AbortError') throw new NetworkError('La ejecución fue cancelada.', ms)
-    throw new NetworkError(
-      'No se pudo conectar: la API no permite CORS desde este origen o no es accesible. Verifica la configuración de CORS y la URL del ambiente.',
-      ms,
-    )
+    if ((e as Error).name === 'AbortError') throw new NetworkError(t('run.cancelled'), ms)
+    throw new NetworkError(t('http.cors'), ms)
   }
   const bodyText = await res.text()
   const headers: Record<string, string> = {}
