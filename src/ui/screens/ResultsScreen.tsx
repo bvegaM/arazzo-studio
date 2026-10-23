@@ -8,6 +8,7 @@ import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badg
 import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
 import { t } from '../../i18n'
 import { copyText } from '../../lib/browser'
+import { JsonView, MismatchList } from '../components/Diff'
 
 interface Props {
   runs: CaseRun[]
@@ -64,6 +65,12 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
   const reasonTone = s.reason ? (REASON_CLS[s.reason.category] ?? (s.status === 'skipped' ? 'skip' : 'err')) : ''
   const failedCriteria = s.criteria.filter((c) => !c.passed).length
   const outputs = Object.keys(s.outputs).length
+  // Diferencias campo a campo de los criterios que fallaron (para compararlas y resaltarlas en la respuesta).
+  const mismatches = s.criteria.filter((c) => !c.passed).flatMap((c) => c.mismatches ?? [])
+  const showInResponse = () => {
+    setOpen(true)
+    setTab('respuesta')
+  }
 
   return (
     <div className={`step-result st-${s.status} ${open ? 'open' : ''}`}>
@@ -91,11 +98,17 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
 
       {(s.reason || s.action || s.actionName) && (
         <div className="step-notes">
-          {s.reason && (
-            <div className={`note n-${reasonTone}`}>
-              <strong>{reasonLabel(s.reason.category)}:</strong> {s.reason.message}
-            </div>
-          )}
+          {s.reason &&
+            (s.reason.category === 'criterio' && mismatches.length ? (
+              <div className={`note n-${reasonTone} note-diff`}>
+                <strong>{reasonLabel(s.reason.category)}</strong>
+                <MismatchList mismatches={mismatches} onShow={s.response ? showInResponse : undefined} />
+              </div>
+            ) : (
+              <div className={`note n-${reasonTone}`}>
+                <strong>{reasonLabel(s.reason.category)}:</strong> {s.reason.message}
+              </div>
+            ))}
           {(s.action || s.actionName) && <div className="note n-action">↪ {s.action ?? t('report.action', { action: s.actionName, type: s.actionType })}</div>}
         </div>
       )}
@@ -167,7 +180,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                   </div>
                   <div>
                     <h4>Body</h4>
-                    <Json value={s.response.body} />
+                    <JsonView value={s.response.body} highlight={mismatches.map((m) => m.pointer ?? '')} />
                   </div>
                 </div>
               ) : (

@@ -1651,6 +1651,80 @@ td code {
   border-radius: 8px;
   padding: 7px 10px;
 }
+/* Comparación esperado / recibido */
+.note-diff {
+  display: grid;
+  gap: 8px;
+}
+.diff-list {
+  display: grid;
+  gap: 8px;
+}
+.diff {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--err) 25%, var(--border));
+  color: var(--text);
+}
+.diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.diff-field {
+  font-weight: 700;
+  font-size: 13px;
+}
+.diff-row {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+.diff-row code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.diff-exp {
+  background: var(--ok-soft);
+}
+.diff-exp .diff-tag {
+  color: var(--ok);
+}
+.diff-act {
+  background: var(--err-soft);
+}
+.diff-act .diff-tag {
+  color: var(--err);
+}
+.diff-missing {
+  color: var(--err);
+}
+.json-view .json-line {
+  display: block;
+}
+.json-view .json-hl {
+  margin: 0 -12px;
+  padding: 0 12px;
+  background: var(--err-soft);
+  box-shadow: inset 3px 0 0 var(--err);
+  color: var(--err);
+  font-weight: 600;
+}
 .n-err {
   background: var(--err-soft);
   color: var(--err);
