@@ -5,7 +5,9 @@ import type { Project } from '../../core/loader'
 import type { SecurityScheme } from '../../core/openapi'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
+import { missingInputs } from '../../core/schemaForm'
 import { ActionBar, PageHeader, Section } from '../components/kit'
+import { SchemaField } from '../components/SchemaField'
 
 interface Props {
   project: Project
@@ -26,78 +28,6 @@ function credHint(type: SecurityScheme['type']): string {
   return t(`params.cred.${type}`)
 }
 
-const isEmpty = (v: any) => v === undefined || v === ''
-
-function InputField({ name, schema, required, value, onChange }: { name: string; schema: any; required: boolean; value: any; onChange: (v: any) => void }) {
-  const type = Array.isArray(schema?.type) ? schema.type[0] : schema?.type
-  const [raw, setRaw] = useState(() => (value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value, null, 2) : ''))
-  const [jsonError, setJsonError] = useState<string>()
-
-  let control
-  if (schema?.enum) {
-    control = (
-      <select value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}>
-        <option value="">{t('params.noValue')}</option>
-        {schema.enum.map((v: any) => (
-          <option key={String(v)} value={v}>
-            {String(v)}
-          </option>
-        ))}
-      </select>
-    )
-  } else if (type === 'boolean') {
-    control = (
-      <select value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}>
-        <option value="">{t('params.noValue')}</option>
-        <option value="true">true</option>
-        <option value="false">false</option>
-      </select>
-    )
-  } else if (type === 'number' || type === 'integer') {
-    control = <input type="number" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
-  } else if (type === 'object' || type === 'array') {
-    control = (
-      <textarea
-        rows={4}
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        onBlur={() => {
-          if (raw.trim() === '') {
-            setJsonError(undefined)
-            return onChange(undefined)
-          }
-          try {
-            onChange(JSON.parse(raw))
-            setJsonError(undefined)
-          } catch {
-            setJsonError(t('params.invalidJson'))
-          }
-        }}
-      />
-    )
-  } else {
-    control = <input type="text" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)} />
-  }
-
-  const hint = jsonError ?? [schema?.description, schema?.pattern && t('params.pattern', { pattern: schema.pattern })].filter(Boolean).join(' · ')
-  return (
-    <div className={`field ${required && isEmpty(value) ? 'missing' : ''}`}>
-      <label>
-        <span>
-          {name} {required && <span className="req">*</span>}
-        </span>
-        <span className="type">{schema?.enum ? 'enum' : (type ?? 'any')}</span>
-      </label>
-      {control}
-      {hint && (
-        <div className="hint clamp" title={hint} style={jsonError ? { color: 'var(--err)' } : undefined}>
-          {hint}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function ParamsScreen(p: Props) {
   const wa = p.analysis.workflows.find((w) => w.workflow.workflowId === p.selected) ?? p.analysis.workflows[0]
   const props = Object.entries<any>(wa?.inputsSchema.properties ?? {})
@@ -105,12 +35,12 @@ export function ParamsScreen(p: Props) {
   const required = props.filter(([n]) => wa.requiredInputs.includes(n))
   const optional = props.filter(([n]) => !wa.requiredInputs.includes(n))
   const [showOptional, setShowOptional] = useState(false)
-  const missingRequired = required.filter(([n]) => isEmpty(values[n])).map(([n]) => n)
+  const missingRequired = missingInputs(wa?.inputsSchema, values)
   const loadedSources = p.project.sources.filter((s) => s.status === 'loaded')
   const credsFilled = p.analysis.credentials.filter((c) => p.credentials[c.key]).length
 
   const field = ([name, schema]: [string, any]) => (
-    <InputField
+    <SchemaField
       key={`${wa.workflow.workflowId}-${name}`}
       name={name}
       schema={schema}
@@ -132,7 +62,7 @@ export function ParamsScreen(p: Props) {
         <div className="workflow-picker">
           {p.analysis.workflows.map((w) => {
             const vals = p.inputs[w.workflow.workflowId] ?? {}
-            const miss = w.requiredInputs.filter((n) => isEmpty(vals[n])).length
+            const miss = missingInputs(w.inputsSchema, vals).length
             return (
               <button key={w.workflow.workflowId} className={w === wa ? 'active' : ''} onClick={() => p.onSelect(w.workflow.workflowId)}>
                 <span className="wp-title">{w.workflow.workflowId}</span>
