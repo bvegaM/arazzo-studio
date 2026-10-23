@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
+import { t } from '../../i18n'
 import { IssueBadge, MethodBadge } from '../components/badges'
 import { ActionBar, Empty, Metric, MoreText, PageHeader, Section } from '../components/kit'
 
@@ -14,6 +15,10 @@ interface Props {
   onNext: () => void
 }
 
+function stepsLabel(n: number) {
+  return t(n === 1 ? 'contracts.oneStep' : 'contracts.nSteps', { n })
+}
+
 function count(issues: Issue[], level: Issue['level']) {
   return issues.filter((i) => i.level === level).length
 }
@@ -24,16 +29,16 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
 
   return (
     <>
-      <PageHeader step={2} title="Contratos y workflows" description="Cómo se resolvió cada paso contra los contratos, qué está mal y qué respuestas maneja el Arazzo." />
+      <PageHeader step={2} title={t('contracts.title')} description={t('contracts.description')} />
 
       <div className="metrics">
         <Metric label="Workflows" value={analysis.workflows.length} />
-        <Metric label="Pasos" value={analysis.workflows.reduce((n, w) => n + w.steps.length, 0)} />
-        <Metric label="Errores" value={count(allIssues, 'error')} tone={count(allIssues, 'error') ? 'err' : 'ok'} />
-        <Metric label="Advertencias" value={count(allIssues, 'warning')} tone={count(allIssues, 'warning') ? 'warn' : undefined} />
+        <Metric label={t('contracts.steps')} value={analysis.workflows.reduce((n, w) => n + w.steps.length, 0)} />
+        <Metric label={t('contracts.errors')} value={count(allIssues, 'error')} tone={count(allIssues, 'error') ? 'err' : 'ok'} />
+        <Metric label={t('contracts.warnings')} value={count(allIssues, 'warning')} tone={count(allIssues, 'warning') ? 'warn' : undefined} />
       </div>
 
-      {analysis.issues.length > 0 && <IssuesSection title="Validación general" issues={analysis.issues} />}
+      {analysis.issues.length > 0 && <IssuesSection title={t('contracts.generalValidation')} issues={analysis.issues} />}
 
       {analysis.workflows.length > 1 && (
         <div className="workflow-picker">
@@ -44,9 +49,9 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
               <button key={w.workflow.workflowId} className={w === wa ? 'active' : ''} onClick={() => onSelect(w.workflow.workflowId)}>
                 <span className="wp-title">{w.workflow.workflowId}</span>
                 <span className="wp-meta">
-                  {w.steps.length} {w.steps.length === 1 ? 'paso' : 'pasos'}
-                  {errs > 0 && <span className="badge b-err">{errs} error(es)</span>}
-                  {warns > 0 && <span className="badge b-warn">{warns} advertencia(s)</span>}
+                  {stepsLabel(w.steps.length)}
+                  {errs > 0 && <span className="badge b-err">{t('nav.errors', { n: errs })}</span>}
+                  {warns > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warns })}</span>}
                 </span>
               </button>
             )
@@ -57,10 +62,10 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
       {wa && <WorkflowDetail key={wa.workflow.workflowId} wa={wa} />}
 
       <ActionBar
-        left={<button onClick={onBack}>← Volver</button>}
+        left={<button onClick={onBack}>{t('common.back')}</button>}
         right={
           <button className="primary" onClick={onNext}>
-            Configurar parámetros →
+            {t('contracts.next')}
           </button>
         }
       />
@@ -77,35 +82,35 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
   return (
     <>
       <Section
-        title="Diagrama del flujo"
+        title={t('contracts.diagram')}
         subtitle={wa.workflow.summary}
-        badges={<span className="badge b-skip">{wa.steps.length} {wa.steps.length === 1 ? 'paso' : 'pasos'}</span>}
+        badges={<span className="badge b-skip">{stepsLabel(wa.steps.length)}</span>}
         defaultOpen
       >
         {wa.workflow.description && <MoreText text={wa.workflow.description} />}
-        <Suspense fallback={<Empty>Cargando diagrama…</Empty>}>
+        <Suspense fallback={<Empty>{t('contracts.loadingDiagram')}</Empty>}>
           <WorkflowGraph wa={wa} />
         </Suspense>
       </Section>
 
-      <IssuesSection title="Validación del workflow" issues={wa.issues} defaultOpen={errs > 0 || warns > 0} />
+      <IssuesSection title={t('contracts.workflowValidation')} issues={wa.issues} defaultOpen={errs > 0 || warns > 0} />
 
       {rows.length > 0 && (
         <Section
-          title="Cobertura de respuestas"
-          badges={<span className={`badge ${handled === rows.length ? 'b-ok' : 'b-warn'}`}>{handled}/{rows.length} manejadas</span>}
-          subtitle="Respuestas documentadas en el contrato frente a cómo las maneja el Arazzo"
+          title={t('contracts.coverage')}
+          badges={<span className={`badge ${handled === rows.length ? 'b-ok' : 'b-warn'}`}>{t('contracts.handled', { handled, total: rows.length })}</span>}
+          subtitle={t('contracts.coverageSubtitle')}
         >
           <p className="muted small" style={{ marginTop: 0 }}>
-            Las respuestas sin manejo hacen fallar el workflow con un error genérico.
+            {t('contracts.coverageHint')}
           </p>
           <table>
             <thead>
               <tr>
-                <th>Paso</th>
+                <th>{t('contracts.col.step')}</th>
                 <th>Status</th>
-                <th>Descripción en el contrato</th>
-                <th>Manejo en el Arazzo</th>
+                <th>{t('contracts.col.contractDescription')}</th>
+                <th>{t('contracts.col.handling')}</th>
               </tr>
             </thead>
             <tbody>
@@ -119,10 +124,10 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
                     <td className="muted">{r.description}</td>
                     <td>
                       {r.kind === 'sin-manejo' ? (
-                        <span className="badge b-err">❌ Sin manejo</span>
+                        <span className="badge b-err">❌ {t('contracts.unhandled')}</span>
                       ) : (
                         <span className="badge b-ok wrap">
-                          ✅ {r.kind === 'exito' ? 'Éxito' : 'Acción'}: {r.handledBy.join(', ')}
+                          ✅ {r.kind === 'exito' ? t('contracts.success') : t('contracts.action')}: {r.handledBy.join(', ')}
                         </span>
                       )}
                     </td>
@@ -134,14 +139,14 @@ function WorkflowDetail({ wa }: { wa: WorkflowAnalysis }) {
         </Section>
       )}
 
-      <Section title="Pasos y operaciones" badges={<span className="badge b-skip">{wa.steps.length}</span>} subtitle={wa.steps.map((s) => s.step.stepId).join(' → ')}>
+      <Section title={t('contracts.stepsAndOps')} badges={<span className="badge b-skip">{wa.steps.length}</span>} subtitle={wa.steps.map((s) => s.step.stepId).join(' → ')}>
         <table className="steps-table">
           <thead>
             <tr>
               <th>#</th>
-              <th>Paso</th>
-              <th>Operación</th>
-              <th>Fuente</th>
+              <th>{t('contracts.col.step')}</th>
+              <th>{t('contracts.col.operation')}</th>
+              <th>{t('contracts.col.source')}</th>
             </tr>
           </thead>
           <tbody>
@@ -186,19 +191,19 @@ function IssuesSection({ title, issues, defaultOpen }: { title: string; issues: 
       defaultOpen={defaultOpen ?? (errs > 0 || warns > 0)}
       badges={
         issues.length === 0 ? (
-          <span className="badge b-ok">✅ Sin observaciones</span>
+          <span className="badge b-ok">✅ {t('contracts.noIssues')}</span>
         ) : (
           <>
-            {errs > 0 && <span className="badge b-err">{errs} error(es)</span>}
-            {warns > 0 && <span className="badge b-warn">{warns} advertencia(s)</span>}
-            {infos > 0 && <span className="badge b-info">{infos} info</span>}
+            {errs > 0 && <span className="badge b-err">{t('nav.errors', { n: errs })}</span>}
+            {warns > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warns })}</span>}
+            {infos > 0 && <span className="badge b-info">{t('contracts.infosN', { n: infos })}</span>}
           </>
         )
       }
     >
       {issues.length === 0 ? (
         <p className="muted" style={{ margin: 0 }}>
-          No hay observaciones.
+          {t('contracts.noIssuesText')}
         </p>
       ) : (
         <ul className="issues">
