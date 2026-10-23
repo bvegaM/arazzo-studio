@@ -14,6 +14,17 @@ export interface Comparison {
   passed: boolean
 }
 
+/** Una diferencia concreta entre lo que pedía el criterio y lo que llegó. */
+export interface Mismatch {
+  /** Qué se comparó: "$response.body#/status", "$statusCode" o el nombre del campo. */
+  subject: string
+  /** Ruta (JSON Pointer) dentro del body de la respuesta, para poder resaltarla. */
+  pointer?: string
+  op: string
+  expected: any
+  actual: any
+}
+
 export interface CriterionResult {
   condition: string
   type: string
@@ -21,6 +32,56 @@ export interface CriterionResult {
   passed: boolean
   /** Explicación legible: valor esperado contra valor obtenido. */
   detail: string
+  /** Diferencias campo a campo cuando el criterio falla y se pueden identificar. */
+  mismatches?: Mismatch[]
+}
+
+const BODY_POINTER = /^\$response\.body(?:#(\/.*))?$/
+
+/** Ruta dentro del body si la expresión apunta a él ("$response.body#/a/b" → "/a/b", "$response.body" → ""). */
+function bodyPointer(expr: string): string | undefined {
+  const m = expr.match(BODY_POINTER)
+  return m ? (m[1] ?? '') : undefined
+}
+
+/** JSON Pointer de un campo dentro de un valor, buscando primero en el nivel superior. */
+export function findKeyPointer(value: any, key: string, depth = 0): string | undefined {
+  if (!value || typeof value !== 'object' || depth > 6) return undefined
+  const esc = (k: string) => k.replace(/~/g, '~0').replace(/\//g, '~1')
+  if (!Array.isArray(value) && key in value) return `/${esc(key)}`
+  for (const [k, v] of Object.entries(value)) {
+    const inner = findKeyPointer(v, key, depth + 1)
+    if (inner) return `/${esc(k)}${inner}`
+  }
+  return undefined
+}
+
+function valueAt(value: any, pointer: string): any {
+  return pointer
+    .split('/')
+    .slice(1)
+    .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
+    .reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), value)
+}
+
+// Pares "campo":"valor" (o número, booleano, null) escritos literalmente en una expresión regular.
+const REGEX_PAIR = /"([\w-]+)"\s*:\s*(?:"([\w\s.@-]*)"|(-?\d+(?:\.\d+)?|true|false|null))(?![\w*+?{])/g
+
+/**
+ * Para un regex sobre un JSON (ej. ^\{.*"status":"ACTIVE"), compara cada par "campo":"valor"
+ * del patrón con el campo real de la respuesta.
+ */
+export function regexFieldMismatches(pattern: string, value: any): Mismatch[] {
+  if (!value || typeof value !== 'object') return []
+  const out: Mismatch[] = []
+  for (const m of pattern.matchAll(REGEX_PAIR)) {
+    const [, key, str, lit] = m
+    const expected = str !== undefined ? str : JSON.parse(lit)
+    const pointer = findKeyPointer(value, key)
+    const actual = pointer ? valueAt(value, pointer) : undefined
+    if (actual !== expected) out.push({ subject: key, pointer, op: '==', expected, actual })
+  }
+  return out
 }
 
 // ---------- Condiciones simples ----------
@@ -245,7 +306,12 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
           )
           .join(' · ')
       }
-      return { ...base, passed, detail }
+      const mismatches = passed
+        ? undefined
+        : parser.comparisons
+            .filter((x) => !x.passed && x.left.startsWith('$'))
+            .map((x) => ({ subject: x.left, pointer: bodyPointer(x.left), op: x.op, expected: x.rightValue, actual: x.leftValue }))
+      return { ...base, passed, detail, mismatches: mismatches?.length ? mismatches : undefined }
     }
     const ctxValue = c.context ? evaluateExpression(c.context, ctx) : { found: false, value: undefined }
     if (!c.context) return { ...base, passed: false, detail: i18n.t('crit.needsContext', { type }) }
@@ -253,10 +319,24 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
     if (type === 'regex') {
       const text = typeof ctxValue.value === 'string' ? ctxValue.value : JSON.stringify(ctxValue.value)
       const passed = new RegExp(c.condition).test(text)
+      if (passed) return { ...base, passed, detail: i18n.t('crit.regexOk', { context: c.context }) }
+      // Si el patrón pide campos concretos, se explica con esos campos en vez de con todo el body.
+      const prefix = bodyPointer(c.context)
+      const onBody = prefix !== undefined
+      const fields = onBody ? regexFieldMismatches(c.condition, ctxValue.value) : []
+      if (fields.length) {
+        return {
+          ...base,
+          passed,
+          detail: fields.map((f) => i18n.t('crit.regexField', { field: f.subject, actual: fmt(f.actual), expected: fmt(f.expected) })).join(' · '),
+          mismatches: fields.map((f) => ({ ...f, pointer: f.pointer !== undefined ? (prefix ?? '') + f.pointer : undefined })),
+        }
+      }
       return {
         ...base,
         passed,
-        detail: passed ? i18n.t('crit.regexOk', { context: c.context }) : i18n.t('crit.regexFail', { context: c.context, value: fmt(ctxValue.value), regex: c.condition }),
+        detail: i18n.t('crit.regexFail', { context: c.context, value: fmt(ctxValue.value), regex: c.condition }),
+        mismatches: [{ subject: c.context, pointer: onBody ? prefix : undefined, op: 'regex', expected: c.condition, actual: ctxValue.value }],
       }
     }
     if (type === 'jsonpath') {

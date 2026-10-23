@@ -91,6 +91,7 @@ export const core = {
   'crit.contextEmpty': 'El contexto {context} no tiene valor.',
   'crit.regexOk': '{context} cumple la expresión regular.',
   'crit.regexFail': '{context} = {value} no cumple /{regex}/',
+  'crit.regexField': '"{field}" vale {actual} y se esperaba {expected}',
   'crit.jsonpathOk': 'JSONPath encontró {n} coincidencia(s).',
   'crit.jsonpathNone': 'JSONPath no encontró coincidencias en {context}.',
   'crit.unsupported': 'Tipo de criterio "{type}" no soportado todavía (XPath).',

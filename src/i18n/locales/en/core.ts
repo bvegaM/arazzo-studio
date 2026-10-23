@@ -92,6 +92,7 @@ export const core: Record<keyof typeof es, string> = {
   'crit.contextEmpty': 'Context {context} has no value.',
   'crit.regexOk': '{context} matches the regular expression.',
   'crit.regexFail': '{context} = {value} does not match /{regex}/',
+  'crit.regexField': '"{field}" is {actual} but {expected} was expected',
   'crit.jsonpathOk': 'JSONPath found {n} match(es).',
   'crit.jsonpathNone': 'JSONPath found no matches in {context}.',
   'crit.unsupported': 'Criterion type "{type}" is not supported yet (XPath).',
