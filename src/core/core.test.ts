@@ -6,7 +6,7 @@ import { analyzeProject } from './analyze'
 import { evaluateCriterion } from './criteria'
 import { interpolate, type ExprContext } from './expressions'
 import { fetchExecutor } from './http'
-import { runWorkflow } from './runner'
+import { realRequest, runWorkflow } from './runner'
 import { applyCaseInputs, evaluateCase, generateTestCases } from './testcases'
 import { createSimulatedExecutor } from './simulator'
 import { setLocale } from '../i18n'
@@ -139,6 +139,8 @@ describe('ejecución contra el mock', () => {
     expect(run.steps.map((s) => s.status)).toEqual(['success', 'success', 'success', 'success'])
     expect(run.outputs.status).toBe('ACTIVE')
     expect(run.steps[0].request?.headers['Authorization']).not.toContain('token-demo')
+    expect(realRequest(run.steps[0].request!).headers['Authorization']).toBe('Bearer token-demo')
+    expect(JSON.stringify(run)).not.toContain('token-demo')
   })
 
   it('dígitos incorrectos: falla en activar y salta consultar', async () => {

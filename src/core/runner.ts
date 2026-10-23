@@ -106,13 +106,15 @@ function chooseAction(project: Project, actions: Action[] | undefined, ctx: Expr
   return undefined
 }
 
+/** Aplica las credenciales y devuelve los nombres de query que llevan un secreto. */
 function applyAuth(
   schemes: SecurityScheme[],
   credentials: Record<string, string>,
   headers: Record<string, string>,
   display: Record<string, string>,
   query: URLSearchParams,
-) {
+): string[] {
+  const secretQuery: string[] = []
   for (const s of schemes) {
     const value = credentials[s.key]?.trim()
     if (!value) continue
@@ -126,9 +128,23 @@ function applyAuth(
       if (s.in === 'header') {
         headers[s.paramName] = value
         display[s.paramName] = mask(value)
-      } else if (s.in === 'query') query.set(s.paramName, value)
+      } else if (s.in === 'query') {
+        query.set(s.paramName, value)
+        secretQuery.push(s.paramName)
+      }
     }
   }
+  return secretQuery
+}
+
+// Petición real (sin enmascarar) de cada paso. Se guarda aparte para que los secretos
+// no queden en el resultado, que se muestra, se exporta y va al reporte.
+const realRequests = new WeakMap<object, { url: string; headers: Record<string, string> }>()
+
+/** La petición con los valores reales de URL y headers, si se ejecutó en esta sesión. */
+export function realRequest<T extends { url: string; headers: Record<string, string> }>(request: T): T {
+  const real = realRequests.get(request)
+  return real ? { ...request, ...real } : request
 }
 
 function parseBody(text: string, contentType: string): any {
@@ -186,7 +202,7 @@ async function executeOperationStep(
     }
   }
 
-  if (!opts.dropAuth) applyAuth(rs.security, opts.credentials, headers, displayHeaders, query)
+  const secretQuery = opts.dropAuth ? [] : applyAuth(rs.security, opts.credentials, headers, displayHeaders, query)
 
   // Body
   let payload: any
@@ -210,6 +226,11 @@ async function executeOperationStep(
   const path = op.path.replace(/\{([^}]+)\}/g, (_m, n: string) => encodeURIComponent(pathParams[n] ?? ''))
   const qs = query.toString()
   const url = `${server}${path}${qs ? `?${qs}` : ''}`
+  // En la URL que se muestra, los secretos de la query van enmascarados (sin codificar la máscara).
+  const displayQs = [...query.entries()]
+    .map(([k, v]) => `${encodeURIComponent(k)}=${secretQuery.includes(k) || SENSITIVE_HEADER.test(k) ? mask(v) : encodeURIComponent(v)}`)
+    .join('&')
+  const displayUrl = `${server}${path}${displayQs ? `?${displayQs}` : ''}`
 
   ctx.request = {
     method: op.method,
@@ -220,13 +241,15 @@ async function executeOperationStep(
     body: payload,
   }
 
+  const request = { method: op.method.toUpperCase(), url: displayUrl, headers: displayHeaders, body: payload }
+  realRequests.set(request, { url, headers: { ...headers } })
   const result: StepResult = {
     stepId: step.stepId,
     label: rs.label,
     description: step.description,
     status: 'failed',
     attempts: 1,
-    request: { method: op.method.toUpperCase(), url, headers: displayHeaders, body: payload },
+    request,
     criteria: [],
     outputs: {},
     missingOutputs: [],
