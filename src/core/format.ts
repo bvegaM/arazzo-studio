@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { t } from '../i18n'
+import { getLocale, t } from '../i18n'
 
 /** Representación corta de un valor para mensajes al usuario. */
 export function fmt(v: any): string {
@@ -29,4 +29,17 @@ export function humanizeId(id: string): string {
       return i === 0 ? lower[0].toUpperCase() + lower.slice(1) : lower
     })
     .join(' ')
+}
+
+/** Tiempo relativo en el idioma activo: "hace 2 horas", "2 hours ago". */
+export function timeAgo(date: Date, now = new Date()): string {
+  const rtf = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto' })
+  const sec = Math.round((date.getTime() - now.getTime()) / 1000)
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ]
+  for (const [unit, size] of units) if (Math.abs(sec) >= size) return rtf.format(Math.round(sec / size), unit)
+  return rtf.format(0, 'minute')
 }

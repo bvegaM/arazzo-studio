@@ -35,6 +35,17 @@ export function maskDeep(value: any): any {
   return value
 }
 
+/** Quita las claves sensibles (tokens, credenciales) en cualquier estructura, para no guardarlas. */
+export function omitSensitive<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(omitSensitive) as T
+  if (value && typeof value === 'object') {
+    const out: any = {}
+    for (const [k, v] of Object.entries(value)) if (!SENSITIVE.test(k)) out[k] = omitSensitive(v)
+    return out
+  }
+  return value
+}
+
 function esc(v: any): string {
   const s = typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v, null, 2)
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
