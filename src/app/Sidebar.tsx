@@ -38,7 +38,7 @@ function navItems(s: Studio): NavItem[] {
 }
 
 export function Sidebar({ studio }: { studio: Studio }) {
-  const { project, analysis, testAnalysis, runs, screen, goTo, locale, changeLocale } = studio
+  const { project, analysis, testAnalysis, runs, screen, goTo, locale, changeLocale, activeEnv } = studio
   const hasWorkflows = !!testAnalysis?.workflows.length
   const reachable = (i: number) => {
     if (i === Screen.Load) return true
@@ -59,6 +59,7 @@ export function Sidebar({ studio }: { studio: Studio }) {
       {project && (
         <div className="sidebar-project" title={project.arazzo.info?.title}>
           {project.arazzo.info?.title ?? project.arazzoFileName}
+          <span className="sidebar-env">{t('params.envTitle', { name: activeEnv.name })}</span>
         </div>
       )}
       <nav className="nav">

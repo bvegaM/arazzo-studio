@@ -20,8 +20,9 @@ import {
 } from '../core/testcases'
 import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
+import { fillServers, newEnvironment, uniqueName, type Environment } from '../core/environments'
 import { download, readTextFiles } from '../lib/browser'
-import { setLocale, type Locale } from '../i18n'
+import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
 import { EXAMPLE_FILES } from './example'
 
@@ -38,17 +39,54 @@ export function useStudio() {
   const [errors, setErrors] = useState<string[]>([])
   const [selected, setSelected] = useState('')
   const [inputs, setInputs] = useState<Inputs>({})
-  const [credentials, setCredentials] = useState<Record<string, string>>({})
-  const [servers, setServers] = useState<Record<string, string>>({})
+  const [envs, setEnvs] = useState(() => {
+    const first = newEnvironment(t('env.defaultName'))
+    return { list: [first], active: first.id }
+  })
   const [cases, setCases] = useState<TestCase[]>([])
   // Workflows que el usuario sacó de las pruebas en el paso 2 (por defecto se prueban todos).
   const [skipped, setSkipped] = useState<string[]>([])
   const [confirmed, setConfirmed] = useState(false)
   const [mode, setMode] = useState<RunMode>('real')
   const [runs, setRuns] = useState<CaseRun[]>([])
+  // Ambiente con el que se corrió la última ejecución (el reporte lo usa aunque después se cambie).
+  const [runEnv, setRunEnv] = useState<{ name: string; servers: Record<string, string> }>()
   const [running, setRunning] = useState(false)
   const abort = useRef<AbortController | null>(null)
   const locale = useLocale()
+
+  const activeEnv = envs.list.find((e) => e.id === envs.active) ?? envs.list[0]
+  const { servers, credentials } = activeEnv
+
+  function updateActiveEnv(patch: (e: Environment) => Partial<Environment>) {
+    setEnvs((prev) => ({ ...prev, list: prev.list.map((e) => (e.id === prev.active ? { ...e, ...patch(e) } : e)) }))
+  }
+
+  const envActions = {
+    select: (id: string) => {
+      // La confirmación de modificar datos vale para un ambiente: al cambiar se vuelve a pedir.
+      if (id !== envs.active) setConfirmed(false)
+      setEnvs((prev) => ({ ...prev, active: id }))
+    },
+    add: (name: string) => {
+      setConfirmed(false)
+      setEnvs((prev) => {
+        const current = prev.list.find((e) => e.id === prev.active) ?? prev.list[0]
+        const env = newEnvironment(uniqueName(name, prev.list.map((e) => e.name)), current.servers)
+        return { list: [...prev.list, env], active: env.id }
+      })
+    },
+    rename: (id: string, name: string) =>
+      setEnvs((prev) => ({ ...prev, list: prev.list.map((e) => (e.id === id && name.trim() ? { ...e, name: name.trim() } : e)) })),
+    remove: (id: string) => {
+      if (id === envs.active) setConfirmed(false)
+      setEnvs((prev) => {
+        if (prev.list.length <= 1) return prev
+        const list = prev.list.filter((e) => e.id !== id)
+        return { list, active: prev.active === id ? list[0].id : prev.active }
+      })
+    },
+  }
 
   // Lo que ven los pasos 3 a 5: solo los workflows marcados para probar.
   const testAnalysis = analysis && skipped.length ? { ...analysis, workflows: analysis.workflows.filter((w) => !skipped.includes(w.workflow.workflowId)) } : analysis
@@ -71,11 +109,8 @@ export function useStudio() {
       for (const w of a.workflows) next[w.workflow.workflowId] ??= defaultInputs(w.inputsSchema)
       return next
     })
-    setServers((prev) => {
-      const next = { ...prev }
-      for (const s of p.sources) if (s.status === 'loaded' && next[s.name] === undefined) next[s.name] = getServerUrl(s)
-      return next
-    })
+    const defaults = Object.fromEntries(p.sources.filter((s) => s.status === 'loaded').map((s) => [s.name, getServerUrl(s)]))
+    setEnvs((prev) => ({ ...prev, list: fillServers(prev.list, defaults) }))
     setCases((prev) => {
       // Se conservan las elecciones del usuario: selección, datos propios, modo y casos creados a mano.
       const byId = new Map(prev.map((c) => [c.id, c]))
@@ -122,10 +157,10 @@ export function useStudio() {
     applyProject(undefined)
     setErrors([])
     setInputs({})
-    setServers({})
     setCases([])
     setSkipped([])
     setRuns([])
+    setRunEnv(undefined)
     setConfirmed(false)
     goTo(Screen.Load)
   }
@@ -135,6 +170,7 @@ export function useStudio() {
     const selectedCases = testCases.filter((c) => c.enabled && runnability(c, mode).ok)
     setRuns(selectedCases.map((tc) => ({ tc, state: 'pending', steps: [] })))
     goTo(Screen.Results)
+    setRunEnv({ name: activeEnv.name, servers })
     setRunning(true)
     const controller = new AbortController()
     abort.current = controller
@@ -195,7 +231,8 @@ export function useStudio() {
       arazzoTitle: project?.arazzo.info?.title ?? project?.arazzoFileName ?? 'Arazzo',
       arazzoFile: project?.arazzoFileName,
       generatedAt,
-      servers,
+      environment: runEnv?.name ?? activeEnv.name,
+      servers: runEnv?.servers ?? servers,
       cases: runs,
     }
     if (format === 'html') download(buildHtmlReport(params), fileName, 'text/html')
@@ -239,10 +276,16 @@ export function useStudio() {
     setSelected,
     inputs,
     setInput: (wf: string, name: string, v: any) => setInputs((prev) => ({ ...prev, [wf]: { ...prev[wf], [name]: v } })),
+    environments: envs.list,
+    activeEnv,
+    envActions,
     credentials,
-    setCredential: (k: string, v: string) => setCredentials((prev) => ({ ...prev, [k]: v })),
+    setCredential: (k: string, v: string) => updateActiveEnv((e) => ({ credentials: { ...e.credentials, [k]: v } })),
     servers,
-    setServer: (n: string, v: string) => setServers((prev) => ({ ...prev, [n]: v })),
+    setServer: (n: string, v: string) => {
+      setConfirmed(false)
+      updateActiveEnv((e) => ({ servers: { ...e.servers, [n]: v } }))
+    },
     cases,
     testCases,
     caseActions,

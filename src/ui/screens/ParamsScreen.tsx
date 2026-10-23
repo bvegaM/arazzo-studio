@@ -10,6 +10,8 @@ import { invalidPaths, leavesFirst, missingInputs } from '../../core/schemaForm'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 import { SchemaField } from '../components/SchemaField'
 import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
+import { EnvironmentBar, type EnvActions } from '../components/EnvironmentBar'
+import type { Environment } from '../../core/environments'
 
 interface Props {
   project: Project
@@ -18,6 +20,9 @@ interface Props {
   onSelect: (id: string) => void
   inputs: Record<string, Record<string, any>>
   setInput: (workflowId: string, name: string, value: any) => void
+  environments: Environment[]
+  activeEnv: Environment
+  envActions: EnvActions
   credentials: Record<string, string>
   setCredential: (key: string, value: string) => void
   servers: Record<string, string>
@@ -41,6 +46,7 @@ export function ParamsScreen(p: Props) {
   const invalid = invalidPaths(wa?.inputsSchema, values)
   const loadedSources = p.project.sources.filter((s) => s.status === 'loaded')
   const credsFilled = p.analysis.credentials.filter((c) => p.credentials[c.key]).length
+  const credsMissing = credsFilled < p.analysis.credentials.length
 
   const pickerItems: PickerItem[] = p.analysis.workflows.map((w) => {
     const vals = p.inputs[w.workflow.workflowId]
@@ -120,18 +126,37 @@ export function ParamsScreen(p: Props) {
       </Section>
 
       <Section
-        title={t('params.credentials')}
-        defaultOpen={p.analysis.credentials.length > 0 && credsFilled < p.analysis.credentials.length}
+        title={t('params.envTitle', { name: p.activeEnv.name })}
+        defaultOpen={credsMissing || p.environments.length > 1}
+        tone={credsMissing ? 'warn' : undefined}
         badges={
-          p.analysis.credentials.length === 0 ? (
-            <span className="badge b-skip">{t('params.credsNotDeclared')}</span>
-          ) : (
-            <span className={`badge ${credsFilled === p.analysis.credentials.length ? 'b-ok' : 'b-warn'}`}>
-              {t('params.credsFilled', { filled: credsFilled, total: p.analysis.credentials.length })}
-            </span>
-          )
+          <>
+            <span className="badge b-skip">{t('params.baseUrls', { n: loadedSources.length })}</span>
+            {p.analysis.credentials.length > 0 && (
+              <span className={`badge ${credsMissing ? 'b-warn' : 'b-ok'}`}>{t('params.credsFilled', { filled: credsFilled, total: p.analysis.credentials.length })}</span>
+            )}
+          </>
         }
+        subtitle={loadedSources.map((s) => p.servers[s.name]).filter(Boolean).join(' · ')}
       >
+        <EnvironmentBar environments={p.environments} activeId={p.activeEnv.id} actions={p.envActions} />
+        <p className="muted small env-hint">{t('env.hint')}</p>
+
+        <div className="sub-head">{t('params.urlsTitle')}</div>
+        <div className="field-grid">
+          {loadedSources.map((s) => (
+            <div className="field" key={s.name}>
+              <label>
+                <span>{s.name}</span>
+                <span className="type plain">{t('report.baseUrl')}</span>
+              </label>
+              <input type="url" value={p.servers[s.name] ?? ''} placeholder={t('params.urlPlaceholder')} onChange={(e) => p.setServer(s.name, e.target.value)} />
+            </div>
+          ))}
+        </div>
+        <p className="muted small">{tn('params.corsHint', { origin: <code>{window.location.origin}</code> })}</p>
+
+        <div className="sub-head">{t('params.credentials')}</div>
         {p.analysis.credentials.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
             {tn('params.noSchemes', { schemes: <code>securitySchemes</code> })}
@@ -161,23 +186,6 @@ export function ParamsScreen(p: Props) {
             ))}
           </div>
         )}
-      </Section>
-
-      <Section title={t('report.environment')} badges={<span className="badge b-skip">{t('params.baseUrls', { n: loadedSources.length })}</span>} subtitle={loadedSources.map((s) => p.servers[s.name]).filter(Boolean).join(' · ')}>
-        <div className="field-grid">
-          {loadedSources.map((s) => (
-            <div className="field" key={s.name}>
-              <label>
-                <span>{s.name}</span>
-                <span className="type">{t('report.baseUrl')}</span>
-              </label>
-              <input type="url" value={p.servers[s.name] ?? ''} placeholder={t('params.urlPlaceholder')} onChange={(e) => p.setServer(s.name, e.target.value)} />
-            </div>
-          ))}
-        </div>
-        <p className="muted small" style={{ marginBottom: 0 }}>
-          {tn('params.corsHint', { origin: <code>{window.location.origin}</code> })}
-        </p>
       </Section>
 
       <ActionBar

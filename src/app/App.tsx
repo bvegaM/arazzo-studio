@@ -49,6 +49,9 @@ export default function App() {
               onSelect={studio.setSelected}
               inputs={studio.inputs}
               setInput={studio.setInput}
+              environments={studio.environments}
+              activeEnv={studio.activeEnv}
+              envActions={studio.envActions}
               credentials={studio.credentials}
               setCredential={studio.setCredential}
               servers={studio.servers}
@@ -68,6 +71,7 @@ export default function App() {
               onImportScenarios={studio.importScenariosFile}
               inputs={studio.inputs}
               servers={studio.servers}
+              envName={studio.activeEnv.name}
               confirmed={studio.confirmed}
               setConfirmed={studio.setConfirmed}
               running={studio.running}

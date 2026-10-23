@@ -25,6 +25,8 @@ interface Props {
   onImportScenarios: (file: File) => Promise<ScenariosImport>
   inputs: Record<string, Record<string, any>>
   servers: Record<string, string>
+  /** Nombre del ambiente activo, para dejar claro contra qué se corre. */
+  envName: string
   mode: RunMode
   setMode: (m: RunMode) => void
   confirmed: boolean
@@ -564,7 +566,7 @@ export function CasesScreen(p: Props) {
 
       {mutating.length > 0 && (
         <div className="callout warn small">
-          <strong>{t('cases.mutating')}</strong>
+          <strong>{t('cases.mutatingEnv', { env: p.envName })}</strong>
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {mutating.map(({ wf, s }) => (
               <li key={wf + s.step.stepId}>
@@ -585,6 +587,7 @@ export function CasesScreen(p: Props) {
       <ActionBar
         left={<button onClick={p.onBack}>{t('common.back')}</button>}
         info={[
+          t('cases.envShort', { env: p.envName }),
           t('cases.readyN', { n: ready.length }) + (simulatedCount ? ` ${t('cases.simulatedN', { n: simulatedCount })}` : ''),
           blocked ? t('cases.selectedBlocked', { n: blocked }) : '',
         ]

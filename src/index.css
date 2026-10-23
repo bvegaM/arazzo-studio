@@ -275,6 +275,15 @@ pre {
   place-items: center;
   font-size: 15px;
 }
+.sidebar-env {
+  display: block;
+  margin-top: 2px;
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sidebar-project {
   font-size: 12.5px;
   font-weight: 600;
@@ -1854,6 +1863,60 @@ button.icon {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+/* Ambientes */
+.env-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.env-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.env-tab {
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-color: transparent;
+}
+.env-tab.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.env-name-input {
+  width: 160px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.env-add {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border-style: dashed;
+  font-size: 13px;
+  color: var(--accent);
+  background: none;
+}
+.env-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.env-hint {
+  margin: 8px 0 14px;
+}
+.danger-link {
+  color: var(--err) !important;
+  font-weight: 600;
 }
 .muted-link {
   color: var(--muted) !important;
