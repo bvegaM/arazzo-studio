@@ -65,10 +65,12 @@ export function Sidebar({ studio }: { studio: Studio }) {
       <nav className="nav">
         {navItems(studio).map((n, i) => (
           <button key={n.label} className={`nav-item ${i === screen ? 'active' : ''}`} disabled={!reachable(i)} onClick={() => goTo(i as Screen)}>
-            <span className={`nav-num ${n.tone ? `t-${n.tone}` : ''}`}>{i + 1}</span>
+            <span className={`nav-num ${n.tone ? `t-${n.tone}` : ''}`} aria-hidden="true">
+              {i === screen || !n.tone ? i + 1 : n.tone === 'ok' ? '✓' : '!'}
+            </span>
             <span className="nav-text">
               <span className="nav-label">{n.label}</span>
-              <span className="nav-sub">{n.sub}</span>
+              <span className={`nav-sub ${n.tone && n.tone !== 'ok' ? `t-${n.tone}` : ''}`}>{n.sub}</span>
             </span>
           </button>
         ))}

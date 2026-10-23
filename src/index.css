@@ -308,6 +308,20 @@ pre {
   text-align: left;
   width: 100%;
 }
+/* Línea que une los pasos, bajo cada número */
+.nav-item {
+  position: relative;
+}
+.nav-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: 34px;
+  bottom: -8px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
 .nav-item:hover:not(:disabled) {
   background: var(--surface-2);
 }
@@ -331,26 +345,23 @@ pre {
   background: var(--accent);
   color: #fff;
 }
-.nav-num.t-ok::after,
-.nav-num.t-err::after,
-.nav-num.t-warn::after {
-  content: '';
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 2px solid var(--surface);
+.nav-num.t-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
 }
-.nav-num.t-ok::after {
-  background: var(--ok);
+.nav-num.t-err {
+  background: var(--err-soft);
+  color: var(--err);
 }
-.nav-num.t-err::after {
-  background: var(--err);
+.nav-num.t-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
-.nav-num.t-warn::after {
-  background: var(--warn);
+.nav-sub.t-err {
+  color: var(--err);
+}
+.nav-sub.t-warn {
+  color: var(--warn);
 }
 .nav-text {
   display: flex;
@@ -1665,6 +1676,9 @@ td code {
   .nav-item {
     width: auto;
     padding: 6px 8px;
+  }
+  .nav-item::after {
+    display: none;
   }
   .main {
     padding: 20px 16px 0;
