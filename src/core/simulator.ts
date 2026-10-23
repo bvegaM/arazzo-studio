@@ -3,7 +3,8 @@
 // Sirve para probar la lógica del Arazzo (criterios y acciones) en escenarios que la API
 // real no permite provocar a voluntad (403, 422, 500, 504…).
 import type { Project } from './loader'
-import type { Criterion, Step } from './types'
+import type { Step } from './types'
+import { requirementsFromCriteria, type BodyValue } from './criteria'
 import { getByPointer, setByPointer } from './jsonPointer'
 import { deref, listOperations, type OperationRef } from './openapi'
 import type { HttpExecutor, HttpResponse } from './http'
@@ -12,35 +13,7 @@ export interface Scenario {
   stepId: string
   status: number
   /** Valores del body que exige la acción (de condiciones $response.body#/x == 'y'). */
-  bodyValues: { pointer: string; value: any }[]
-}
-
-const STATUS_EQ = /\$statusCode\s*==\s*(\d{3})/g
-const BODY_EQ = /\$response\.body#(\/[^\s=!<>]*)\s*==\s*('([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?)|true|false|null)/g
-
-/** Todos los status que aparecen en las condiciones (incluye todas las alternativas de un OR). */
-export function statusesInCriteria(criteria: Criterion[] | undefined): number[] {
-  const out = new Set<number>()
-  for (const c of criteria ?? []) for (const m of c.condition.matchAll(STATUS_EQ)) out.add(Number(m[1]))
-  return [...out]
-}
-
-/** Lee de las condiciones los status y valores del body que deben darse. */
-export function requirementsFromCriteria(criteria: Criterion[] | undefined): { statuses: number[]; bodyValues: Scenario['bodyValues'] } {
-  const statuses: number[] = []
-  const bodyValues: Scenario['bodyValues'] = []
-  for (const c of criteria ?? []) {
-    // Solo la primera alternativa de un OR: alcanza para provocar el escenario.
-    const firstAlt = c.condition.split('||')[0]
-    for (const m of firstAlt.matchAll(STATUS_EQ)) statuses.push(Number(m[1]))
-    for (const m of firstAlt.matchAll(BODY_EQ)) {
-      const raw = m[2]
-      const value =
-        m[3] !== undefined ? m[3] : m[4] !== undefined ? m[4] : m[5] !== undefined ? Number(m[5]) : raw === 'true' ? true : raw === 'false' ? false : null
-      bodyValues.push({ pointer: m[1], value })
-    }
-  }
-  return { statuses: [...new Set(statuses)], bodyValues }
+  bodyValues: BodyValue[]
 }
 
 /** Genera un valor de ejemplo a partir de un schema (usa example/default/enum cuando existen). */
@@ -82,7 +55,7 @@ function responseFor(op: OperationRef, status: number): any | undefined {
 }
 
 /** Cuerpo de ejemplo para un status: prefiere un ejemplo del contrato que ya cumpla los valores pedidos. */
-export function exampleBody(op: OperationRef, status: number, bodyValues: Scenario['bodyValues']): any {
+export function exampleBody(op: OperationRef, status: number, bodyValues: BodyValue[]): any {
   let response = responseFor(op, status)
   // Status de éxito no documentado (p. ej. el Arazzo espera 201 y el contrato dice 200): se usa el 2xx documentado.
   if (!response && status >= 200 && status < 300) {

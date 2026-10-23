@@ -4,7 +4,7 @@ import type { ProjectAnalysis, WorkflowAnalysis } from '../core/analyze'
 import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, type TestCase } from '../core/testcases'
 import type { ScenariosImport } from '../core/scenariosFile'
 import { TEMPLATE_HELP } from '../core/templates'
-import { statusesInCriteria } from '../core/simulator'
+import { statusesInCriteria } from '../core/criteria'
 import { MethodBadge } from './common'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from './kit'
 

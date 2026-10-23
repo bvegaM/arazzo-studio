@@ -274,3 +274,39 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
     return { ...base, passed: false, detail: `No se pudo evaluar la condición: ${(e as Error).message}` }
   }
 }
+
+// Requisitos que imponen las condiciones (los usan el simulador, el análisis y la UI).
+
+/** Valor que una condición exige en el body ($response.body#/x == 'y'). */
+export interface BodyValue {
+  pointer: string
+  value: any
+}
+
+const STATUS_EQ = /\$statusCode\s*==\s*(\d{3})/g
+const BODY_EQ = /\$response\.body#(\/[^\s=!<>]*)\s*==\s*('([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?)|true|false|null)/g
+
+/** Todos los status que aparecen en las condiciones (incluye todas las alternativas de un OR). */
+export function statusesInCriteria(criteria: Criterion[] | undefined): number[] {
+  const out = new Set<number>()
+  for (const c of criteria ?? []) for (const m of c.condition.matchAll(STATUS_EQ)) out.add(Number(m[1]))
+  return [...out]
+}
+
+/** Lee de las condiciones los status y valores del body que deben darse. */
+export function requirementsFromCriteria(criteria: Criterion[] | undefined): { statuses: number[]; bodyValues: BodyValue[] } {
+  const statuses: number[] = []
+  const bodyValues: BodyValue[] = []
+  for (const c of criteria ?? []) {
+    // Solo la primera alternativa de un OR: alcanza para provocar el escenario.
+    const firstAlt = c.condition.split('||')[0]
+    for (const m of firstAlt.matchAll(STATUS_EQ)) statuses.push(Number(m[1]))
+    for (const m of firstAlt.matchAll(BODY_EQ)) {
+      const raw = m[2]
+      const value =
+        m[3] !== undefined ? m[3] : m[4] !== undefined ? m[4] : m[5] !== undefined ? Number(m[5]) : raw === 'true' ? true : raw === 'false' ? false : null
+      bodyValues.push({ pointer: m[1], value })
+    }
+  }
+  return { statuses: [...new Set(statuses)], bodyValues }
+}

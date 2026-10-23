@@ -16,7 +16,7 @@ import {
   type SecurityScheme,
 } from './openapi'
 import { collectReferences } from './expressions'
-import { statusesInCriteria } from './simulator'
+import { statusesInCriteria } from './criteria'
 
 export type IssueLevel = 'error' | 'warning' | 'info'
 

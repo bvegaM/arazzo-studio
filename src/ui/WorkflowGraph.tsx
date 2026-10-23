@@ -3,7 +3,7 @@ import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edg
 import '@xyflow/react/dist/style.css'
 import type { Issue, ResolvedStep, WorkflowAnalysis } from '../core/analyze'
 import { MethodBadge } from './common'
-import { requirementsFromCriteria, statusesInCriteria } from '../core/simulator'
+import { requirementsFromCriteria, statusesInCriteria } from '../core/criteria'
 import type { Action } from '../core/types'
 import { Pill } from './kit'
 
