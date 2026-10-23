@@ -3,7 +3,7 @@ import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyz
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge, MethodBadge } from '../components/badges'
-import { ActionBar, Empty, Metric, MoreText, PageHeader, Section } from '../components/kit'
+import { ActionBar, Empty, MoreText, PageHeader, Section } from '../components/kit'
 import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
 
 // React Flow pesa bastante: se carga solo cuando se muestra el diagrama.
@@ -32,6 +32,8 @@ function count(issues: Issue[], level: Issue['level']) {
 export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggleWorkflow, onAllWorkflows, onBack, onNext }: Props) {
   const wa = analysis.workflows.find((w) => w.workflow.workflowId === selected) ?? analysis.workflows[0]
   const allIssues = [...analysis.issues, ...analysis.workflows.flatMap((w) => w.issues)]
+  const errorCount = count(allIssues, 'error')
+  const warningCount = count(allIssues, 'warning')
   const noneIncluded = analysis.workflows.every((w) => skipped.includes(w.workflow.workflowId))
   const pickerItems: PickerItem[] = analysis.workflows.map((w) => {
     const errs = count(w.issues, 'error')
@@ -45,11 +47,13 @@ export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggl
     <>
       <PageHeader step={2} title={t('contracts.title')} description={t('contracts.description')} />
 
-      <div className="metrics">
-        <Metric label="Workflows" value={analysis.workflows.length} />
-        <Metric label={t('contracts.steps')} value={analysis.workflows.reduce((n, w) => n + w.steps.length, 0)} />
-        <Metric label={t('contracts.errors')} value={count(allIssues, 'error')} tone={count(allIssues, 'error') ? 'err' : 'ok'} />
-        <Metric label={t('contracts.warnings')} value={count(allIssues, 'warning')} tone={count(allIssues, 'warning') ? 'warn' : undefined} />
+      <div className="summary-strip">
+        <span>
+          {t('contracts.summary', { steps: analysis.workflows.reduce((n, w) => n + w.steps.length, 0), workflows: analysis.workflows.length })}
+        </span>
+        {errorCount > 0 && <span className="badge b-err">{t('nav.errors', { n: errorCount })}</span>}
+        {warningCount > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warningCount })}</span>}
+        {errorCount + warningCount === 0 && <span className="badge b-ok">✓ {t('contracts.allValid')}</span>}
       </div>
 
       {analysis.issues.length > 0 && <IssuesSection title={t('contracts.generalValidation')} issues={analysis.issues} />}
