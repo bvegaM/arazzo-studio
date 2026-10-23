@@ -112,3 +112,68 @@ export function typeLabel(schema: any): string {
   const label = t(`params.type.${key}` as MessageKey)
   return schema?.format ? `${label} · ${schema.format}` : label
 }
+
+const FORMATS: Record<string, { test: (v: string) => boolean; key: MessageKey }> = {
+  email: { test: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), key: 'val.email' },
+  uuid: { test: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v), key: 'val.uuid' },
+  date: { test: (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)), key: 'val.date' },
+  'date-time': { test: (v) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v) && !isNaN(Date.parse(v)), key: 'val.dateTime' },
+  uri: { test: (v) => URL.canParse(v), key: 'val.uri' },
+  url: { test: (v) => URL.canParse(v), key: 'val.uri' },
+}
+
+function matches(pattern: string, value: string): boolean {
+  try {
+    return new RegExp(pattern, 'u').test(value)
+  } catch {
+    return true // un patrón que no entendemos no debe bloquear al usuario
+  }
+}
+
+/**
+ * Primer problema de un valor simple o de una lista frente a su esquema, en lenguaje normal.
+ * Los valores con generadores ({{email}}) no se revisan: se resuelven al ejecutar.
+ */
+export function validateValue(schema: any, value: any): string | undefined {
+  const s = normalizeSchema(schema)
+  if (isEmptyValue(value) || (typeof value === 'string' && value.includes('{{'))) return undefined
+  if (Array.isArray(value)) {
+    if (s.minItems !== undefined && value.length < s.minItems) return t('val.minItems', { n: s.minItems })
+    if (s.maxItems !== undefined && value.length > s.maxItems) return t('val.maxItems', { n: s.maxItems })
+    return undefined
+  }
+  if (s.enum && !s.enum.some((e: any) => e === value)) return t('val.enum')
+  const type = schemaType(s)
+  if (typeof value === 'number' || type === 'number' || type === 'integer') {
+    if (typeof value !== 'number' || isNaN(value)) return t('val.number')
+    if (type === 'integer' && !Number.isInteger(value)) return t('val.integer')
+    if (s.minimum !== undefined && value < s.minimum) return t('val.minimum', { n: s.minimum })
+    if (s.maximum !== undefined && value > s.maximum) return t('val.maximum', { n: s.maximum })
+    if (typeof s.exclusiveMinimum === 'number' && value <= s.exclusiveMinimum) return t('val.exclusiveMinimum', { n: s.exclusiveMinimum })
+    if (typeof s.exclusiveMaximum === 'number' && value >= s.exclusiveMaximum) return t('val.exclusiveMaximum', { n: s.exclusiveMaximum })
+    return undefined
+  }
+  if (typeof value === 'string') {
+    if (s.minLength !== undefined && value.length < s.minLength) return t('val.minLength', { n: s.minLength })
+    if (s.maxLength !== undefined && value.length > s.maxLength) return t('val.maxLength', { n: s.maxLength })
+    if (s.pattern && !matches(s.pattern, value)) return t('val.pattern', { pattern: s.pattern })
+    const format = s.format && FORMATS[s.format]
+    if (format && !format.test(value)) return t(format.key)
+  }
+  return undefined
+}
+
+/** Rutas con valores que no cumplen el esquema (ej. "cliente.email", "items[0].sku"). */
+export function invalidPaths(schema: any, value: any, prefix = ''): string[] {
+  const s = normalizeSchema(schema)
+  const kind = fieldKind(s)
+  if (kind === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    return Object.entries<any>(s.properties).flatMap(([k, child]) => invalidPaths(child, value[k], prefix ? `${prefix}.${k}` : k))
+  }
+  const own = validateValue(s, value) ? [prefix] : []
+  if (kind === 'array' && Array.isArray(value)) {
+    return [...own, ...value.flatMap((item, i) => invalidPaths(s.items, item, `${prefix}[${i}]`))]
+  }
+  return own
+}

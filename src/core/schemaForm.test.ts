@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { exampleValue, fieldKind, leavesFirst, missingInputs, normalizeSchema, setKey, valueSummary } from './schemaForm'
+import { exampleValue, fieldKind, invalidPaths, leavesFirst, missingInputs, normalizeSchema, setKey, validateValue, valueSummary } from './schemaForm'
 import { defaultInputs } from './testcases'
+import { setLocale } from '../i18n'
+
+setLocale('es')
 
 const schema = {
   type: 'object',
@@ -64,5 +67,38 @@ describe('resúmenes del formulario', () => {
     expect(valueSummary({ nombre: 'Ana', direccion: { calle: 'X' }, tags: [1, 2], vacio: '' })).toBe('nombre: Ana · direccion: {…} · tags: [2]')
     expect(valueSummary({ a: 1, b: 2, c: 3, d: 4 })).toBe('a: 1 · b: 2 · c: 3 · …')
     expect(valueSummary(['x', '', 'y'])).toBe('x · y')
+  })
+})
+
+describe('validación en vivo', () => {
+  it('revisa patrón, longitudes, números y formatos', () => {
+    expect(validateValue({ type: 'string', pattern: '^[0-9]{4}$' }, '12a4')).toBe('No cumple el patrón ^[0-9]{4}$')
+    expect(validateValue({ type: 'string', pattern: '^[0-9]{4}$' }, '1234')).toBeUndefined()
+    expect(validateValue({ type: 'string', minLength: 3 }, 'ab')).toBe('Debe tener al menos 3 caracteres')
+    expect(validateValue({ type: 'integer', minimum: 1 }, 0)).toBe('Debe ser mayor o igual a 1')
+    expect(validateValue({ type: 'integer' }, 1.5)).toBe('Debe ser un número entero')
+    expect(validateValue({ type: 'number', exclusiveMaximum: 10 }, 10)).toBe('Debe ser menor que 10')
+    expect(validateValue({ type: 'string', format: 'email' }, 'ana@')).toBe('No es un correo válido')
+    expect(validateValue({ type: 'string', format: 'date' }, '2026-10-23')).toBeUndefined()
+    expect(validateValue({ type: 'string', format: 'date' }, '23/10/2026')).toBe('Usa el formato AAAA-MM-DD')
+    expect(validateValue({ type: 'array', minItems: 1, items: {} }, ['a'])).toBeUndefined()
+  })
+
+  it('no revisa vacíos ni generadores, y tolera patrones inválidos', () => {
+    expect(validateValue({ type: 'string', format: 'email' }, '{{email}}')).toBeUndefined()
+    expect(validateValue({ type: 'string', minLength: 3 }, undefined)).toBeUndefined()
+    expect(validateValue({ type: 'string', pattern: '([' }, 'x')).toBeUndefined()
+  })
+
+  it('lista las rutas inválidas en objetos y listas', () => {
+    const s = {
+      type: 'object',
+      properties: {
+        email: { type: 'string', format: 'email' },
+        dir: { type: 'object', properties: { postal: { type: 'string', pattern: '^\\d{5}$' } } },
+        tags: { type: 'array', maxItems: 1, items: { type: 'string', minLength: 2 } },
+      },
+    }
+    expect(invalidPaths(s, { email: 'x', dir: { postal: '123' }, tags: ['a', 'bb'] })).toEqual(['email', 'dir.postal', 'tags', 'tags[0]'])
   })
 })
