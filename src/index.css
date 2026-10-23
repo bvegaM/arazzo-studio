@@ -496,6 +496,18 @@ pre {
   font-weight: 650;
   font-size: 15px;
 }
+.section-head {
+  flex-wrap: wrap;
+}
+.section-toggle {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.callout code,
+.note,
+.case-summary .kv {
+  overflow-wrap: anywhere;
+}
 .section-badges {
   display: inline-flex;
   gap: 6px;
@@ -1395,6 +1407,9 @@ td code {
   background: var(--surface-2);
   cursor: pointer;
   flex-wrap: wrap;
+}
+.case-group-head > .grow {
+  flex: 1 1 240px;
 }
 .case-rows {
   display: flex;
