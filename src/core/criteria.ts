@@ -2,6 +2,7 @@
 import { JSONPath } from 'jsonpath-plus'
 import type { Criterion } from './types'
 import { evaluateExpression, type ExprContext } from './expressions'
+import { fmt } from './format'
 
 export interface Comparison {
   left: string
@@ -208,13 +209,6 @@ function describe(t: Token | undefined): string {
   if (t.t === 'expr') return t.v
   if (t.t === 'lit') return t.raw
   return String(t.v)
-}
-
-export function fmt(v: any): string {
-  if (v === undefined) return 'sin valor'
-  if (typeof v === 'string') return `"${v}"`
-  const s = JSON.stringify(v)
-  return s.length > 80 ? s.slice(0, 77) + '…' : s
 }
 
 const OP_TEXT: Record<string, string> = {

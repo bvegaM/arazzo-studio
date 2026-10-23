@@ -2,7 +2,7 @@
 import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv'
 import addFormats from 'ajv-formats'
 import { deref, findResponse, jsonSchemaOfResponse, toJsonSchema, type OperationRef } from './openapi'
-import { fmt } from './criteria'
+import { fmt } from './format'
 
 const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: true, verbose: true })
 addFormats(ajv)
