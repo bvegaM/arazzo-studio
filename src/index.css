@@ -1007,7 +1007,7 @@ td code {
 }
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 14px 18px;
 }
 .field label {
@@ -1036,49 +1036,150 @@ td code {
 .req {
   color: var(--err);
 }
-.field-grid > .field-group {
+.field-grid > .fg {
   grid-column: 1 / -1;
 }
-.field-group {
-  margin: 0;
-  min-width: 0;
+.field-error {
+  font-size: 12px;
+  color: var(--err);
+  margin-top: 4px;
+}
+.field .segmented button {
+  padding: 5px 14px;
+}
+
+/* Grupos del formulario: tarjeta en el primer nivel, rama con guía a la izquierda dentro. */
+.fg-root {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 14px 12px;
-  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+  background: var(--surface);
 }
-.field-group > legend {
+.fg-branch {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+.fg-branch.fg-missing {
+  border-left-color: color-mix(in srgb, var(--err) 35%, var(--border));
+}
+.field .type.plain {
+  font-family: inherit;
+}
+.fg-head {
   display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fg-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  align-items: baseline;
-  padding: 0 6px;
+  border: none;
+  background: none;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 10px;
+}
+.fg-branch .fg-toggle {
+  padding: 6px 4px;
+}
+.fg-toggle:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.fg-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 13.5px;
+  white-space: nowrap;
 }
-.field-group > .hint {
-  font-size: 12px;
+.fg-type {
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.fg-summary {
+  flex: 1;
+  min-width: 0;
   color: var(--muted);
-  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.field-group.missing {
-  border-color: color-mix(in srgb, var(--err) 60%, var(--border));
+.fg-status {
+  margin-left: auto;
+  flex-shrink: 0;
 }
-.array-items {
+.fg-body {
+  padding: 4px 14px 14px 32px;
+}
+.fg-branch .fg-body {
+  padding: 4px 0 10px 24px;
+}
+@media (max-width: 640px) {
+  .fg-body,
+  .fg-branch .fg-body {
+    padding-left: 12px;
+  }
+  .fg-summary {
+    display: none;
+  }
+}
+.fg-desc,
+.fg-empty {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.arr-items {
   display: grid;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-.array-item {
+.arr-row {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px;
 }
-.array-item > :first-child {
+.arr-row > :not(.icon-btn, .arr-index) {
   flex: 1;
   min-width: 0;
 }
-.array-item > button {
-  margin-top: 24px;
+.arr-index {
+  width: 20px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.icon-btn {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--faint);
+}
+.icon-btn:hover:not(:disabled) {
+  color: var(--err);
+  border-color: transparent;
+  background: var(--err-soft);
+}
+.add-btn {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed var(--border-strong);
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+}
+.add-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
 }
 .toggle-more {
   margin: 16px 0 10px;
