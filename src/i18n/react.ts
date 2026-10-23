@@ -3,7 +3,7 @@ import { getLocale, subscribeLocale, t, type Locale, type MessageKey, type Param
 
 /** Idioma actual; el componente se vuelve a renderizar cuando cambia. */
 export function useLocale(): Locale {
-  return useSyncExternalStore(subscribeLocale, getLocale)
+  return useSyncExternalStore(subscribeLocale, getLocale, getLocale)
 }
 
 /**
