@@ -5,15 +5,20 @@ Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/
 ## Flujo
 
 1. **Cargar**: subes el Arazzo y los OpenAPI que referencia (`sourceDescriptions`). Si falta un contrato, la pantalla lo indica.
-2. **Contratos**: cada paso se resuelve a su operación del OpenAPI. Incluye una tabla de cobertura: qué respuestas documentadas en el contrato maneja el Arazzo y cuáles no. Ves el grafo del workflow, con flechas que muestran qué output alimenta a qué paso, y la validación (operaciones inexistentes, parámetros obligatorios que no se envían, referencias rotas).
-3. **Valores por defecto**: formulario generado desde el schema de `inputs`, credenciales detectadas desde los `securitySchemes` y URL base por contrato. Estos valores se usan en todos los casos.
+2. **Contratos**: cada paso se resuelve a su operación del OpenAPI. Incluye una tabla de cobertura: qué respuestas documentadas en el contrato maneja el Arazzo y cuáles no. Ves el grafo del workflow, con flechas que muestran qué output alimenta a qué paso, y la validación (operaciones inexistentes, parámetros obligatorios que no se envían, referencias rotas). Aquí marcas qué workflows quieres probar: los pasos siguientes solo muestran los marcados.
+3. **Valores por defecto**: formulario generado desde el schema de `inputs` (los objetos anidados y las listas se llenan campo por campo), con avisos en vivo cuando un valor no cumple el contrato (patrón, longitud, mínimos, formato). Estos valores se usan en todos los casos.
+   - **Ambientes** (DEV, QA, UAT…): cada uno guarda sus URLs base y sus credenciales (detectadas desde los `securitySchemes`). Se cambia con un clic y el reporte indica contra cuál se corrió. Cambiar de ambiente vuelve a pedir la confirmación antes de ejecutar pasos que modifican datos.
 4. **Casos de prueba**:
    - Casos generales: camino feliz, inputs obligatorios faltantes, tipos y enums inválidos, y ejecución sin credenciales. Se ejecutan contra la API real o en simulación.
    - Escenarios por respuesta: uno por cada acción `onFailure`/`onSuccess` con criterios. Se simulan siempre (con los ejemplos del contrato, o su schema si no hay ejemplos) y verifican que, ante esa respuesta, se active la acción correcta.
    - Parámetros por caso: todos los casos parten de los **valores por defecto** del paso 3 y en cada caso puedes cambiar u omitir cualquier valor. Los escenarios por respuesta se pueden pasar a "API real" dándoles los datos que provocan esa respuesta, y puedes crear casos nuevos con datos propios y una expectativa (status, `code` del body y/o acción del Arazzo). Solo se ejecutan los casos que se pueden cumplir con sus datos.
    - Generadores para que los casos se puedan repetir: `{{email}}`, `{{cpf}}`, `{{rut}}`, `{{uuid}}`, `{{numero:8}}`, `{{fecha}}`, `{{timestamp}}`.
    - **Importar / exportar escenarios** en YAML (bases por workflow + datos de cada caso) para versionarlos junto al Arazzo.
-5. **Resultados**: entrada y salida de cada petición, criterios evaluados (esperado contra obtenido), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
+5. **Resultados**: entrada y salida de cada petición (con **Copiar como cURL** para reproducirla; los secretos quedan como `<secret>` salvo que elijas copiarlos), criterios evaluados (esperado contra obtenido), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
+
+## Sesión guardada
+
+Lo que haces se guarda solo en este equipo (IndexedDB): archivos, valores, casos, workflows elegidos, ambientes y el paso en que estabas. Al volver, un aviso ofrece continuar o descartar. **Las credenciales y los inputs con nombre sensible (token, password…) nunca se guardan.** "Empezar de nuevo" borra la sesión.
 
 ## Idiomas
 
@@ -78,12 +83,13 @@ src/
     example.ts        ejemplo de tarjetas incluido
   core/               motor independiente de la UI (sin React ni DOM)
     loader, analyze, openapi, expressions, criteria, runner, testcases,
-    contract, simulator, report, scenariosFile, templates,
-    jsonPointer, format, http, types
+    contract, simulator, report, scenariosFile, templates, schemaForm,
+    environments, session, curl, jsonPointer, format, http, types
   i18n/               traducciones (es, en), t() y el hook useLocale
-  lib/browser.ts      utilidades del navegador (descargas, lectura de archivos)
+  lib/                utilidades del navegador (descargas, portapapeles, IndexedDB)
   ui/
-    components/       piezas reutilizables (kit, badges, WorkflowGraph)
+    components/       piezas reutilizables (kit, badges, WorkflowGraph, SchemaField,
+                      WorkflowPicker, EnvironmentBar)
     screens/          una pantalla por paso del flujo
 examples              contrato, Arazzo y mock de ejemplo
 ```
