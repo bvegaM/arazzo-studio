@@ -425,9 +425,6 @@ function WorkflowCases({ wa, list, p }: { wa: WorkflowAnalysis; list: TestCase[]
   const own = list.filter((c) => c.origin === 'datos')
   return (
     <div className="case-groups">
-      <div className="callout info small">
-        {tn('cases.groupsHint', { defaults: <strong>{t('cases.groupsHint.defaults')}</strong>, params: <strong>{t('report.params')}</strong> })}
-      </div>
       <CaseGroup title={t('tc.happy.title')} hint={t('cases.group.happyHint')} list={general.filter((c) => c.origin === 'arazzo')} defaultOpen ctx={ctx} />
       <CaseGroup
         title={t('cases.group.own')}
@@ -532,22 +529,41 @@ export function CasesScreen(p: Props) {
       )}
 
       <div className="mode-card">
-        <div>
-          <strong>{t('cases.mode.title')}</strong>
-          <div className="muted small">
-            {p.mode === 'real'
-              ? t('cases.mode.realHint')
-              : t('cases.mode.simHint')}
+        <div className="mode-row">
+          <div>
+            <strong>{t('cases.mode.title')}</strong>
+            <div className="muted small">{p.mode === 'real' ? t('cases.mode.realHint') : t('cases.mode.simHint')}</div>
           </div>
+          <Segmented
+            options={[
+              { id: 'real', label: t('common.realApi') },
+              { id: 'simulado', label: t('cases.mode.simulation') },
+            ]}
+            value={p.mode}
+            onChange={p.setMode}
+          />
         </div>
-        <Segmented
-          options={[
-            { id: 'real', label: t('common.realApi') },
-            { id: 'simulado', label: t('cases.mode.simulation') },
-          ]}
-          value={p.mode}
-          onChange={p.setMode}
-        />
+        <div className="cases-overview" aria-label={t('cases.overview')}>
+          <span className="co-total">{t('cases.overviewSelected', { n: enabled.length, total: p.cases.length })}</span>
+          {ready.length - simulatedCount > 0 && (
+            <span className="co-chip co-real">
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewReal', { n: ready.length - simulatedCount })}
+            </span>
+          )}
+          {simulatedCount > 0 && (
+            <span className="co-chip co-sim">
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewSim', { n: simulatedCount })}
+            </span>
+          )}
+          {blocked > 0 && (
+            <span className="co-chip co-blocked" title={t('cases.overviewBlockedHint')}>
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewBlocked', { n: blocked })}
+            </span>
+          )}
+        </div>
       </div>
 
       {p.analysis.workflows.map((w, i) => {

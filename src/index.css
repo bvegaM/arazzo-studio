@@ -1391,11 +1391,8 @@ td code {
 
 /* ---------- Casos ---------- */
 .mode-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2259,6 +2256,46 @@ button.icon {
 .resume-actions {
   display: flex;
   gap: 8px;
+}
+
+.mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cases-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.co-total {
+  font-weight: 650;
+}
+.co-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.co-real .status-dot {
+  background: var(--info);
+}
+.co-sim .status-dot {
+  background: var(--accent);
+}
+.co-blocked {
+  color: var(--warn);
+  font-weight: 600;
+  cursor: help;
+}
+.co-blocked .status-dot {
+  background: var(--warn);
 }
 
 /* Ambientes */
