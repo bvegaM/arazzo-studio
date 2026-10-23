@@ -4,6 +4,7 @@ import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge, MethodBadge } from '../components/badges'
 import { ActionBar, Empty, Metric, MoreText, PageHeader, Section } from '../components/kit'
+import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
 
 // React Flow pesa bastante: se carga solo cuando se muestra el diagrama.
 const WorkflowGraph = lazy(() => import('../components/WorkflowGraph').then((m) => ({ default: m.WorkflowGraph })))
@@ -27,6 +28,13 @@ function count(issues: Issue[], level: Issue['level']) {
 export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }: Props) {
   const wa = analysis.workflows.find((w) => w.workflow.workflowId === selected) ?? analysis.workflows[0]
   const allIssues = [...analysis.issues, ...analysis.workflows.flatMap((w) => w.issues)]
+  const pickerItems: PickerItem[] = analysis.workflows.map((w) => {
+    const errs = count(w.issues, 'error')
+    const warns = count(w.issues, 'warning')
+    if (errs) return { id: w.workflow.workflowId, tone: 'err', meta: t('nav.errors', { n: errs }) }
+    if (warns) return { id: w.workflow.workflowId, tone: 'warn', meta: t('contracts.warningsN', { n: warns }) }
+    return { id: w.workflow.workflowId, tone: 'ok', meta: stepsLabel(w.steps.length) }
+  })
 
   return (
     <>
@@ -42,22 +50,12 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
       {analysis.issues.length > 0 && <IssuesSection title={t('contracts.generalValidation')} issues={analysis.issues} />}
 
       {analysis.workflows.length > 1 && (
-        <div className="workflow-picker">
-          {analysis.workflows.map((w) => {
-            const errs = count(w.issues, 'error')
-            const warns = count(w.issues, 'warning')
-            return (
-              <button key={w.workflow.workflowId} className={w === wa ? 'active' : ''} onClick={() => onSelect(w.workflow.workflowId)}>
-                <span className="wp-title">{w.workflow.workflowId}</span>
-                <span className="wp-meta">
-                  {stepsLabel(w.steps.length)}
-                  {errs > 0 && <span className="badge b-err">{t('nav.errors', { n: errs })}</span>}
-                  {warns > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warns })}</span>}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        <WorkflowPicker
+          value={wa?.workflow.workflowId ?? ''}
+          onChange={onSelect}
+          summary={t('contracts.pickerSummary', { ok: pickerItems.filter((i) => i.tone !== 'err').length, total: pickerItems.length })}
+          items={pickerItems}
+        />
       )}
 
       {wa && <WorkflowDetail key={wa.workflow.workflowId} wa={wa} />}

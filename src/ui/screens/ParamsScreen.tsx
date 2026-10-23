@@ -8,6 +8,7 @@ import { tn } from '../../i18n/react'
 import { leavesFirst, missingInputs } from '../../core/schemaForm'
 import { ActionBar, PageHeader, Section } from '../components/kit'
 import { SchemaField } from '../components/SchemaField'
+import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
 
 interface Props {
   project: Project
@@ -39,6 +40,11 @@ export function ParamsScreen(p: Props) {
   const loadedSources = p.project.sources.filter((s) => s.status === 'loaded')
   const credsFilled = p.analysis.credentials.filter((c) => p.credentials[c.key]).length
 
+  const pickerItems: PickerItem[] = p.analysis.workflows.map((w) => {
+    const miss = missingInputs(w.inputsSchema, p.inputs[w.workflow.workflowId]).length
+    return { id: w.workflow.workflowId, tone: miss ? 'err' : 'ok', meta: miss ? t('nav.missing', { n: miss }) : undefined }
+  })
+
   const field = ([name, schema]: [string, any]) => (
     <SchemaField
       key={`${wa.workflow.workflowId}-${name}`}
@@ -59,18 +65,12 @@ export function ParamsScreen(p: Props) {
       />
 
       {p.analysis.workflows.length > 1 && (
-        <div className="workflow-picker">
-          {p.analysis.workflows.map((w) => {
-            const vals = p.inputs[w.workflow.workflowId] ?? {}
-            const miss = missingInputs(w.inputsSchema, vals).length
-            return (
-              <button key={w.workflow.workflowId} className={w === wa ? 'active' : ''} onClick={() => p.onSelect(w.workflow.workflowId)}>
-                <span className="wp-title">{w.workflow.workflowId}</span>
-                <span className="wp-meta">{miss > 0 ? <span className="badge b-err">{t('nav.missing', { n: miss })}</span> : <span className="badge b-ok">✅ {t('params.complete')}</span>}</span>
-              </button>
-            )
-          })}
-        </div>
+        <WorkflowPicker
+          value={wa.workflow.workflowId}
+          onChange={p.onSelect}
+          summary={t('params.pickerSummary', { done: pickerItems.filter((i) => i.tone === 'ok').length, total: pickerItems.length })}
+          items={pickerItems}
+        />
       )}
 
       <Section
