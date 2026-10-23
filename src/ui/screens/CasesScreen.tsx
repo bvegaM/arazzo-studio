@@ -5,6 +5,7 @@ import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, ty
 import type { ScenariosImport } from '../../core/scenariosFile'
 import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
+import { humanizeId } from '../../core/format'
 import { MethodBadge } from '../components/badges'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
 import { t } from '../../i18n'
@@ -514,7 +515,7 @@ export function CasesScreen(p: Props) {
         return (
           <Section
             key={w.workflow.workflowId}
-            title={w.workflow.workflowId}
+            title={<span title={w.workflow.workflowId}>{humanizeId(w.workflow.workflowId)}</span>}
             subtitle={w.workflow.summary}
             defaultOpen={i === 0}
             badges={<span className={`badge ${wfReady ? 'b-accent' : 'b-skip'}`}>{t('cases.readyN', { n: wfReady })}</span>}

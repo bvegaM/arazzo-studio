@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { reasonLabel, type StepResult } from '../../core/runner'
 import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
 import { maskDeep } from '../../core/report'
+import { humanizeId } from '../../core/format'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
 import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
 import { t } from '../../i18n'
@@ -286,7 +287,9 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
             <div className="case-nav-group" key={wf}>
               <button className="case-nav-head" onClick={() => setCollapsed({ ...collapsed, [wf]: !collapsed[wf] })}>
                 <Chevron open={!collapsed[wf]} />
-                <span className="grow">{wf}</span>
+                <span className="grow" title={wf}>
+                  {humanizeId(wf)}
+                </span>
                 <span className="muted small">{list.length}</span>
               </button>
               {!collapsed[wf] &&

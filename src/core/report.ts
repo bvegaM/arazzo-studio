@@ -2,6 +2,7 @@
 // Reporte HTML autocontenido: se abre en cualquier navegador y se puede imprimir a PDF.
 import { reasonLabel, type StepResult, type StepStatus } from './runner'
 import { dataSummary, originLabel, verdictLabel, type CaseRun, type Verdict } from './testcases'
+import { humanizeId } from './format'
 import { getLocale, t } from '../i18n'
 
 export type ReportCase = Omit<CaseRun, 'state'>
@@ -113,7 +114,7 @@ export function buildHtmlReport(p: ReportParams): string {
     .map(
       (r, i) => `<tr class="v-${r.verdict ? VERDICT_CLASS[r.verdict] : 'skip'}">
 <td class="muted">${i + 1}</td>
-<td><a href="#caso-${i + 1}">${esc(r.tc.title)}</a><div class="muted small">${esc(r.tc.workflowId)}</div></td>
+<td><a href="#caso-${i + 1}">${esc(r.tc.title)}</a><div class="muted small" title="${esc(r.tc.workflowId)}">${esc(humanizeId(r.tc.workflowId))}</div></td>
 <td class="small">${esc(originLabel(r.tc.origin))}</td>
 <td class="small">${r.simulated ? t('common.simulated') : t('common.realApi')}</td>
 <td class="small"><code>${esc(dataSummary(r.tc))}</code></td>
@@ -128,7 +129,7 @@ export function buildHtmlReport(p: ReportParams): string {
       return `<section class="case" id="caso-${i + 1}">
 <div class="case-head"><span class="muted">#${i + 1}</span><h3>${esc(r.tc.title)}</h3>${verdictBadge(r.verdict)}</div>
 <div class="kv">
-<span>Workflow</span><span>${esc(r.tc.workflowId)}</span>
+<span>Workflow</span><span>${esc(humanizeId(r.tc.workflowId))} <code>${esc(r.tc.workflowId)}</code></span>
 <span>${t('report.type')}</span><span>${esc(originLabel(r.tc.origin))} · ${r.simulated ? t('report.simulatedLong') : t('report.realLong')}</span>
 <span>${t('report.expected')}</span><span>${esc(r.tc.expectation.text)}</span>
 <span>${t('report.result')}</span><span>${esc(r.explanation ?? '—')}</span>
