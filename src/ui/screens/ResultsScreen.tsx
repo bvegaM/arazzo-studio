@@ -4,6 +4,7 @@ import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
 import { maskDeep } from '../../core/report'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
 import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
+import { t } from '../../i18n'
 
 interface Props {
   runs: CaseRun[]
@@ -46,7 +47,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
           <span className="label muted">{s.label}</span>
         )}
         <span className="spacer" />
-        {s.simulated && <span className="badge b-accent">Simulado</span>}
+        {s.simulated && <span className="badge b-accent">{t('common.simulated')}</span>}
         {s.attempts > 1 && <span className="badge b-info">Intento {s.attempts}</span>}
         {s.response && (
           <span className="http muted small">
@@ -63,7 +64,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
               <strong>{reasonLabel(s.reason.category)}:</strong> {s.reason.message}
             </div>
           )}
-          {(s.action || s.actionName) && <div className="note n-action">↪ {s.action ?? `Acción "${s.actionName}" (${s.actionType})`}</div>}
+          {(s.action || s.actionName) && <div className="note n-action">↪ {s.action ?? t('report.action', { action: s.actionName, type: s.actionType })}</div>}
         </div>
       )}
 
@@ -73,10 +74,10 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
             value={tab}
             onChange={setTab}
             tabs={[
-              { id: 'resumen', label: 'Criterios', count: s.criteria.length, tone: failedCriteria ? 'err' : 'ok' },
-              { id: 'peticion', label: 'Petición' },
-              { id: 'respuesta', label: 'Respuesta' },
-              { id: 'contrato', label: 'Contrato', count: s.response ? s.contractIssues.length : undefined, tone: s.contractIssues.length ? 'warn' : 'ok' },
+              { id: 'resumen', label: t('report.criteria'), count: s.criteria.length, tone: failedCriteria ? 'err' : 'ok' },
+              { id: 'peticion', label: t('report.request') },
+              { id: 'respuesta', label: t('report.response') },
+              { id: 'contrato', label: t('report.contract'), count: s.response ? s.contractIssues.length : undefined, tone: s.contractIssues.length ? 'warn' : 'ok' },
               { id: 'outputs', label: 'Outputs', count: outputs },
             ]}
           />
@@ -86,9 +87,9 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                 <table>
                   <thead>
                     <tr>
-                      <th>Condición</th>
-                      <th>Resultado</th>
-                      <th>Detalle</th>
+                      <th>{t('report.condition')}</th>
+                      <th>{t('report.result')}</th>
+                      <th>{t('report.detail')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -98,20 +99,20 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                           <code>{c.context ? `${c.context} ~ ${c.condition}` : c.condition}</code>
                           {c.type !== 'simple' && <span className="muted small"> ({c.type})</span>}
                         </td>
-                        <td>{c.passed ? <span className="badge b-ok">✅ Se cumple</span> : <span className="badge b-err">❌ No se cumple</span>}</td>
+                        <td>{c.passed ? <span className="badge b-ok">✅ {t('crit.badge.passed')}</span> : <span className="badge b-err">❌ {t('crit.badge.failed')}</span>}</td>
                         <td>{c.detail}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <Empty>Sin criterios evaluados.</Empty>
+                <Empty>{t('results.noCriteria')}</Empty>
               ))}
             {tab === 'peticion' &&
               (s.request ? (
                 <div className="io">
                   <div>
-                    <h4>Línea y headers</h4>
+                    <h4>{t('results.lineHeaders')}</h4>
                     <pre>{`${s.request.method} ${s.request.url}\n${headersText(s.request.headers)}`}</pre>
                   </div>
                   <div>
@@ -120,13 +121,13 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                   </div>
                 </div>
               ) : (
-                <Empty>No se envió petición.</Empty>
+                <Empty>{t('results.noRequest')}</Empty>
               ))}
             {tab === 'respuesta' &&
               (s.response ? (
                 <div className="io">
                   <div>
-                    <h4>Status y headers</h4>
+                    <h4>{t('results.statusHeaders')}</h4>
                     <pre>{`HTTP ${s.response.status} ${s.response.statusText}\n${headersText(s.response.headers)}`}</pre>
                   </div>
                   <div>
@@ -135,18 +136,18 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                   </div>
                 </div>
               ) : (
-                <Empty>Sin respuesta.</Empty>
+                <Empty>{t('report.noResponse')}</Empty>
               ))}
             {tab === 'contrato' &&
               (!s.response ? (
-                <Empty>Sin respuesta que validar.</Empty>
+                <Empty>{t('results.nothingToValidate')}</Empty>
               ) : s.contractIssues.length === 0 ? (
-                <span className="badge b-ok">✅ La respuesta cumple el contrato</span>
+                <span className="badge b-ok">✅ {t('report.contractOk')}</span>
               ) : (
                 <ul className="issues">
                   {s.contractIssues.map((c, i) => (
                     <li key={i}>
-                      <span className="badge b-warn">Contrato</span> <span>{c}</span>
+                      <span className="badge b-warn">{t('report.contract')}</span> <span>{c}</span>
                     </li>
                   ))}
                 </ul>
@@ -172,14 +173,14 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                             <code>{k}</code>
                           </td>
                           <td>
-                            <span className="badge b-skip">No vino en la respuesta</span>
+                            <span className="badge b-skip">{t('results.notInResponse')}</span>
                           </td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
               ) : (
-                <Empty>El paso no declara outputs.</Empty>
+                <Empty>{t('results.noOutputs')}</Empty>
               ))}
             {s.subRun && (
               <div style={{ marginTop: 12 }}>
@@ -224,9 +225,9 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
   if (!runs.length) {
     return (
       <>
-        <PageHeader step={5} title="Resultados" />
-        <Empty>Todavía no se ha ejecutado ningún caso.</Empty>
-        <ActionBar left={<button onClick={onBack}>← Volver a los casos</button>} />
+        <PageHeader step={5} title={t('nav.results')} />
+        <Empty>{t('results.none')}</Empty>
+        <ActionBar left={<button onClick={onBack}>{t('results.back')}</button>} />
       </>
     )
   }
@@ -235,17 +236,17 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
     <>
       <PageHeader
         step={5}
-        title="Resultados"
-        description={`${done.length} de ${runs.length} casos ejecutados${running ? '…' : '.'}`}
+        title={t('nav.results')}
+        description={t(running ? 'results.progressRunning' : 'results.progress', { done: done.length, total: runs.length })}
         actions={
           running ? (
-            <button onClick={onCancel}>Cancelar</button>
+            <button onClick={onCancel}>{t('common.cancel')}</button>
           ) : (
             <div className="row">
-              <button onClick={onRerun}>Volver a ejecutar</button>
+              <button onClick={onRerun}>{t('results.rerun')}</button>
               <button onClick={() => onExport('json')}>JSON</button>
               <button className="primary" onClick={() => onExport('html')}>
-                Descargar reporte
+                {t('results.download')}
               </button>
             </div>
           )
@@ -253,10 +254,10 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
       />
 
       <div className="metrics">
-        <Metric label="Pasaron" value={count('passed')} tone="ok" />
-        <Metric label="No pasaron" value={count('failed')} tone={count('failed') ? 'err' : undefined} />
-        <Metric label="No concluyentes" value={count('inconclusive')} tone={count('inconclusive') ? 'warn' : undefined} />
-        <Metric label="Pendientes" value={runs.length - done.length} />
+        <Metric label={t('report.passed')} value={count('passed')} tone="ok" />
+        <Metric label={t('report.failed')} value={count('failed')} tone={count('failed') ? 'err' : undefined} />
+        <Metric label={t('report.inconclusive')} value={count('inconclusive')} tone={count('inconclusive') ? 'warn' : undefined} />
+        <Metric label={t('results.pending')} value={runs.length - done.length} />
       </div>
       {running && (
         <div className="progress">
@@ -268,7 +269,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
         <aside className="case-nav">
           <div className="filters">
             <Pill active={filter === 'all'} onClick={() => setFilter('all')}>
-              Todos <span className="count">{runs.length}</span>
+              {t('cases.all')} <span className="count">{runs.length}</span>
             </Pill>
             <Pill active={filter === 'failed'} onClick={() => setFilter('failed')}>
               ❌ <span className="count">{count('failed')}</span>
@@ -280,7 +281,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
               ✅ <span className="count">{count('passed')}</span>
             </Pill>
           </div>
-          {groups.length === 0 && <Empty>No hay casos con este filtro.</Empty>}
+          {groups.length === 0 && <Empty>{t('results.noMatches')}</Empty>}
           {groups.map(([wf, list]) => (
             <div className="case-nav-group" key={wf}>
               <button className="case-nav-head" onClick={() => setCollapsed({ ...collapsed, [wf]: !collapsed[wf] })}>
@@ -293,7 +294,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
                   <button key={r.tc.id} title={r.tc.title} className={`case-nav-item ${r === current ? 'active' : ''}`} onClick={() => select(r.tc.id)}>
                     <span className={`status-dot sd-${r.state === 'done' ? r.verdict : r.state}`} />
                     <span className="grow clamp">{r.tc.title}</span>
-                    {r.steps.some((s) => s.simulated) && <span className="badge b-accent tiny">Sim</span>}
+                    {r.steps.some((s) => s.simulated) && <span className="badge b-accent tiny">{t('results.simShort')}</span>}
                   </button>
                 ))}
             </div>
@@ -308,24 +309,24 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
                 {current.verdict ? (
                   <VerdictBadge verdict={current.verdict} />
                 ) : (
-                  <span className="badge b-skip">{current.state === 'running' ? '⏳ Ejecutando' : 'Pendiente'}</span>
+                  <span className="badge b-skip">{current.state === 'running' ? `⏳ ${t('results.runningState')}` : t('results.pendingState')}</span>
                 )}
               </div>
               <div className="kv">
-                <span>Esperado</span>
+                <span>{t('report.expected')}</span>
                 <span>{current.tc.expectation.text}</span>
                 {current.explanation && (
                   <>
-                    <span>Resultado</span>
+                    <span>{t('report.result')}</span>
                     <span>{current.explanation}</span>
                   </>
                 )}
-                <span>Parámetros</span>
+                <span>{t('report.params')}</span>
                 <span>
                   <code>{dataSummary(current.tc)}</code>
                   {current.inputsUsed && (
                     <details className="inputs-used">
-                      <summary>Ver valores enviados ({Object.keys(current.inputsUsed).length})</summary>
+                      <summary>{t('results.sentValues', { n: Object.keys(current.inputsUsed).length })}</summary>
                       <table>
                         <tbody>
                           {Object.entries(maskDeep(current.inputsUsed)).map(([k, v]) => (
@@ -354,7 +355,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
               </div>
             </div>
             <div className="steps">
-              {current.steps.length === 0 && <Empty>{current.state === 'pending' ? 'Pendiente de ejecución.' : current.state === 'running' ? 'Ejecutando…' : 'No se ejecutaron pasos.'}</Empty>}
+              {current.steps.length === 0 && <Empty>{current.state === 'pending' ? t('results.pendingRun') : current.state === 'running' ? t('cases.running') : t('report.noSteps')}</Empty>}
               {current.steps.map((s, i) => (
                 <StepCard key={`${current.tc.id}-${i}`} s={s} index={i} />
               ))}
@@ -363,7 +364,7 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onExport, onBa
         )}
       </div>
 
-      <ActionBar left={<button onClick={onBack}>← Volver a los casos</button>} />
+      <ActionBar left={<button onClick={onBack}>{t('results.back')}</button>} />
     </>
   )
 }
