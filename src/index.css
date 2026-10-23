@@ -300,18 +300,17 @@ pre {
   gap: 2px;
 }
 .nav-item {
+  position: relative;
   border: none;
   background: none;
   padding: 8px 10px;
   border-radius: 9px;
-  gap: 10px;
+  gap: 12px;
+  align-items: flex-start;
   text-align: left;
   width: 100%;
 }
-/* Línea que une los pasos, bajo cada número */
-.nav-item {
-  position: relative;
-}
+/* Línea que une cada número con el siguiente; en verde cuando el paso ya está listo. */
 .nav-item:not(:last-child)::after {
   content: '';
   position: absolute;
@@ -322,11 +321,28 @@ pre {
   border-radius: 1px;
   background: var(--border);
 }
+.nav-item.done:not(:last-child)::after {
+  background: color-mix(in srgb, var(--ok) 45%, var(--border));
+}
 .nav-item:hover:not(:disabled) {
   background: var(--surface-2);
 }
 .nav-item.active {
   background: var(--accent-soft);
+}
+/* Pasos aún no disponibles: contorno y texto atenuado, sin apagar todo con opacidad. */
+.nav-item:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.nav-item:disabled .nav-num {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+  color: var(--faint);
+}
+.nav-item:disabled .nav-label {
+  color: var(--faint);
+  font-weight: 500;
 }
 .nav-num {
   width: 24px;
@@ -344,6 +360,7 @@ pre {
 .nav-item.active .nav-num {
   background: var(--accent);
   color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .nav-num.t-ok {
   background: var(--ok-soft);
@@ -367,6 +384,7 @@ pre {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-top: 2px;
 }
 .nav-label {
   font-weight: 600;

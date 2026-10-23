@@ -30,10 +30,10 @@ function navItems(s: Studio): NavItem[] {
   const inconclusiveRuns = done.filter((r) => r.verdict === 'inconclusive').length
   return [
     { label: t('nav.load'), sub: project ? t('nav.files', { n: files.length }) : t('nav.noFiles'), tone: project ? (project.sources.some((x) => x.status !== 'loaded') ? 'err' : 'ok') : undefined },
-    { label: t('nav.contracts'), sub: analysis ? (errorCount ? t('nav.errors', { n: errorCount }) : workflowsLabel(testAnalysis?.workflows.length ?? 0, analysis.workflows.length)) : '—', tone: analysis ? (errorCount ? 'err' : 'ok') : undefined },
-    { label: t('nav.defaults'), sub: analysis ? (missing ? t('nav.missing', { n: missing }) : invalid ? t('params.invalidN', { n: invalid }) : t('nav.complete')) : '—', tone: analysis ? (missing || invalid ? 'warn' : 'ok') : undefined },
-    { label: t('nav.cases'), sub: analysis ? t('nav.ready', { n: cases.filter((c) => c.enabled && runnability(c, mode).ok).length }) : '—' },
-    { label: t('nav.results'), sub: runs.length ? (running ? t('nav.running', { done: done.length, total: runs.length }) : t('nav.passed', { passed: passedRuns, total: runs.length })) : '—', tone: runs.length && !running ? (failedRuns ? 'err' : inconclusiveRuns ? 'warn' : 'ok') : undefined },
+    { label: t('nav.contracts'), sub: analysis ? (errorCount ? t('nav.errors', { n: errorCount }) : workflowsLabel(testAnalysis?.workflows.length ?? 0, analysis.workflows.length)) : '', tone: analysis ? (errorCount ? 'err' : 'ok') : undefined },
+    { label: t('nav.defaults'), sub: analysis ? (missing ? t('nav.missing', { n: missing }) : invalid ? t('params.invalidN', { n: invalid }) : t('nav.complete')) : '', tone: analysis ? (missing || invalid ? 'warn' : 'ok') : undefined },
+    { label: t('nav.cases'), sub: analysis ? t('nav.ready', { n: cases.filter((c) => c.enabled && runnability(c, mode).ok).length }) : '' },
+    { label: t('nav.results'), sub: runs.length ? (running ? t('nav.running', { done: done.length, total: runs.length }) : t('nav.passed', { passed: passedRuns, total: runs.length })) : '', tone: runs.length && !running ? (failedRuns ? 'err' : inconclusiveRuns ? 'warn' : 'ok') : undefined },
   ]
 }
 
@@ -64,13 +64,19 @@ export function Sidebar({ studio }: { studio: Studio }) {
       )}
       <nav className="nav">
         {navItems(studio).map((n, i) => (
-          <button key={n.label} className={`nav-item ${i === screen ? 'active' : ''}`} disabled={!reachable(i)} onClick={() => goTo(i as Screen)}>
+          <button
+            key={n.label}
+            className={`nav-item ${i === screen ? 'active' : ''} ${n.tone === 'ok' ? 'done' : ''}`}
+            disabled={!reachable(i)}
+            aria-current={i === screen ? 'step' : undefined}
+            onClick={() => goTo(i as Screen)}
+          >
             <span className={`nav-num ${n.tone ? `t-${n.tone}` : ''}`} aria-hidden="true">
               {i === screen || !n.tone ? i + 1 : n.tone === 'ok' ? '✓' : '!'}
             </span>
             <span className="nav-text">
               <span className="nav-label">{n.label}</span>
-              <span className={`nav-sub ${n.tone && n.tone !== 'ok' ? `t-${n.tone}` : ''}`}>{n.sub}</span>
+              {n.sub && <span className={`nav-sub ${n.tone && n.tone !== 'ok' ? `t-${n.tone}` : ''}`}>{n.sub}</span>}
             </span>
           </button>
         ))}
