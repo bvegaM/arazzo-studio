@@ -7,6 +7,7 @@ import { requirementsFromCriteria } from './criteria'
 import type { Scenario } from './simulator'
 import type { Action } from './types'
 import { resolveTemplates } from './templates'
+import { exampleValue } from './schemaForm'
 import { joinOr, t } from '../i18n'
 
 export type CaseOrigin = 'arazzo' | 'escenario' | 'schema' | 'security' | 'datos'
@@ -439,7 +440,7 @@ export interface CaseRun {
 export function defaultInputs(schema: any): Record<string, any> {
   const out: Record<string, any> = {}
   for (const [name, s] of Object.entries<any>(schema?.properties ?? {})) {
-    const v = s.example ?? s.examples?.[0] ?? s.default ?? s.enum?.[0]
+    const v = exampleValue(s)
     if (v !== undefined) out[name] = v
   }
   return out
