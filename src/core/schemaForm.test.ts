@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exampleValue, fieldKind, missingInputs, normalizeSchema, setKey } from './schemaForm'
+import { exampleValue, fieldKind, leavesFirst, missingInputs, normalizeSchema, setKey, valueSummary } from './schemaForm'
 import { defaultInputs } from './testcases'
 
 const schema = {
@@ -52,5 +52,17 @@ describe('formulario por esquema', () => {
     expect(missingInputs(schema, {})).toEqual(['cliente'])
     expect(missingInputs(schema, { cliente: { nombre: 'Ana', direccion: { numero: 1 } } })).toEqual(['cliente.direccion.calle'])
     expect(missingInputs(schema, { cliente: { nombre: 'A', direccion: { calle: 'X' } }, items: [{ sku: 'a' }, {}] })).toEqual(['items[1].sku'])
+  })
+})
+
+describe('resúmenes del formulario', () => {
+  it('pone los campos simples antes que los grupos', () => {
+    expect(leavesFirst(Object.entries(schema.properties)).map(([k]) => k)).toEqual(['extra', 'cliente', 'items'])
+  })
+
+  it('resume valores anidados', () => {
+    expect(valueSummary({ nombre: 'Ana', direccion: { calle: 'X' }, tags: [1, 2], vacio: '' })).toBe('nombre: Ana · direccion: {…} · tags: [2]')
+    expect(valueSummary({ a: 1, b: 2, c: 3, d: 4 })).toBe('a: 1 · b: 2 · c: 3 · …')
+    expect(valueSummary(['x', '', 'y'])).toBe('x · y')
   })
 })

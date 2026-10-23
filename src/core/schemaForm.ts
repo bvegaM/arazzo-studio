@@ -86,3 +86,19 @@ export function missingPaths(schema: any, value: any, prefix = ''): string[] {
 export function missingInputs(inputsSchema: any, values: Record<string, any> | undefined): string[] {
   return missingPaths(inputsSchema, values ?? {})
 }
+
+/** Campos simples primero y grupos (objetos y listas) al final, respetando el orden declarado. */
+export function leavesFirst<T>(entries: [string, T][]): [string, T][] {
+  const isGroup = ([, s]: [string, T]) => ['object', 'array'].includes(fieldKind(s))
+  return [...entries.filter((e) => !isGroup(e)), ...entries.filter(isGroup)]
+}
+
+/** Resumen corto de un valor para mostrar en un grupo plegado (ej. "nombre: Ana · direccion: {…}"). */
+export function valueSummary(value: any, max = 3): string {
+  const show = (v: any) => (Array.isArray(v) ? `[${v.length}]` : v && typeof v === 'object' ? '{…}' : String(v))
+  if (Array.isArray(value)) return value.filter((v) => !isEmptyValue(v)).slice(0, max).map(show).join(' · ')
+  if (!value || typeof value !== 'object') return isEmptyValue(value) ? '' : String(value)
+  const parts = Object.entries(value).filter(([, v]) => !isEmptyValue(v))
+  const text = parts.slice(0, max).map(([k, v]) => `${k}: ${show(v)}`).join(' · ')
+  return parts.length > max ? `${text} · …` : text
+}
