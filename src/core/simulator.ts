@@ -4,8 +4,8 @@
 // real no permite provocar a voluntad (403, 422, 500, 504…).
 import type { Project } from './loader'
 import type { Criterion, Step } from './types'
-import { deref, getByPointer, listOperations, type OperationRef } from './openapi'
-import { setByPointer } from './expressions'
+import { getByPointer, setByPointer } from './jsonPointer'
+import { deref, listOperations, type OperationRef } from './openapi'
 import type { HttpExecutor, HttpResponse } from './http'
 
 export interface Scenario {

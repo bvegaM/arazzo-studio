@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { decodePointerSegment, getByPointer } from './jsonPointer'
 import type { Project, SourceState } from './loader'
 
 export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
@@ -12,22 +13,6 @@ export interface OperationRef {
   operation: any
   pathItem: any
   doc: any
-}
-
-export function decodePointerSegment(s: string): string {
-  return s.replace(/~1/g, '/').replace(/~0/g, '~')
-}
-
-export function getByPointer(obj: any, pointer: string): { found: boolean; value: any } {
-  if (pointer === '' || pointer === '/') return { found: obj !== undefined, value: obj }
-  const segs = pointer.replace(/^#?\//, '').split('/').map(decodePointerSegment)
-  let cur = obj
-  for (const seg of segs) {
-    if (cur === null || cur === undefined || typeof cur !== 'object') return { found: false, value: undefined }
-    if (!(seg in cur)) return { found: false, value: undefined }
-    cur = cur[seg]
-  }
-  return { found: true, value: cur }
 }
 
 /** Resuelve $ref locales (#/...) de forma profunda. Las referencias externas se dejan tal cual. */

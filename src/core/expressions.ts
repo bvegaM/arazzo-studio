@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getByPointer } from './openapi'
+import { getByPointer } from './jsonPointer'
 
 export interface ExchangeRequest {
   method: string
@@ -133,29 +133,13 @@ export function interpolate(value: any, ctx: ExprContext): any {
   return value
 }
 
-/** Escribe un valor en un JSON pointer, creando objetos intermedios. */
-export function setByPointer(target: any, pointer: string, value: any): any {
-  const segs = pointer.replace(/^#?\//, '').split('/').map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'))
-  if (segs.length === 1 && segs[0] === '') return value
-  const root = target && typeof target === 'object' ? target : {}
-  let cur = root
-  segs.forEach((seg, i) => {
-    if (i === segs.length - 1) cur[seg] = value
-    else {
-      if (cur[seg] === null || typeof cur[seg] !== 'object') cur[seg] = /^\d+$/.test(segs[i + 1]) ? [] : {}
-      cur = cur[seg]
-    }
-  })
-  return root
-}
-
 /** Referencias que un objeto usa: $steps.X.outputs.Y y $inputs.Z */
 export function collectReferences(value: unknown): { steps: { stepId: string; output: string }[]; inputs: string[] } {
   const text = JSON.stringify(value ?? null)
-  const steps = [...text.matchAll(/\$steps\.([A-Za-z0-9_\-]+)\.outputs\.([A-Za-z0-9_\-]+)/g)].map((m) => ({
+  const steps = [...text.matchAll(/\$steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)/g)].map((m) => ({
     stepId: m[1],
     output: m[2],
   }))
-  const inputs = [...text.matchAll(/\$inputs\.([A-Za-z0-9_\-]+)/g)].map((m) => m[1])
+  const inputs = [...text.matchAll(/\$inputs\.([A-Za-z0-9_-]+)/g)].map((m) => m[1])
   return { steps, inputs: [...new Set(inputs)] }
 }
