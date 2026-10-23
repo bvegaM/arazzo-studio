@@ -1,17 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Reporte HTML autocontenido: se abre en cualquier navegador y se puede imprimir a PDF.
-import { REASON_LABEL, type StepResult, type WorkflowRunResult } from './runner'
-import { ORIGIN_LABEL, VERDICT_LABEL, dataSummary, type TestCase, type Verdict } from './testcases'
+import { REASON_LABEL, type StepResult } from './runner'
+import { ORIGIN_LABEL, VERDICT_LABEL, dataSummary, type CaseRun, type Verdict } from './testcases'
 
-export interface ReportCase {
-  tc: TestCase
-  verdict?: Verdict
-  explanation?: string
-  steps: StepResult[]
-  result?: WorkflowRunResult
-  inputsUsed?: Record<string, any>
-  simulated?: boolean
-}
+export type ReportCase = Omit<CaseRun, 'state'>
 
 export interface ReportParams {
   arazzoTitle: string
@@ -225,4 +217,33 @@ ${details}
 <script>window.addEventListener('beforeprint',()=>document.querySelectorAll('details').forEach(d=>d.open=true))</script>
 </body>
 </html>`
+}
+
+/** Reporte en JSON, con credenciales ocultas. */
+export function buildJsonReport(p: ReportParams & { info?: unknown }): string {
+  const report = {
+    generadoEl: p.generatedAt.toISOString(),
+    arazzo: p.info,
+    ambiente: p.servers,
+    casos: p.cases.map((r) => ({
+      id: r.tc.id,
+      titulo: r.tc.title,
+      origen: r.tc.origin,
+      simulado: r.simulated,
+      parametros: r.inputsUsed ? maskDeep(r.inputsUsed) : undefined,
+      esperado: r.tc.expectation.text,
+      resultado: r.verdict,
+      explicacion: r.explanation,
+      pasos: maskDeep(r.steps),
+      outputs: maskDeep(r.result?.outputs),
+    })),
+  }
+  return JSON.stringify(report, null, 2)
+}
+
+/** Nombre de archivo del reporte: reporte-<titulo>-<fecha>.<ext> */
+export function reportFileName(title: string, date: Date, ext: string): string {
+  const stamp = date.toISOString().slice(0, 16).replace(/[:T]/g, '-')
+  const slug = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `reporte-${slug}-${stamp}.${ext}`
 }

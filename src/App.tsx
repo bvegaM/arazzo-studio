@@ -8,7 +8,7 @@ import { createSimulatedExecutor } from './core/simulator'
 import { runWorkflow } from './core/runner'
 import { applyCaseInputs, defaultInputs, evaluateCase, generateTestCases, isSimulated, runnability, type CaseRun, type RunMode, type TestCase } from './core/testcases'
 import { exportScenarios, importScenarios } from './core/scenariosFile'
-import { buildHtmlReport, maskDeep } from './core/report'
+import { buildHtmlReport, buildJsonReport, reportFileName } from './core/report'
 import { LoadScreen } from './ui/LoadScreen'
 import { ContractsScreen } from './ui/ContractsScreen'
 import { ParamsScreen } from './ui/ParamsScreen'
@@ -140,37 +140,17 @@ export default function App() {
   }
 
   function exportReport(format: 'html' | 'json') {
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
-    const slug = (project?.arazzo.info?.title ?? 'arazzo').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    if (format === 'html') {
-      const html = buildHtmlReport({
-        arazzoTitle: project?.arazzo.info?.title ?? project?.arazzoFileName ?? 'Arazzo',
-        arazzoFile: project?.arazzoFileName,
-        generatedAt: new Date(),
-        servers,
-        cases: runs,
-      })
-      download(html, `reporte-${slug}-${stamp}.html`, 'text/html')
-      return
+    const generatedAt = new Date()
+    const fileName = reportFileName(project?.arazzo.info?.title ?? 'arazzo', generatedAt, format)
+    const params = {
+      arazzoTitle: project?.arazzo.info?.title ?? project?.arazzoFileName ?? 'Arazzo',
+      arazzoFile: project?.arazzoFileName,
+      generatedAt,
+      servers,
+      cases: runs,
     }
-    const report = {
-      generadoEl: new Date().toISOString(),
-      arazzo: project?.arazzo.info,
-      ambiente: servers,
-      casos: runs.map((r) => ({
-        id: r.tc.id,
-        titulo: r.tc.title,
-        origen: r.tc.origin,
-        simulado: r.simulated,
-        parametros: r.inputsUsed ? maskDeep(r.inputsUsed) : undefined,
-        esperado: r.tc.expectation.text,
-        resultado: r.verdict,
-        explicacion: r.explanation,
-        pasos: maskDeep(r.steps),
-        outputs: maskDeep(r.result?.outputs),
-      })),
-    }
-    download(JSON.stringify(report, null, 2), `reporte-${slug}-${stamp}.json`, 'application/json')
+    if (format === 'html') download(buildHtmlReport(params), fileName, 'text/html')
+    else download(buildJsonReport({ ...params, info: project?.arazzo.info }), fileName, 'application/json')
   }
 
   const reachable = (i: number) => i === 0 || (!!analysis && (i < 4 || runs.length > 0))
