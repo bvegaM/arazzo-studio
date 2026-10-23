@@ -422,6 +422,29 @@ pre {
   align-items: center;
   gap: 12px;
 }
+.block-reason {
+  font-size: 12.5px;
+  color: var(--warn);
+  font-weight: 600;
+  text-align: right;
+}
+.callout.pulse {
+  animation: pulse-ring 1.2s ease-out 2;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .callout.pulse {
+    animation: none;
+    outline: 2px solid var(--warn);
+  }
+}
 .action-bar-info {
   flex: 1;
   text-align: right;

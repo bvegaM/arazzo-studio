@@ -476,7 +476,19 @@ export function CasesScreen(p: Props) {
   const mutating = p.analysis.workflows
     .filter((w) => realWfs.has(w.workflow.workflowId))
     .flatMap((w) => w.steps.filter((s) => s.mutating && s.op).map((s) => ({ wf: w.workflow.workflowId, s })))
-  const canRun = ready.length > 0 && (mutating.length === 0 || p.confirmed) && !p.running
+  const needsConfirm = mutating.length > 0 && !p.confirmed
+  const canRun = ready.length > 0 && !needsConfirm && !p.running
+  const confirmRef = useRef<HTMLDivElement>(null)
+  // Lleva a la confirmación y la resalta un momento, para que se vea qué falta.
+  const goToConfirm = () => {
+    const box = confirmRef.current
+    if (!box) return
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    box.querySelector('input')?.focus({ preventScroll: true })
+    box.classList.remove('pulse')
+    void box.offsetWidth
+    box.classList.add('pulse')
+  }
   const simulatedCount = ready.filter((c) => isSimulated(c, p.mode)).length
 
   return (
@@ -565,7 +577,7 @@ export function CasesScreen(p: Props) {
       })}
 
       {mutating.length > 0 && (
-        <div className="callout warn small">
+        <div className="callout warn small" ref={confirmRef}>
           <strong>{t('cases.mutatingEnv', { env: p.envName })}</strong>
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {mutating.map(({ wf, s }) => (
@@ -594,9 +606,20 @@ export function CasesScreen(p: Props) {
           .filter(Boolean)
           .join(' · ')}
         right={
-          <button className="primary" disabled={!canRun} onClick={p.onRun}>
-            {p.running ? t('cases.running') : t('cases.run', { n: ready.length })}
-          </button>
+          <>
+            {!p.running && ready.length === 0 && <span className="block-reason">{t('cases.block.none')}</span>}
+            {!p.running && ready.length > 0 && needsConfirm && (
+              <span className="block-reason">
+                {t('cases.block.confirm')}{' '}
+                <button className="link small" onClick={goToConfirm}>
+                  {t('cases.block.goConfirm')}
+                </button>
+              </span>
+            )}
+            <button className="primary" disabled={!canRun} onClick={p.onRun}>
+              {p.running ? t('cases.running') : t('cases.run', { n: ready.length })}
+            </button>
+          </>
         }
       />
     </>

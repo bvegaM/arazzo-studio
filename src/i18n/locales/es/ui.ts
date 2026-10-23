@@ -255,6 +255,9 @@ export const ui = {
   'cases.confirm': 'Entiendo que se crearán o modificarán datos en ese ambiente',
   'cases.running': 'Ejecutando…',
   'cases.run': 'Ejecutar {n} caso(s) →',
+  'cases.block.none': 'Marca al menos un caso listo para ejecutar',
+  'cases.block.confirm': 'Falta confirmar que se modificarán datos.',
+  'cases.block.goConfirm': 'Revisar y confirmar',
 
   'results.copyCurl': 'Copiar como cURL',
   'results.copyCurlReal': 'Copiar con credenciales',

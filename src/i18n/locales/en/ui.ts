@@ -256,6 +256,9 @@ export const ui: Record<keyof typeof es, string> = {
   'cases.confirm': 'I understand that data will be created or modified in that environment',
   'cases.running': 'Running…',
   'cases.run': 'Run {n} case(s) →',
+  'cases.block.none': 'Select at least one ready case',
+  'cases.block.confirm': 'You need to confirm that data will be modified.',
+  'cases.block.goConfirm': 'Review and confirm',
 
   'results.copyCurl': 'Copy as cURL',
   'results.copyCurlReal': 'Copy with credentials',
