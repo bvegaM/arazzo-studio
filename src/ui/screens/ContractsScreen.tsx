@@ -13,6 +13,10 @@ interface Props {
   analysis: ProjectAnalysis
   selected: string
   onSelect: (id: string) => void
+  /** Workflows que no se van a probar. */
+  skipped: string[]
+  onToggleWorkflow: (id: string, include: boolean) => void
+  onAllWorkflows: (include: boolean) => void
   onBack: () => void
   onNext: () => void
 }
@@ -25,9 +29,10 @@ function count(issues: Issue[], level: Issue['level']) {
   return issues.filter((i) => i.level === level).length
 }
 
-export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }: Props) {
+export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggleWorkflow, onAllWorkflows, onBack, onNext }: Props) {
   const wa = analysis.workflows.find((w) => w.workflow.workflowId === selected) ?? analysis.workflows[0]
   const allIssues = [...analysis.issues, ...analysis.workflows.flatMap((w) => w.issues)]
+  const noneIncluded = analysis.workflows.every((w) => skipped.includes(w.workflow.workflowId))
   const pickerItems: PickerItem[] = analysis.workflows.map((w) => {
     const errs = count(w.issues, 'error')
     const warns = count(w.issues, 'warning')
@@ -55,15 +60,26 @@ export function ContractsScreen({ analysis, selected, onSelect, onBack, onNext }
           onChange={onSelect}
           summary={t('contracts.pickerSummary', { ok: pickerItems.filter((i) => i.tone !== 'err').length, total: pickerItems.length })}
           items={pickerItems}
+          selection={{ isIncluded: (id) => !skipped.includes(id), onToggle: onToggleWorkflow, onAll: onAllWorkflows }}
         />
+      )}
+
+      {wa && skipped.includes(wa.workflow.workflowId) && (
+        <div className="callout warn row">
+          <span className="grow">{t('contracts.excluded')}</span>
+          <button className="small" onClick={() => onToggleWorkflow(wa.workflow.workflowId, true)}>
+            {t('contracts.include')}
+          </button>
+        </div>
       )}
 
       {wa && <WorkflowDetail key={wa.workflow.workflowId} wa={wa} />}
 
       <ActionBar
         left={<button onClick={onBack}>{t('common.back')}</button>}
+        info={noneIncluded ? t('contracts.noneSelected') : undefined}
         right={
-          <button className="primary" onClick={onNext}>
+          <button className="primary" disabled={noneIncluded} onClick={onNext}>
             {t('contracts.next')}
           </button>
         }

@@ -8,7 +8,7 @@ import { Screen, useStudio } from './useStudio'
 
 export default function App() {
   const studio = useStudio()
-  const { screen, goTo, project, analysis } = studio
+  const { screen, goTo, project, analysis, testAnalysis } = studio
 
   return (
     <div className="shell">
@@ -34,14 +34,17 @@ export default function App() {
               analysis={analysis}
               selected={studio.selected}
               onSelect={studio.setSelected}
+              skipped={studio.skipped}
+              onToggleWorkflow={studio.toggleWorkflow}
+              onAllWorkflows={studio.setAllWorkflows}
               onBack={() => goTo(Screen.Load)}
               onNext={() => goTo(Screen.Params)}
             />
           )}
-          {screen === Screen.Params && analysis && project && (
+          {screen === Screen.Params && testAnalysis && project && (
             <ParamsScreen
               project={project}
-              analysis={analysis}
+              analysis={testAnalysis}
               selected={studio.selected}
               onSelect={studio.setSelected}
               inputs={studio.inputs}
@@ -54,10 +57,10 @@ export default function App() {
               onNext={() => goTo(Screen.Cases)}
             />
           )}
-          {screen === Screen.Cases && analysis && (
+          {screen === Screen.Cases && testAnalysis && (
             <CasesScreen
-              analysis={analysis}
-              cases={studio.cases}
+              analysis={testAnalysis}
+              cases={studio.testCases}
               {...studio.caseActions}
               mode={studio.mode}
               setMode={studio.setMode}
