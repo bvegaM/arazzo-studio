@@ -41,12 +41,18 @@ export function useStudio() {
   const [credentials, setCredentials] = useState<Record<string, string>>({})
   const [servers, setServers] = useState<Record<string, string>>({})
   const [cases, setCases] = useState<TestCase[]>([])
+  // Workflows que el usuario sacó de las pruebas en el paso 2 (por defecto se prueban todos).
+  const [skipped, setSkipped] = useState<string[]>([])
   const [confirmed, setConfirmed] = useState(false)
   const [mode, setMode] = useState<RunMode>('real')
   const [runs, setRuns] = useState<CaseRun[]>([])
   const [running, setRunning] = useState(false)
   const abort = useRef<AbortController | null>(null)
   const locale = useLocale()
+
+  // Lo que ven los pasos 3 a 5: solo los workflows marcados para probar.
+  const testAnalysis = analysis && skipped.length ? { ...analysis, workflows: analysis.workflows.filter((w) => !skipped.includes(w.workflow.workflowId)) } : analysis
+  const testCases = skipped.length ? cases.filter((c) => !skipped.includes(c.workflowId)) : cases
 
   function goTo(s: Screen) {
     setScreenState(s)
@@ -118,6 +124,7 @@ export function useStudio() {
     setInputs({})
     setServers({})
     setCases([])
+    setSkipped([])
     setRuns([])
     setConfirmed(false)
     goTo(Screen.Load)
@@ -125,7 +132,7 @@ export function useStudio() {
 
   async function runAll() {
     if (!project || !analysis) return
-    const selectedCases = cases.filter((c) => c.enabled && runnability(c, mode).ok)
+    const selectedCases = testCases.filter((c) => c.enabled && runnability(c, mode).ok)
     setRuns(selectedCases.map((tc) => ({ tc, state: 'pending', steps: [] })))
     goTo(Screen.Results)
     setRunning(true)
@@ -166,6 +173,14 @@ export function useStudio() {
     setLocale(l)
     document.documentElement.lang = l
     if (project) applyProject(project)
+  }
+
+  function toggleWorkflow(id: string, include: boolean) {
+    setSkipped((prev) => (include ? prev.filter((x) => x !== id) : [...new Set([...prev, id])]))
+  }
+
+  function setAllWorkflows(include: boolean) {
+    setSkipped(include ? [] : (analysis?.workflows.map((w) => w.workflow.workflowId) ?? []))
   }
 
   function cancelRun() {
@@ -215,6 +230,10 @@ export function useStudio() {
     files,
     project,
     analysis,
+    testAnalysis,
+    skipped,
+    toggleWorkflow,
+    setAllWorkflows,
     errors,
     selected,
     setSelected,
@@ -225,6 +244,7 @@ export function useStudio() {
     servers,
     setServer: (n: string, v: string) => setServers((prev) => ({ ...prev, [n]: v })),
     cases,
+    testCases,
     caseActions,
     mode,
     setMode,
