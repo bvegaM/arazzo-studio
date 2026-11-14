@@ -194,3 +194,23 @@ export async function fetchRemoteSource(project: Project, sourceName: string): P
     }
   }
 }
+
+/**
+ * Reemplaza el Arazzo por una versión editada. Las fuentes que ya estaban cargadas
+ * (incluidas las adjuntadas a mano o descargadas) se conservan si siguen en sourceDescriptions.
+ */
+export function replaceArazzo(project: Project, file: ParsedFile): Project {
+  const files = [...project.files.filter((f) => f.name !== project.arazzoFileName), { ...file, name: project.arazzoFileName }]
+  // El Arazzo editado tiene que ser el primero: buildProject usa el primer Arazzo que encuentra.
+  files.sort((a, b) => Number(b.name === project.arazzoFileName) - Number(a.name === project.arazzoFileName))
+  const built = buildProject(files).project
+  if (!built) return project
+  return {
+    ...built,
+    sources: built.sources.map((s) => {
+      if (s.status === 'loaded') return s
+      const old = project.sources.find((o) => o.name === s.name && o.url === s.url && o.status === 'loaded')
+      return old ?? s
+    }),
+  }
+}

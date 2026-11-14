@@ -144,6 +144,17 @@ button.primary {
 button.primary:hover:not(:disabled) {
   filter: brightness(1.08);
 }
+/* Acción secundaria destacada (p. ej. "Editar Arazzo"). */
+button.accent {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+button.accent:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 button.ghost {
   background: transparent;
   border-color: transparent;
@@ -1106,6 +1117,19 @@ td code {
 .graph {
   height: 620px;
   background: var(--bg);
+  /* Colores de React Flow con los de la app (sus estilos se cargan después y pisarían los nuestros). */
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.react-flow__node {
+  cursor: grab;
+}
+.react-flow__node.dragging {
+  cursor: grabbing;
 }
 .react-flow__attribution {
   display: none;
@@ -2456,4 +2480,118 @@ td.nowrap code {
 }
 .steps-table td:nth-child(2) {
   min-width: 220px;
+}
+
+/* ---------- Editor del Arazzo ---------- */
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.editor-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* Con el editor abierto, la página usa todo el ancho disponible. */
+.main:has(.editor) {
+  max-width: none;
+}
+.editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  height: calc(100vh - 230px);
+  min-height: 560px;
+}
+.editor-code {
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.editor-side h4 {
+  margin: 4px 0 0;
+}
+.editor-file {
+  font-weight: 600;
+}
+.editor-state {
+  font-size: 13px;
+  color: var(--warn);
+}
+.editor-state.ok {
+  color: var(--ok);
+}
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.editor-actions button {
+  font-weight: 500;
+}
+/* Los problemas ocupan lo justo (con scroll si son muchos) y el diagrama el resto. */
+.editor-problems-box {
+  flex: 0 1 auto;
+  max-height: 32%;
+  overflow: auto;
+}
+.editor-side .graph-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.editor-side .graph {
+  flex: 1;
+  height: auto;
+  min-height: 300px;
+}
+.editor-problems button {
+  white-space: normal;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-problems button:hover span:last-child {
+  text-decoration: underline;
+}
+@media (max-width: 900px) {
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+  .editor-code {
+    height: 60vh;
+  }
+  .editor-side .graph {
+    height: 480px;
+    flex: none;
+  }
 }

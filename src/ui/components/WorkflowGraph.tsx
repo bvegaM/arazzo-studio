@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
+import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type XYPosition } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { Issue, ResolvedStep, WorkflowAnalysis } from '../../core/analyze'
 import { MethodBadge } from './badges'
@@ -251,6 +251,51 @@ export function WorkflowGraph({ wa }: { wa: WorkflowAnalysis }) {
   const [showActions, setShowActions] = useState(true)
   const [showData, setShowData] = useState(true)
   const graph = useMemo(() => buildGraph(wa, { actions: showActions, data: showData }), [wa, showActions, showData])
+  // Lo que el usuario movió cada cuadro respecto del orden automático. Se guarda como desplazamiento
+  // (no como posición) para que siga valiendo cuando el Arazzo cambia y el orden automático se recalcula.
+  const [offsets, setOffsets] = useState<Record<string, XYPosition>>({})
+  // Tamaños que midió React Flow: si un nodo nuevo llega sin ellos, lo oculta hasta volver a medirlo.
+  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({})
+  const nodes = useMemo(
+    () =>
+      graph.nodes.map((n) => {
+        const o = offsets[n.id]
+        return {
+          ...n,
+          measured: sizes[n.id],
+          position: o ? { x: n.position.x + o.x, y: n.position.y + o.y } : n.position,
+        }
+      }),
+    [graph, offsets, sizes],
+  )
+  const onNodesChange = (changes: NodeChange[]) => {
+    const measured = changes.filter((c) => c.type === 'dimensions' && c.dimensions)
+    if (measured.length) {
+      setSizes((prev) => {
+        const next = { ...prev }
+        for (const c of measured) if (c.type === 'dimensions' && c.dimensions) next[c.id] = c.dimensions
+        return next
+      })
+    }
+    setOffsets((prev) => {
+      const next = { ...prev }
+      for (const c of changes) {
+        if (c.type !== 'position' || !c.position) continue
+        const base = graph.nodes.find((n) => n.id === c.id)?.position
+        if (!base) continue
+        const before = next[c.id] ?? { x: 0, y: 0 }
+        const after = { x: c.position.x - base.x, y: c.position.y - base.y }
+        next[c.id] = after
+        // Las acciones de un paso se mueven con él.
+        const actions = `actions-${c.id}`
+        if (graph.nodes.some((n) => n.id === actions)) {
+          const o = next[actions] ?? { x: 0, y: 0 }
+          next[actions] = { x: o.x + after.x - before.x, y: o.y + after.y - before.y }
+        }
+      }
+      return next
+    })
+  }
   const actionCount = wa.steps.reduce((n, s) => n + (s.step.onFailure?.length ?? 0) + (s.step.onSuccess?.length ?? 0), 0)
   return (
     <div className="graph-wrap">
@@ -263,6 +308,11 @@ export function WorkflowGraph({ wa }: { wa: WorkflowAnalysis }) {
           <span className="dot d-flow" /> {t('graph.dataToggle')} {wa.dataEdges.length > 0 && <span className="count">{wa.dataEdges.length}</span>}
         </Pill>
         <span className="spacer" />
+        {Object.keys(offsets).length > 0 && (
+          <button className="small" onClick={() => setOffsets({})}>
+            {t('graph.resetLayout')}
+          </button>
+        )}
         <span className="legend small muted">
           <span className="dot d-ok" /> {t('graph.successShort')} <span className="dot d-warn" /> goto
         </span>
@@ -270,8 +320,9 @@ export function WorkflowGraph({ wa }: { wa: WorkflowAnalysis }) {
       <div className="graph">
         <ReactFlow
           key={`${wa.workflow.workflowId}-${showActions}-${showData}`}
-          nodes={graph.nodes}
+          nodes={nodes}
           edges={graph.edges}
+          onNodesChange={onNodesChange}
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.15 }}

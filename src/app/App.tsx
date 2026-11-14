@@ -32,11 +32,14 @@ export default function App() {
               onNext={() => goTo(Screen.Contracts)}
             />
           )}
-          {screen === Screen.Contracts && analysis && (
+          {screen === Screen.Contracts && analysis && project && (
             <ContractsScreen
               analysis={analysis}
               selected={studio.selected}
               onSelect={studio.setSelected}
+              project={project}
+              arazzoText={studio.arazzoText}
+              onEditArazzo={studio.editArazzo}
               skipped={studio.skipped}
               onToggleWorkflow={studio.toggleWorkflow}
               onAllWorkflows={studio.setAllWorkflows}
