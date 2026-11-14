@@ -77,7 +77,7 @@ Arazzo Studio is built for **exploring, debugging and demonstrating** journeys b
     <td width="50%" valign="top">
       <img src="docs/screenshots/load.png" alt="Load screen with drag and drop, built-in examples and a three-step guide">
       <h3>1 · Load</h3>
-      Drop the Arazzo file, the OpenAPI and AsyncAPI contracts it references and any file they point to with <code>$ref</code>. Missing contracts and referenced files are pointed out; contracts can be attached by hand or fetched from their URL.
+      Drop one or more Arazzo files (a collection: one journey per workflow), the OpenAPI and AsyncAPI contracts they reference and any file they point to with <code>$ref</code>. Missing contracts and referenced files are pointed out; contracts can be attached by hand or fetched from their URL.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/defaults.png" alt="Form generated from the inputs schema, with nested objects and lists">
@@ -173,6 +173,7 @@ npm run mock:bug     # same APIs, with contract violations on purpose
 
 | Example | What it shows | How to run it |
 |---|---|---|
+| **Collection** | Both examples below in one collection: two Arazzo files, three journeys, shared environments. | As each example. |
 | **Credit cards** | A four-step onboarding over one OpenAPI contract: generated cases, response scenarios, contract violations. | Any token as the credential and `4321` as `last4Digits`. |
 | **Miles transfer** | An Arazzo 1.1 journey: an OpenAPI contract split with external `$ref`s, AsyncAPI `send` / `receive` steps, `correlationId`, `timeout` and `dependsOn`. | Any token as the credential. The messaging steps are simulated. |
 

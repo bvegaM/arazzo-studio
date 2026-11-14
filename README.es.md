@@ -77,7 +77,7 @@ Arazzo Studio está pensado para **explorar, depurar y mostrar** journeys a mano
     <td width="50%" valign="top">
       <img src="docs/screenshots/load.png" alt="Pantalla de carga con arrastrar y soltar, ejemplos incluidos y una guía de tres pasos">
       <h3>1 · Cargar</h3>
-      Suelta el archivo Arazzo, los contratos OpenAPI y AsyncAPI que referencia y los archivos a los que apuntan con <code>$ref</code>. La app indica qué contratos o archivos faltan; los contratos se pueden adjuntar a mano o descargar desde su URL.
+      Suelta uno o varios archivos Arazzo (una colección: cada workflow es un journey), los contratos OpenAPI y AsyncAPI que referencian y los archivos a los que apuntan con <code>$ref</code>. La app indica qué contratos o archivos faltan; los contratos se pueden adjuntar a mano o descargar desde su URL.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/defaults.png" alt="Formulario generado desde el schema de inputs, con objetos anidados y listas">
@@ -173,6 +173,7 @@ npm run mock:bug     # las mismas APIs, con errores de contrato a propósito
 
 | Ejemplo | Qué muestra | Cómo ejecutarlo |
 |---|---|---|
+| **Colección** | Los dos ejemplos de abajo en una colección: dos archivos Arazzo, tres journeys y ambientes compartidos. | Como cada ejemplo. |
 | **Tarjetas de crédito** | Un onboarding de cuatro pasos sobre un contrato OpenAPI: casos generados, escenarios por respuesta y errores de contrato. | Cualquier token como credencial y `4321` como `last4Digits`. |
 | **Traspaso de millas** | Un journey Arazzo 1.1: un OpenAPI repartido en archivos con `$ref` externos, pasos AsyncAPI `send` / `receive`, `correlationId`, `timeout` y `dependsOn`. | Cualquier token como credencial. Los pasos de mensajería se simulan. |
 

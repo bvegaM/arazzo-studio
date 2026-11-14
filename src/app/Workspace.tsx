@@ -1,6 +1,7 @@
 // Espacio de trabajo: colección a la izquierda, journey abierto al centro y su resultado a la derecha.
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { WorkflowAnalysis } from '../core/analyze'
+import { caseJourney, splitJourneyKey } from '../core/collection'
 import { loadFaker } from '../core/dynamicVars'
 import { humanizeId } from '../core/format'
 import { isAsyncOperation } from '../core/openapi'
@@ -8,7 +9,7 @@ import { invalidPaths, missingInputs } from '../core/schemaForm'
 import { isSimulated, runnability } from '../core/testcases'
 import { t } from '../i18n'
 import { MethodBadge } from '../ui/components/badges'
-import { Empty, Icon, Segmented, Tabs } from '../ui/components/kit'
+import { Empty, EnvDot, Icon, Segmented, Tabs } from '../ui/components/kit'
 import { TemplateVarsProvider, type TemplateVars } from '../ui/components/TemplateInput'
 import { CasesView } from '../ui/workspace/CasesView'
 import { EnvironmentView } from '../ui/workspace/EnvironmentView'
@@ -16,7 +17,7 @@ import { InputsView } from '../ui/workspace/InputsView'
 import { OverviewView } from '../ui/workspace/OverviewView'
 import { ResultsPanel } from '../ui/workspace/ResultsPanel'
 import { StepView } from '../ui/workspace/StepView'
-import { Welcome } from '../ui/workspace/Welcome'
+import { EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
 import { CollectionSidebar } from './CollectionSidebar'
 import type { Studio } from './useStudio'
 
@@ -56,7 +57,7 @@ function Splitter({ width, onChange }: { width: number; onChange: (w: number) =>
 }
 
 export function Workspace({ studio }: { studio: Studio }) {
-  const { project, analysis } = studio
+  const { journeys, projects } = studio
   // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [envOpen, setEnvOpen] = useState(false)
@@ -66,18 +67,26 @@ export function Workspace({ studio }: { studio: Studio }) {
   const [askConfirm, setAskConfirm] = useState(false)
   const [errorsHidden, setErrorsHidden] = useState(false)
   const [resultsWidth, setResultsWidth] = useState(savedWidth)
+  // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
+  const [welcomeClosed, setWelcomeClosed] = useState(false)
+  if (projects.length && welcomeClosed) setWelcomeClosed(false)
 
-  const workflows = analysis?.workflows ?? []
-  const exists = (id: string) => workflows.some((w) => w.workflow.workflowId === id)
-  const activeId = exists(studio.selected) ? studio.selected : workflows[0]?.workflow.workflowId
+  // Las pestañas y la selección usan la clave del journey (archivo#workflowId).
+  const exists = (key: string) => journeys.some((j) => j.key === key)
+  const activeId = exists(studio.selected) ? studio.selected : journeys[0]?.key
   const tabs = [...new Set([...openTabs.filter(exists), ...(activeId ? [activeId] : [])])]
-  const wa: WorkflowAnalysis | undefined = workflows.find((w) => w.workflow.workflowId === activeId)
+  const journey = journeys.find((j) => j.key === activeId)
+  const wa: WorkflowAnalysis | undefined = journey?.wa
+  const analysis = journey?.analysis
+  // Con varios Arazzo, cada journey muestra de qué archivo viene.
+  const multiFile = projects.length > 1
+  const journeyName = (key: string) => humanizeId(splitJourneyKey(key).workflowId)
   const stepId = activeId ? steps[activeId] : undefined
   const rs = wa?.steps.find((s) => s.step.stepId === stepId)
   const view: View = (activeId && views[activeId]) || 'overview'
   const shownView: View = view === 'step' && !rs ? 'overview' : view
 
-  const journeyCases = studio.cases.filter((c) => c.workflowId === activeId)
+  const journeyCases = studio.cases.filter((c) => caseJourney(c) === activeId)
   const ready = journeyCases.filter((c) => c.enabled && runnability(c, studio.mode).ok)
   const realCases = ready.filter((c) => !isSimulated(c, studio.mode))
   const mutating = realCases.length ? (wa?.steps.filter((s) => s.mutating && s.op) ?? []) : []
@@ -85,11 +94,12 @@ export function Workspace({ studio }: { studio: Studio }) {
   const credsMissing = realCases.length > 0 && (analysis?.credentials ?? []).some((c) => !studio.credentials[c.key])
   const values = (activeId && studio.inputs[activeId]) || {}
   const inputsMissing = wa ? missingInputs(wa.inputsSchema, values).length + invalidPaths(wa.inputsSchema, values).length : 0
-  const journeyRuns = studio.runs.filter((r) => r.tc.workflowId === activeId)
+  const journeyRuns = studio.runs.filter((r) => caseJourney(r.tc) === activeId)
 
   const openJourney = (id: string, nextView?: View) => {
     studio.setSelected(id)
-    setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    // El journey que estaba activo queda abierto como pestaña (al empezar no está en la lista).
+    setOpenTabs((prev) => [...new Set([...prev, ...(activeId ? [activeId] : []), id])])
     setEnvActive(false)
     setAskConfirm(false)
     if (nextView) setViews((v) => ({ ...v, [id]: nextView }))
@@ -166,21 +176,24 @@ export function Workspace({ studio }: { studio: Studio }) {
     />
   )
 
-  if (!project || !analysis) {
+  if (!projects.length) {
+    const actions = {
+      errors: studio.errors,
+      onFiles: studio.addFiles,
+      onExample: studio.loadExample,
+      onOpenFolder: studio.isDesktop ? studio.openFolder : undefined,
+      onCreate: () => openJourney(studio.createArazzo(), 'yaml'),
+      savedSession: studio.savedSession,
+      onRestore: studio.restoreSession,
+      onDiscard: studio.discardSession,
+    }
     return (
       <div className="ws-shell">
         {sidebar}
         <main className="ws-welcome">
-          <Welcome
-            errors={studio.errors}
-            onFiles={studio.addFiles}
-            onExample={studio.loadExample}
-            onOpenFolder={studio.isDesktop ? studio.openFolder : undefined}
-            savedSession={studio.savedSession}
-            onRestore={studio.restoreSession}
-            onDiscard={studio.discardSession}
-          />
+          <EmptyWorkspace {...actions} onShowWelcome={() => setWelcomeClosed(false)} />
         </main>
+        {!welcomeClosed && <WelcomeDialog {...actions} onClose={() => setWelcomeClosed(true)} />}
       </div>
     )
   }
@@ -188,12 +201,14 @@ export function Workspace({ studio }: { studio: Studio }) {
   const envView = (
     <div className="ws-center">
       <div className="ws-center-head">
-        <h2>{t('ws.env.title', { name: studio.activeEnv.name })}</h2>
+        <h2 className="ws-env-title">
+          <EnvDot color={studio.activeEnv.color} /> {t('ws.env.title', { name: studio.activeEnv.name })}
+        </h2>
       </div>
       <div className="ws-center-body">
         <EnvironmentView
-          project={project}
-          analysis={analysis}
+          sources={studio.collectionSources}
+          schemes={studio.collectionSchemes}
           environments={studio.environments}
           activeEnv={studio.activeEnv}
           envActions={studio.envActions}
@@ -215,7 +230,8 @@ export function Workspace({ studio }: { studio: Studio }) {
             {tabs.map((id) => (
               <div key={id} className={`ws-tab ${id === activeId && !envActive ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
-                  {humanizeId(id)}
+                  {journeyName(id)}
+                  {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
                 </button>
                 {tabs.length > 1 && (
                   <button className="ws-tab-close" onClick={() => closeTab(id)} aria-label={t('common.close')} title={t('common.close')}>
@@ -226,8 +242,8 @@ export function Workspace({ studio }: { studio: Studio }) {
             ))}
             {envOpen && (
               <div className={`ws-tab ${envActive ? 'active' : ''}`} role="tab" aria-selected={envActive}>
-                <button className="ws-tab-main" onClick={() => setEnvActive(true)}>
-                  ⚙ {studio.activeEnv.name}
+                <button className="ws-tab-main ws-env-tab" onClick={() => setEnvActive(true)}>
+                  <EnvDot color={studio.activeEnv.color} /> {studio.activeEnv.name}
                 </button>
                 <button
                   className="ws-tab-close"
@@ -266,7 +282,7 @@ export function Workspace({ studio }: { studio: Studio }) {
                 <div className="ws-runbar-title">
                   <h2 title={wa.workflow.workflowId}>{humanizeId(wa.workflow.workflowId)}</h2>
                   <span className="muted small clamp-1">
-                    {[wa.workflow.summary, messaging.length ? t('ws.run.messaging', { n: messaging.length }) : ''].filter(Boolean).join(' · ')}
+                    {[multiFile ? journey?.file : '', wa.workflow.summary, messaging.length ? t('ws.run.messaging', { n: messaging.length }) : ''].filter(Boolean).join(' · ')}
                   </span>
                 </div>
                 <span className="spacer" />
@@ -284,6 +300,7 @@ export function Workspace({ studio }: { studio: Studio }) {
                 <label className="ws-env-select" title={t('ws.run.env')}>
                   <span className="muted small">{t('ws.run.env')}</span>
                   <select
+                    className={studio.activeEnv.color ? `c-${studio.activeEnv.color}` : undefined}
                     value={studio.activeEnv.id}
                     onChange={(e) => {
                       if (e.target.value === '__config') openEnv()
@@ -331,7 +348,7 @@ export function Workspace({ studio }: { studio: Studio }) {
                   <button
                     onClick={() => {
                       setAskConfirm(false)
-                      void studio.runJourney(wa.workflow.workflowId, 'simulado')
+                      void studio.runJourney(activeId!, 'simulado')
                     }}
                   >
                     {t('ws.run.simulateInstead')}
@@ -355,7 +372,7 @@ export function Workspace({ studio }: { studio: Studio }) {
                   <div className="ws-center-head">
                     <Tabs<View>
                       value={shownView}
-                      onChange={(v) => setViews((prev) => ({ ...prev, [wa.workflow.workflowId]: v }))}
+                      onChange={(v) => setViews((prev) => ({ ...prev, [activeId!]: v }))}
                       tabs={[
                         { id: 'overview', label: t('ws.view.overview'), ...(wa.issues.some((i) => i.level === 'error') ? { count: wa.issues.filter((i) => i.level === 'error').length, tone: 'err' as const } : {}) },
                         { id: 'inputs', label: 'Inputs', ...(inputsMissing ? { count: inputsMissing, tone: 'warn' as const } : {}) },
@@ -366,51 +383,53 @@ export function Workspace({ studio }: { studio: Studio }) {
                     />
                   </div>
                   <div className={`ws-center-body ${shownView === 'yaml' ? 'fill' : ''}`}>
-                    {shownView === 'overview' && <OverviewView analysis={analysis} wa={wa} />}
-                    {shownView === 'inputs' && <InputsView wa={wa} values={values} setInput={studio.setInput} />}
+                    {shownView === 'overview' && analysis && <OverviewView analysis={analysis} wa={wa} />}
+                    {shownView === 'inputs' && <InputsView wa={wa} values={values} setInput={(_, name, v) => studio.setInput(activeId!, name, v)} />}
                     {shownView === 'cases' && (
                       <CasesView
                         wa={wa}
                         cases={journeyCases}
                         {...studio.caseActions}
+                        addCase={(tc) => studio.caseActions.addCase(tc, activeId!)}
                         onExportScenarios={studio.exportScenariosFile}
                         onImportScenarios={studio.importScenariosFile}
                         base={values}
                         mode={studio.mode}
                         running={studio.running}
-                        onRunCase={(id) => void studio.runJourney(wa.workflow.workflowId, studio.mode, [id])}
+                        onRunCase={(id) => void studio.runJourney(activeId!, studio.mode, [id])}
                         variables={studio.activeEnv.variables.filter((v) => v.name).map((v) => v.name)}
                       />
                     )}
-                    {shownView === 'yaml' && studio.arazzoText !== undefined && (
+                    {shownView === 'yaml' && journey && studio.arazzoText(journey.file) !== undefined && (
                       <Suspense fallback={<Empty>{t('editor.loading')}</Empty>}>
                         <ArazzoEditor
-                          fileName={project.arazzoFileName}
-                          text={studio.arazzoText}
-                          original={studio.arazzoOriginal ?? studio.arazzoText}
-                          project={project}
-                          analysis={analysis}
+                          key={journey.file}
+                          fileName={journey.file}
+                          text={studio.arazzoText(journey.file)!}
+                          original={studio.arazzoOriginal(journey.file) ?? studio.arazzoText(journey.file)!}
+                          project={journey.project}
+                          analysis={journey.analysis}
                           selected={wa.workflow.workflowId}
-                          onChange={studio.editArazzo}
-                          onSave={studio.saveArazzo}
+                          onChange={(text) => studio.editArazzo(journey.file, text)}
+                          onSave={(text) => studio.saveArazzo(journey.file, text)}
                           showDiagram={false}
                         />
                       </Suspense>
                     )}
                     {shownView === 'step' && rs && (
-                      <StepView wa={wa} rs={rs} servers={studio.servers} onEditYaml={() => setViews((prev) => ({ ...prev, [wa.workflow.workflowId]: 'yaml' }))} />
+                      <StepView wa={wa} rs={rs} servers={studio.servers} onEditYaml={() => setViews((prev) => ({ ...prev, [activeId!]: 'yaml' }))} />
                     )}
                   </div>
                 </div>
                 <Splitter width={resultsWidth} onChange={changeWidth} />
                 <aside className="ws-results" style={{ width: resultsWidth }}>
                   <ResultsPanel
-                    key={wa.workflow.workflowId}
+                    key={activeId}
                     runs={journeyRuns}
                     running={studio.running && journeyRuns.some((r) => r.state !== 'done')}
                     onCancel={studio.cancelRun}
                     onRerun={() => run()}
-                    onRunSimulated={() => void studio.runJourney(wa.workflow.workflowId, 'simulado')}
+                    onRunSimulated={() => void studio.runJourney(activeId!, 'simulado')}
                     onEditEnvironment={openEnv}
                     onExport={studio.exportReport}
                   />

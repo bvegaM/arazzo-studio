@@ -7,7 +7,7 @@ import milesSchemas from '../../examples/miles-transfer/member-schemas.yaml?raw'
 import milesEvents from '../../examples/miles-transfer/miles-events.asyncapi.yaml?raw'
 import type { LoadedFile } from '../core/loader'
 
-export type ExampleId = 'cards' | 'miles'
+export type ExampleId = 'cards' | 'miles' | 'collection'
 
 export const EXAMPLES: Record<ExampleId, LoadedFile[]> = {
   cards: [
@@ -21,4 +21,8 @@ export const EXAMPLES: Record<ExampleId, LoadedFile[]> = {
     { name: 'member-schemas.yaml', text: milesSchemas },
     { name: 'miles-events.asyncapi.yaml', text: milesEvents },
   ],
+  collection: [],
 }
+
+// Colección: los dos ejemplos juntos, como la carpeta de un equipo con varios journeys de partners.
+EXAMPLES.collection = [...EXAMPLES.cards, ...EXAMPLES.miles]

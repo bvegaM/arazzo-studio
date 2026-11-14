@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Estado de la app y acciones del flujo (cargar, configurar, ejecutar, exportar).
 import { useEffect, useRef, useState } from 'react'
-import { attachSource, buildProject, fetchRemoteSource, parseFile, replaceArazzo, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
+import { attachToCollection, buildCollection, fetchRemoteInCollection, parseFile, replaceArazzo, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
+import { caseJourney, collectionCases, collectionCredentials, journeyKey, listJourneys, migrateLegacySession, scopeCase, splitJourneyKey, unscopeCase } from '../core/collection'
 import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
 import { fetchExecutor } from '../core/http'
@@ -11,7 +12,6 @@ import {
   applyCaseInputs,
   defaultInputs,
   evaluateCase,
-  generateTestCases,
   isSimulated,
   runnability,
   type CaseRun,
@@ -20,7 +20,7 @@ import {
 } from '../core/testcases'
 import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
-import { fillServers, newEnvironment, redactSecrets, secretValues, uniqueName, variableValues, type Environment, type EnvVariable } from '../core/environments'
+import { fillServers, newEnvironment, redactSecrets, secretValues, uniqueName, variableValues, type EnvColor, type Environment, type EnvVariable } from '../core/environments'
 import { resolveTemplates } from '../core/templates'
 import { loadFaker } from '../core/dynamicVars'
 import { readSavedSession, toSavedSession, type SavedSession } from '../core/session'
@@ -50,8 +50,9 @@ export function useStudio() {
   const [folder, setFolder] = useState<{ root: string; paths: Record<string, string> }>()
   // Sesión anterior encontrada al abrir, a la espera de que el usuario decida si la continúa.
   const [savedSession, setSavedSession] = useState<SavedSession>()
-  const [project, setProject] = useState<Project>()
-  const [analysis, setAnalysis] = useState<ProjectAnalysis>()
+  // Colección: un proyecto (y su análisis) por cada archivo Arazzo cargado.
+  const [projects, setProjects] = useState<Project[]>([])
+  const [analyses, setAnalyses] = useState<Record<string, ProjectAnalysis>>({})
   const [errors, setErrors] = useState<string[]>([])
   const [selected, setSelected] = useState('')
   const [inputs, setInputs] = useState<Inputs>({})
@@ -70,6 +71,13 @@ export function useStudio() {
   const locale = useLocale()
 
   const activeEnv = envs.list.find((e) => e.id === envs.active) ?? envs.list[0]
+  const journeys = listJourneys(projects, analyses)
+  const activeJourney = journeys.find((j) => j.key === selected) ?? journeys[0]
+  // Un solo Arazzo: su título. Varios: el nombre de la carpeta o cuántos archivos son.
+  const collectionTitle =
+    projects.length === 1
+      ? (projects[0].arazzo.info?.title ?? projects[0].arazzoFileName)
+      : (folder?.root.split(/[\\/]/).pop() ?? t('ws.tree.collectionN', { n: projects.length }))
   const { servers, credentials } = activeEnv
 
   function updateActiveEnv(patch: (e: Environment) => Partial<Environment>) {
@@ -92,6 +100,8 @@ export function useStudio() {
     },
     rename: (id: string, name: string) =>
       setEnvs((prev) => ({ ...prev, list: prev.list.map((e) => (e.id === id && name.trim() ? { ...e, name: name.trim() } : e)) })),
+    /** Color de la etiqueta del ambiente activo (undefined = sin color). */
+    setColor: (color: EnvColor | undefined) => updateActiveEnv(() => ({ color })),
     /** Reemplaza las variables y secretos del ambiente activo. */
     setVariables: (variables: EnvVariable[]) => updateActiveEnv(() => ({ variables })),
     remove: (id: string) => {
@@ -105,31 +115,22 @@ export function useStudio() {
   }
 
 
-  /** Cambia el proyecto y recalcula lo que depende de él: análisis, valores por defecto, servidores y casos. */
-  function applyProject(p: Project | undefined) {
-    setProject(p)
-    const a = p ? analyzeProject(p) : undefined
-    setAnalysis(a)
-    if (!p || !a) return
-    setSelected((s) => (a.workflows.some((w) => w.workflow.workflowId === s) ? s : (a.workflows[0]?.workflow.workflowId ?? '')))
+  /** Cambia la colección y recalcula lo que depende de ella: análisis, valores por defecto, servidores y casos. */
+  function applyCollection(next: Project[]) {
+    setProjects(next)
+    const nextAnalyses = Object.fromEntries(next.map((p) => [p.arazzoFileName, analyzeProject(p)]))
+    setAnalyses(nextAnalyses)
+    if (!next.length) return
+    const all = listJourneys(next, nextAnalyses)
+    setSelected((s) => (all.some((j) => j.key === s) ? s : (all[0]?.key ?? '')))
     setInputs((prev) => {
-      const next = { ...prev }
-      for (const w of a.workflows) next[w.workflow.workflowId] ??= defaultInputs(w.inputsSchema)
-      return next
+      const values = { ...prev }
+      for (const j of all) values[j.key] ??= defaultInputs(j.wa.inputsSchema)
+      return values
     })
-    const defaults = Object.fromEntries(p.sources.filter((s) => s.status === 'loaded').map((s) => [s.name, getServerUrl(s)]))
+    const defaults = Object.fromEntries(next.flatMap((p) => p.sources.filter((s) => s.status === 'loaded').map((s) => [s.name, getServerUrl(s)])))
     setEnvs((prev) => ({ ...prev, list: fillServers(prev.list, defaults) }))
-    setCases((prev) => {
-      // Se conservan las elecciones del usuario: selección, datos propios, modo y casos creados a mano.
-      const byId = new Map(prev.map((c) => [c.id, c]))
-      const wfIds = new Set(a.workflows.map((w) => w.workflow.workflowId))
-      const generated = a.workflows.flatMap(generateTestCases).map((c) => {
-        const old = byId.get(c.id)
-        return old ? { ...c, enabled: old.enabled, inputOverrides: old.inputOverrides, omitInputs: old.omitInputs, dataMode: old.dataMode } : c
-      })
-      const custom = prev.filter((c) => c.origin === 'datos' && wfIds.has(c.workflowId))
-      return [...generated, ...custom]
-    })
+    setCases((prev) => collectionCases(all, prev))
   }
 
   function loadFiles(loaded: LoadedFile[], replace: boolean) {
@@ -145,13 +146,48 @@ export function useStudio() {
       setRemotes([])
       setFolder(undefined)
     }
-    const { project: p, errors: e } = buildProject(all)
-    applyProject(p)
-    setErrors(e)
+    const built = buildCollection(all)
+    applyCollection(built.projects)
+    setErrors(built.errors)
   }
 
   async function addFiles(fs: File[]) {
     loadFiles(await readTextFiles(fs), false)
+  }
+
+  /**
+   * Crea un Arazzo nuevo a partir de un esqueleto (una fuente y un paso) y lo agrega a la colección.
+   * Devuelve la clave de su journey, para abrirlo en el editor.
+   */
+  function createArazzo(): string {
+    const taken = new Set(texts.map((f) => f.name))
+    let name = 'nuevo.arazzo.yaml'
+    for (let i = 2; taken.has(name); i++) name = `nuevo-${i}.arazzo.yaml`
+    const text = [
+      'arazzo: 1.1.0',
+      'info:',
+      `  title: ${t('newArazzo.title')}`,
+      '  version: 1.0.0',
+      'sourceDescriptions:',
+      '  - name: miApi',
+      '    url: ./openapi.yaml',
+      '    type: openapi',
+      'workflows:',
+      '  - workflowId: miJourney',
+      `    summary: ${t('newArazzo.summary')}`,
+      '    inputs:',
+      '      type: object',
+      '      properties: {}',
+      '    steps:',
+      '      - stepId: primerPaso',
+      `        description: ${t('newArazzo.step')}`,
+      '        operationId: $sourceDescriptions.miApi.operacion',
+      '        successCriteria:',
+      '          - condition: $statusCode == 200',
+      '',
+    ].join('\n')
+    loadFiles([{ name, text }], false)
+    return journeyKey(name, 'miJourney')
   }
 
   function loadExample(id: ExampleId = 'cards') {
@@ -159,12 +195,12 @@ export function useStudio() {
   }
 
   async function attachFile(sourceName: string, f: File) {
-    if (!project) return
+    if (!projects.length) return
     const [loaded] = await readTextFiles([f])
     const parsed = parseFile(loaded)
     setFiles((prev) => [...prev.filter((x) => x.name !== parsed.name), parsed])
     setAttachments((prev) => [...prev.filter((a) => a.source !== sourceName), { source: sourceName, file: loaded }])
-    applyProject(attachSource(project, sourceName, parsed))
+    applyCollection(attachToCollection(projects, sourceName, parsed))
   }
 
   /**
@@ -172,15 +208,15 @@ export function useStudio() {
    * válido, reemplaza al anterior y se vuelve a analizar. Si no se puede leer, el análisis
    * queda como estaba y el editor muestra el error.
    */
-  function editArazzo(text: string): string | undefined {
+  function editArazzo(name: string, text: string): string | undefined {
+    const project = projects.find((p) => p.arazzoFileName === name)
     if (!project) return
-    const name = project.arazzoFileName
     setTexts((prev) => (prev.some((f) => f.name === name) ? prev.map((f) => (f.name === name ? { ...f, text } : f)) : [...prev, { name, text }]))
     const parsed = parseFile({ name, text })
     if (parsed.error) return parsed.error
     if (parsed.kind !== 'arazzo') return t('load.noArazzo')
     setFiles((prev) => prev.map((f) => (f.name === name ? parsed : f)))
-    applyProject(replaceArazzo(project, parsed))
+    applyCollection(projects.map((p) => (p === project ? replaceArazzo(project, parsed) : p)))
   }
 
   /** Escritorio: carga todos los YAML/JSON de una carpeta, como una colección de Bruno. */
@@ -193,8 +229,7 @@ export function useStudio() {
   }
 
   /** Guarda el Arazzo editado: sobre su archivo en disco si se abrió desde una carpeta. */
-  async function saveArazzo(text: string): Promise<SaveResult> {
-    const name = project?.arazzoFileName ?? 'workflow.arazzo.yaml'
+  async function saveArazzo(name: string, text: string): Promise<SaveResult> {
     const baseName = name.split(/[\\/]/).pop() ?? name
     if (!desktop) return saveTextFile(text, baseName)
     const path = folder?.paths[name]
@@ -209,10 +244,10 @@ export function useStudio() {
   }
 
   async function fetchRemote(sourceName: string) {
-    if (!project) return
-    const next = await fetchRemoteSource(project, sourceName)
-    if (next.sources.find((s) => s.name === sourceName)?.status === 'loaded') setRemotes((prev) => [...new Set([...prev, sourceName])])
-    applyProject(next)
+    if (!projects.length) return
+    const next = await fetchRemoteInCollection(projects, sourceName)
+    if (next.some((p) => p.sources.find((s) => s.name === sourceName)?.status === 'loaded')) setRemotes((prev) => [...new Set([...prev, sourceName])])
+    applyCollection(next)
   }
 
   // Al abrir, busca una sesión anterior para ofrecer continuarla.
@@ -225,10 +260,10 @@ export function useStudio() {
 
   // Guarda la sesión poco después de cada cambio (sin credenciales ni valores sensibles).
   useEffect(() => {
-    if (!project || savedSession) return
+    if (!projects.length || savedSession) return
     const timer = setTimeout(() => {
       const session = toSavedSession({
-        title: project.arazzo.info?.title,
+        title: collectionTitle,
         files: texts,
         attachments,
         remotes,
@@ -245,16 +280,13 @@ export function useStudio() {
       void storeSet(SESSION_KEY, session)
     }, 500)
     return () => clearTimeout(timer)
-  }, [project, savedSession, texts, attachments, remotes, inputs, cases, selected, mode, envs])
+  }, [projects, collectionTitle, savedSession, texts, attachments, remotes, inputs, cases, selected, mode, envs])
 
   /** Continúa la sesión guardada: vuelve a armar el proyecto y recupera las elecciones del usuario. */
   async function restoreSession() {
     const saved = savedSession
     if (!saved) return
     setSavedSession(undefined)
-    setInputs(saved.inputs)
-    setCases(saved.cases)
-    setSelected(saved.selected)
     setMode(saved.mode)
     if (saved.environments.length) {
       const list = saved.environments.map((e) => ({ ...e, credentials: {}, variables: e.variables ?? [] }))
@@ -266,12 +298,17 @@ export function useStudio() {
     setOriginals(Object.fromEntries(saved.files.map((f) => [f.name, f.text])))
     setAttachments(saved.attachments)
     setFiles([...parsed, ...attached.map((a) => a.parsed)])
-    const built = buildProject(parsed)
-    let p = built.project
-    if (p) for (const a of attached) p = attachSource(p, a.source, a.parsed)
-    if (p) for (const r of saved.remotes) p = await fetchRemoteSource(p, r)
+    const built = buildCollection(parsed)
+    let next = built.projects
+    for (const a of attached) next = attachToCollection(next, a.source, a.parsed)
+    for (const r of saved.remotes) next = await fetchRemoteInCollection(next, r)
+    // Sesiones de antes de las colecciones: lo guardado sin archivo pasa al primer Arazzo.
+    const migrated = next.length ? migrateLegacySession(next[0].arazzoFileName, saved) : saved
+    setInputs(migrated.inputs)
+    setCases(migrated.cases)
+    setSelected(migrated.selected)
     setRemotes(saved.remotes)
-    applyProject(p)
+    applyCollection(next)
     setErrors(built.errors)
   }
 
@@ -287,7 +324,7 @@ export function useStudio() {
     setAttachments([])
     setRemotes([])
     void storeDelete(SESSION_KEY)
-    applyProject(undefined)
+    applyCollection([])
     setErrors([])
     setInputs({})
     setCases([])
@@ -300,14 +337,16 @@ export function useStudio() {
    * Ejecuta los casos elegidos de un journey (o solo `onlyIds`); con `runMode` se fuerza un modo
    * (ej. reintentar en simulación). Los resultados de los demás journeys se conservan.
    */
-  async function runJourney(workflowId: string, runMode: RunMode = mode, onlyIds?: string[]) {
-    if (!project || !analysis || running) return
+  async function runJourney(key: string, runMode: RunMode = mode, onlyIds?: string[]) {
+    const journey = journeys.find((j) => j.key === key)
+    if (!journey || running) return
+    const { project, analysis } = journey
     if (runMode !== mode) setMode(runMode)
     const selectedCases = cases.filter(
-      (c) => c.workflowId === workflowId && (onlyIds ? onlyIds.includes(c.id) : c.enabled) && runnability(c, runMode).ok,
+      (c) => caseJourney(c) === key && (onlyIds ? onlyIds.includes(c.id) : c.enabled) && runnability(c, runMode).ok,
     )
     if (!selectedCases.length) return
-    setRuns((prev) => [...prev.filter((r) => r.tc.workflowId !== workflowId), ...selectedCases.map((tc) => ({ tc, state: 'pending' as const, steps: [] }))])
+    setRuns((prev) => [...prev.filter((r) => caseJourney(r.tc) !== key), ...selectedCases.map((tc) => ({ tc, state: 'pending' as const, steps: [] }))])
     // {{variables}} del ambiente en URLs y credenciales; los secretos se envían pero no se muestran.
     await loadFaker()
     const variables = variableValues(activeEnv)
@@ -326,7 +365,7 @@ export function useStudio() {
       const live: CaseRun['steps'] = []
       const wf = project.arazzo.workflows.find((w) => w.workflowId === tc.workflowId)
       const simulate = isSimulated(tc, runMode)
-      const inputsUsed = applyCaseInputs(tc, inputs[tc.workflowId] ?? {}, variables)
+      const inputsUsed = applyCaseInputs(tc, inputs[key] ?? {}, variables)
       update({ inputsUsed: redactSecrets(inputsUsed, secrets), simulated: simulate })
       const result = await runWorkflow(project, analysis, tc.workflowId, {
         inputs: inputsUsed,
@@ -353,7 +392,7 @@ export function useStudio() {
   function changeLocale(l: Locale) {
     setLocale(l)
     document.documentElement.lang = l
-    if (project) applyProject(project)
+    if (projects.length) applyCollection(projects)
   }
 
   function cancelRun() {
@@ -362,29 +401,42 @@ export function useStudio() {
 
   function exportReport(format: 'html' | 'json') {
     const generatedAt = new Date()
-    const title = project?.arazzo.info?.title ?? 'arazzo'
-    const fileName = reportFileName(title, generatedAt, format)
+    const fileName = reportFileName(collectionTitle, generatedAt, format)
     const params = {
-      arazzoTitle: project?.arazzo.info?.title ?? project?.arazzoFileName ?? 'Arazzo',
-      arazzoFile: project?.arazzoFileName,
+      arazzoTitle: collectionTitle,
+      arazzoFile: projects.map((p) => p.arazzoFileName).join(', '),
       generatedAt,
       environment: runEnv?.name ?? activeEnv.name,
       servers: runEnv?.servers ?? servers,
       cases: runs,
     }
     if (format === 'html') download(buildHtmlReport(params), fileName, 'text/html')
-    else download(buildJsonReport({ ...params, info: project?.arazzo.info }), fileName, 'application/json')
+    else download(buildJsonReport({ ...params, info: projects.length === 1 ? projects[0].arazzo.info : undefined }), fileName, 'application/json')
   }
 
+  /** Escenarios del Arazzo del journey activo (el archivo de escenarios es de un Arazzo). */
   function exportScenariosFile() {
-    download(exportScenarios({ title: project?.arazzo.info?.title, bases: inputs, cases }), 'escenarios.arazzo-studio.yaml', 'application/yaml')
+    const file = activeJourney?.file
+    if (!file) return
+    const bases = Object.fromEntries(
+      Object.entries(inputs)
+        .filter(([k]) => splitJourneyKey(k).file === file)
+        .map(([k, v]) => [splitJourneyKey(k).workflowId, v]),
+    )
+    const own = cases.filter((c) => c.arazzo === file).map(unscopeCase)
+    const base = file.split(/[\\/]/).pop()?.replace(/\.(ya?ml|json)$/i, '') ?? 'escenarios'
+    download(exportScenarios({ title: activeJourney.project.arazzo.info?.title, bases, cases: own }), `${base}.escenarios.yaml`, 'application/yaml')
   }
 
-  async function importScenariosFile(file: File) {
-    const workflowIds = analysis?.workflows.map((w) => w.workflow.workflowId) ?? []
-    const result = importScenarios(await file.text(), cases, workflowIds)
-    setCases(result.cases)
-    if (Object.keys(result.bases).length) setInputs((prev) => ({ ...prev, ...result.bases }))
+  async function importScenariosFile(fileToImport: File) {
+    const file = activeJourney?.file ?? ''
+    const workflowIds = journeys.filter((j) => j.file === file).map((j) => j.workflowId)
+    const own = cases.filter((c) => c.arazzo === file).map(unscopeCase)
+    const result = importScenarios(await fileToImport.text(), own, workflowIds)
+    setCases((prev) => [...prev.filter((c) => c.arazzo !== file), ...result.cases.map((c) => scopeCase(file, c))])
+    if (Object.keys(result.bases).length) {
+      setInputs((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(result.bases).map(([wf, v]) => [journeyKey(file, wf), v])) }))
+    }
     return result
   }
 
@@ -392,7 +444,8 @@ export function useStudio() {
     toggle: (id: string, en: boolean) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, enabled: en } : c))),
     setMany: (ids: string[], en: boolean) => setCases((cs) => cs.map((c) => (ids.includes(c.id) ? { ...c, enabled: en } : c))),
     updateCase: (id: string, patch: Partial<TestCase>) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c))),
-    addCase: (tc: TestCase) => setCases((cs) => [...cs, tc]),
+    /** Un caso nuevo de un journey: se le asigna su archivo Arazzo. */
+    addCase: (tc: TestCase, key: string) => setCases((cs) => [...cs, scopeCase(splitJourneyKey(key).file, tc)]),
     removeCase: (id: string) => setCases((cs) => cs.filter((c) => c.id !== id)),
   }
 
@@ -400,13 +453,20 @@ export function useStudio() {
     locale,
     changeLocale,
     files,
-    project,
-    analysis,
+    projects,
+    journeys,
+    activeJourney,
+    collectionTitle,
+    /** Credenciales que piden todos los contratos de la colección. */
+    collectionSchemes: collectionCredentials(Object.values(analyses)),
+    analysisOf: (file: string): ProjectAnalysis | undefined => analyses[file],
+    /** Fuentes de todos los Arazzo, una por nombre (el mismo nombre comparte URL base en cada ambiente). */
+    collectionSources: [...new Map(projects.flatMap((p) => p.sources).map((src) => [src.name, src])).values()],
     errors,
     selected,
     setSelected,
     inputs,
-    setInput: (wf: string, name: string, v: any) => setInputs((prev) => ({ ...prev, [wf]: { ...prev[wf], [name]: v } })),
+    setInput: (key: string, name: string, v: any) => setInputs((prev) => ({ ...prev, [key]: { ...prev[key], [name]: v } })),
     environments: envs.list,
     activeEnv,
     envActions,
@@ -430,8 +490,8 @@ export function useStudio() {
     discardSession,
     addFiles,
     attachFile,
-    arazzoText: project ? texts.find((f) => f.name === project.arazzoFileName)?.text : undefined,
-    arazzoOriginal: project ? originals[project.arazzoFileName] : undefined,
+    arazzoText: (file: string) => texts.find((f) => f.name === file)?.text,
+    arazzoOriginal: (file: string) => originals[file],
     editArazzo,
     saveArazzo,
     isDesktop: !!desktop,
@@ -439,6 +499,7 @@ export function useStudio() {
     openFolder,
     fetchRemote,
     loadExample,
+    createArazzo,
     reset,
     runJourney,
     cancelRun,

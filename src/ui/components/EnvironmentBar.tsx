@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Environment } from '../../core/environments'
 import { t } from '../../i18n'
+import { EnvDot } from './kit'
 
 export interface EnvActions {
   select: (id: string) => void
@@ -60,7 +61,7 @@ export function EnvironmentBar({ environments, activeId, actions }: { environmen
               key={e.id}
               role="tab"
               aria-selected={e.id === active.id}
-              className={`env-tab ${e.id === active.id ? 'active' : ''}`}
+              className={`env-tab ${e.id === active.id ? 'active' : ''} ${e.color ? `c-${e.color}` : ''}`}
               title={t('env.renameHint')}
               onClick={() => {
                 actions.select(e.id)
@@ -68,6 +69,7 @@ export function EnvironmentBar({ environments, activeId, actions }: { environmen
               }}
               onDoubleClick={() => setRenaming(e.id)}
             >
+              <EnvDot color={e.color} />
               {e.name}
             </button>
           ),

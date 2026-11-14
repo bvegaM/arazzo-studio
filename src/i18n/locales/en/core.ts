@@ -375,4 +375,7 @@ export const core: Record<keyof typeof es, string> = {
   'dyn.$randomDatePast': 'Date within the past year',
   'dyn.$randomDateFuture': 'Date within the next year',
   'dyn.$randomDateRecent': 'Date within the last few days',
+  'newArazzo.title': 'New journey',
+  'newArazzo.summary': 'Describe what this journey does',
+  'newArazzo.step': 'First call of the journey (change the operationId to an operation from your contract)',
 }

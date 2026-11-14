@@ -374,4 +374,7 @@ export const core = {
   'dyn.$randomDatePast': 'Fecha del último año',
   'dyn.$randomDateFuture': 'Fecha del próximo año',
   'dyn.$randomDateRecent': 'Fecha de los últimos días',
+  'newArazzo.title': 'Nuevo journey',
+  'newArazzo.summary': 'Describe aquí qué hace este journey',
+  'newArazzo.step': 'Primera llamada del journey (cambia el operationId por una operación de tu contrato)',
 }

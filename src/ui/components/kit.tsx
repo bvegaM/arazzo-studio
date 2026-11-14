@@ -104,6 +104,11 @@ export function Icon({ d, size = 15 }: { d: string; size?: number }) {
 
 export const PENCIL_ICON = 'M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4'
 
+/** Punto con el color de la etiqueta de un ambiente (vacío si no tiene). */
+export function EnvDot({ color, title }: { color?: string; title?: string }) {
+  return <span className={`env-dot ${color ? `c-${color}` : ''}`} title={title} aria-hidden={title ? undefined : true} />
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>
 }

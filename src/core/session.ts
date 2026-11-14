@@ -43,6 +43,7 @@ export function toSavedSession(state: SessionState, now = new Date()): SavedSess
     environments: state.environments.map((e) => ({
       id: e.id,
       name: e.name,
+      ...(e.color ? { color: e.color } : {}),
       servers: e.servers,
       variables: (e.variables ?? []).map((v) => (v.secret ? { ...v, value: '' } : v)),
     })),

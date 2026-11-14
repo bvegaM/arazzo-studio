@@ -32,6 +32,8 @@ export interface CaseExpectation {
 
 export interface TestCase {
   id: string
+  /** Archivo Arazzo de la colección al que pertenece el workflow. */
+  arazzo?: string
   workflowId: string
   title: string
   origin: CaseOrigin

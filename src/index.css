@@ -36,6 +36,8 @@
   --delete: #b42318;
   --send: #0b7285;
   --receive: #a61e4d;
+  --env-yellow: #a47f00;
+  --env-orange: #c2410c;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.05);
@@ -76,6 +78,8 @@
     --delete: #f27066;
     --send: #3bb3c9;
     --receive: #e0679a;
+    --env-yellow: #e3b341;
+    --env-orange: #fb923c;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
     color-scheme: dark;
   }
@@ -3331,4 +3335,257 @@ body:has(.ws-shell) {
 }
 .tpl-chip code {
   color: var(--text);
+}
+
+/* Colección con varios Arazzo */
+.ws-tab-file {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+}
+.tree-file-name {
+  display: block;
+  font-size: 11px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Etiquetas de color de los ambientes */
+.c-gray {
+  --env-color: var(--skip);
+}
+.c-green {
+  --env-color: var(--ok);
+}
+.c-blue {
+  --env-color: var(--info);
+}
+.c-purple {
+  --env-color: var(--sim);
+}
+.c-yellow {
+  --env-color: var(--env-yellow);
+}
+.c-orange {
+  --env-color: var(--env-orange);
+}
+.c-red {
+  --env-color: var(--err);
+}
+.env-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--env-color, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--env-color, var(--border-strong));
+}
+/* El selector de ambiente de la barra de ejecución lleva el color a la izquierda. */
+.ws-env-select select[class*='c-'] {
+  border-left: 4px solid var(--env-color);
+}
+.tree-list .radio[class*='c-'] {
+  box-shadow: inset 0 0 0 2px var(--env-color);
+}
+.tree-list .radio.on[class*='c-'] {
+  background: var(--env-color);
+  box-shadow: inset 0 0 0 2px var(--env-color), inset 0 0 0 4px var(--surface);
+}
+.env-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.env-colors {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.env-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+  border: 2px solid transparent;
+  background: var(--surface);
+}
+.env-swatch .env-dot {
+  width: 16px;
+  height: 16px;
+}
+.env-swatch.on {
+  border-color: var(--text);
+}
+.env-swatch.none .env-dot {
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--border-strong) 3px 4px);
+}
+.ws-env-tab,
+.ws-env-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+/* Ambiente activo con color: borde del color y fondo neutro (el texto se lee en cualquier color). */
+.env-tab.active[class*='c-'] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--env-color);
+  box-shadow: inset 0 0 0 1px var(--env-color);
+}
+
+/* Bienvenida: diálogo sobre el espacio de trabajo vacío */
+.welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(10 12 16 / 0.45);
+  backdrop-filter: blur(2px);
+}
+.welcome-backdrop.over .welcome-dialog {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 24px 60px rgb(0 0 0 / 0.35);
+}
+.welcome-dialog {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 32px 36px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+}
+.wd-hero {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.wd-hero h2 {
+  margin: 12px 0 4px;
+  font-size: 22px;
+}
+.wd-hero p {
+  margin: 0;
+}
+.wd-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.welcome-dialog h3 {
+  margin: -6px 0 4px;
+  font-size: 17px;
+}
+.wd-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.wd-icon.big {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+.wd-featured {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+  white-space: normal;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.wd-featured .grow,
+.wd-example {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.wd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 14px;
+  text-align: center;
+  white-space: normal;
+  border-radius: 12px;
+}
+.wd-card:hover:not(:disabled),
+.wd-example:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.wd-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wd-example {
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  white-space: normal;
+  border-radius: 10px;
+}
+.wd-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.wd-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+.wd-footer > :first-child {
+  flex: 1;
+}
+/* Espacio de trabajo vacío */
+.ws-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  border: 2px dashed transparent;
+}
+.ws-empty.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ws-empty h2,
+.ws-empty p {
+  margin: 0;
 }

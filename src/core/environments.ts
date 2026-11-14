@@ -8,9 +8,15 @@ export interface EnvVariable {
   secret: boolean
 }
 
+/** Colores de etiqueta para distinguir ambientes (prod en rojo, por ejemplo). */
+export const ENV_COLORS = ['gray', 'green', 'blue', 'purple', 'yellow', 'orange', 'red'] as const
+export type EnvColor = (typeof ENV_COLORS)[number]
+
 export interface Environment {
   id: string
   name: string
+  /** Etiqueta de color; sin ella el ambiente se muestra neutro. */
+  color?: EnvColor
   /** URL base por fuente del Arazzo. */
   servers: Record<string, string>
   /** Valor por esquema de seguridad. Nunca se guarda fuera de la pestaña. */

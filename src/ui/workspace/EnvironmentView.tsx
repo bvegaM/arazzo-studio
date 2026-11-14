@@ -1,23 +1,24 @@
 import { useState } from 'react'
-import type { ProjectAnalysis } from '../../core/analyze'
-import { VARIABLE_NAME, type Environment, type EnvVariable } from '../../core/environments'
+import { ENV_COLORS, VARIABLE_NAME, type EnvColor, type Environment, type EnvVariable } from '../../core/environments'
 import { GENERATOR_NAMES } from '../../core/templates'
-import type { Project } from '../../core/loader'
+import type { SourceState } from '../../core/loader'
 import type { SecurityScheme } from '../../core/openapi'
 import { isAsyncApi } from '../../core/asyncapi'
 import { desktop } from '../../lib/desktop'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
 import { EnvironmentBar, type EnvActions } from '../components/EnvironmentBar'
-import { Icon, Section } from '../components/kit'
+import { EnvDot, Icon, Section } from '../components/kit'
 import { TemplateInput } from '../components/TemplateInput'
 
 interface Props {
-  project: Project
-  analysis: ProjectAnalysis
+  /** Fuentes de la colección (una por nombre). */
+  sources: SourceState[]
+  /** Credenciales que piden los contratos de la colección. */
+  schemes: SecurityScheme[]
   environments: Environment[]
   activeEnv: Environment
-  envActions: EnvActions & { setVariables: (variables: EnvVariable[]) => void }
+  envActions: EnvActions & { setVariables: (variables: EnvVariable[]) => void; setColor: (color: EnvColor | undefined) => void }
   credentials: Record<string, string>
   setCredential: (key: string, value: string) => void
   servers: Record<string, string>
@@ -116,15 +117,43 @@ function VariablesTable({ variables, secret, onChange }: { variables: EnvVariabl
 /** Pestaña "Ambiente": URLs base, credenciales, variables y secretos de cada ambiente (local, intg, prod…). */
 export function EnvironmentView(p: Props) {
   // Los AsyncAPI no tienen URL base que configurar: sus pasos se simulan.
-  const httpSources = p.project.sources.filter((s) => s.status === 'loaded' && !isAsyncApi(s.doc))
+  const httpSources = p.sources.filter((s) => s.status === 'loaded' && !isAsyncApi(s.doc))
   const variables = p.activeEnv.variables.filter((v) => !v.secret)
   const secrets = p.activeEnv.variables.filter((v) => v.secret)
-  const credsFilled = p.analysis.credentials.filter((c) => p.credentials[c.key]).length
+  const credsFilled = p.schemes.filter((c) => p.credentials[c.key]).length
   const count = (n: number) => <span className="badge b-skip">{n}</span>
   return (
     <div className="ws-view">
       <EnvironmentBar environments={p.environments} activeId={p.activeEnv.id} actions={p.envActions} />
       <p className="muted small env-hint">{t('env.hint')}</p>
+
+      <div className="env-colors" role="radiogroup" aria-label={t('envColor.label')}>
+        <span className="muted small">{t('envColor.label')}</span>
+        <button
+          className={`env-swatch none ${!p.activeEnv.color ? 'on' : ''}`}
+          role="radio"
+          aria-checked={!p.activeEnv.color}
+          title={t('envColor.none')}
+          aria-label={t('envColor.none')}
+          onClick={() => p.envActions.setColor(undefined)}
+        >
+          <EnvDot />
+        </button>
+        {ENV_COLORS.map((c) => (
+          <button
+            key={c}
+            className={`env-swatch ${p.activeEnv.color === c ? 'on' : ''}`}
+            role="radio"
+            aria-checked={p.activeEnv.color === c}
+            title={t(`envColor.${c}`)}
+            aria-label={t(`envColor.${c}`)}
+            onClick={() => p.envActions.setColor(c)}
+          >
+            <EnvDot color={c} />
+          </button>
+        ))}
+        <span className="muted small">{t('envColor.hint')}</span>
+      </div>
 
       <Section title={t('params.urlsTitle')} badges={count(httpSources.length)} defaultOpen>
         <div className="field-grid">
@@ -144,23 +173,23 @@ export function EnvironmentView(p: Props) {
       <Section
         title={t('params.credentials')}
         defaultOpen
-        tone={credsFilled < p.analysis.credentials.length ? 'warn' : undefined}
+        tone={credsFilled < p.schemes.length ? 'warn' : undefined}
         badges={
-          p.analysis.credentials.length > 0 && (
-            <span className={`badge ${credsFilled < p.analysis.credentials.length ? 'b-warn' : 'b-ok'}`}>
-              {t('params.credsFilled', { filled: credsFilled, total: p.analysis.credentials.length })}
+          p.schemes.length > 0 && (
+            <span className={`badge ${credsFilled < p.schemes.length ? 'b-warn' : 'b-ok'}`}>
+              {t('params.credsFilled', { filled: credsFilled, total: p.schemes.length })}
             </span>
           )
         }
       >
-        {p.analysis.credentials.length === 0 ? (
+        {p.schemes.length === 0 ? (
           <p className="muted">{tn('params.noSchemes', { schemes: <code>securitySchemes</code> })}</p>
         ) : (
           <div className="field-grid">
-            {p.analysis.credentials.map((c) => (
+            {p.schemes.map((c) => (
               <div className="field" key={c.key}>
                 <label>
-                  <span>{c.schemeName}</span>
+                  <span>{p.schemes.filter((x) => x.schemeName === c.schemeName).length > 1 ? `${c.sourceName} · ${c.schemeName}` : c.schemeName}</span>
                   <span className="type">
                     {c.type}
                     {c.paramName ? ` · ${c.in} "${c.paramName}"` : ''}
