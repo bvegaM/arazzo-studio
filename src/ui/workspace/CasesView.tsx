@@ -1,21 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react'
-import type { ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
+import type { WorkflowAnalysis } from '../../core/analyze'
 import { createDataCase, dataSummary, isSimulated, runnability, type RunMode, type TestCase } from '../../core/testcases'
 import type { ScenariosImport } from '../../core/scenariosFile'
 import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
-import { humanizeId } from '../../core/format'
 import { isAsyncOperation } from '../../core/openapi'
 import { fieldKind, typeLabel, valueSummary } from '../../core/schemaForm'
-import { MethodBadge } from '../components/badges'
-import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
+import { Chevron, Segmented } from '../components/kit'
 import { ObjectFields, SchemaField } from '../components/SchemaField'
+import { TemplateInput } from '../components/TemplateInput'
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
 
 interface Props {
-  analysis: ProjectAnalysis
+  wa: WorkflowAnalysis
+  /** Casos de este journey. */
   cases: TestCase[]
   toggle: (id: string, enabled: boolean) => void
   setMany: (ids: string[], enabled: boolean) => void
@@ -24,20 +24,17 @@ interface Props {
   removeCase: (id: string) => void
   onExportScenarios: () => void
   onImportScenarios: (file: File) => Promise<ScenariosImport>
-  inputs: Record<string, Record<string, any>>
-  servers: Record<string, string>
-  /** Nombre del ambiente activo, para dejar claro contra qué se corre. */
-  envName: string
+  /** Inputs por defecto del journey. */
+  base: Record<string, any>
   mode: RunMode
-  setMode: (m: RunMode) => void
-  confirmed: boolean
-  setConfirmed: (v: boolean) => void
   running: boolean
-  onRun: () => void
-  onBack: () => void
+  /** Ejecuta solo este caso. */
+  onRunCase: (id: string) => void
+  /** Nombres de las variables del ambiente activo (para la ayuda de {{nombre}}). */
+  variables: string[]
 }
 
-type Ctx = Pick<Props, 'toggle' | 'setMany' | 'updateCase' | 'removeCase' | 'mode'> & {
+type Ctx = Pick<Props, 'toggle' | 'setMany' | 'updateCase' | 'removeCase' | 'mode' | 'running' | 'onRunCase' | 'variables'> & {
   wa: WorkflowAnalysis
   base: Record<string, any>
 }
@@ -86,7 +83,7 @@ type ParamsPatch = Pick<TestCase, 'inputOverrides' | 'omitInputs'>
  * Parámetros del caso: cada input empieza con su valor por defecto (paso 3)
  * y aquí se puede cambiar u omitir solo para este caso.
  */
-function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Record<string, any>; tc: Pick<TestCase, 'inputOverrides' | 'omitInputs' | 'omitInput' | 'setInput'>; onChange: (p: ParamsPatch) => void }) {
+function CaseParams({ wa, base, tc, onChange, variables = [] }: { wa: WorkflowAnalysis; base: Record<string, any>; tc: Pick<TestCase, 'inputOverrides' | 'omitInputs' | 'omitInput' | 'setInput'>; onChange: (p: ParamsPatch) => void; variables?: string[] }) {
   const props = Object.entries<any>(wa.inputsSchema.properties ?? {})
   const overrides = tc.inputOverrides ?? {}
   const omitted = tc.omitInputs ?? []
@@ -164,12 +161,12 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
                       <option value="false">false</option>
                     </select>
                   ) : (
-                    <input
+                    <TemplateInput
                       list={listId}
                       value={show(value)}
                       disabled={disabled}
                       placeholder={t('cases.params.noDefault')}
-                      onChange={(e) => setOverride(name, parseValue(e.target.value, schema))}
+                      onChange={(v) => setOverride(name, parseValue(v, schema))}
                     />
                   )}
                   {listId && (
@@ -228,6 +225,18 @@ function CaseParams({ wa, base, tc, onChange }: { wa: WorkflowAnalysis; base: Re
             <code>{g.token}</code>{' '}
           </span>
         ))}
+        {t('vars.dynamicHint')}
+        {variables.length > 0 && (
+          <>
+            <br />
+            {t('vars.inCases')}{' '}
+            {variables.map((v) => (
+              <span key={v}>
+                <code>{`{{${v}}}`}</code>{' '}
+              </span>
+            ))}
+          </>
+        )}
       </div>
     </div>
   )
@@ -267,6 +276,9 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
           <button className="small" onClick={() => setEditing(!editing)}>
             {editing ? t('cases.closeParams') : t('report.params')}
           </button>
+          <button className="small icon" disabled={!run.ok || ctx.running} onClick={() => ctx.onRunCase(c.id)} title={run.ok ? t('ws.runCase') : run.reason} aria-label={t('ws.runCase')}>
+            ▶
+          </button>
           {c.origin === 'datos' && (
             <button className="small danger" onClick={() => ctx.removeCase(c.id)} title={t('cases.deleteTitle')}>
               {t('cases.delete')}
@@ -278,7 +290,7 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
           <span className="muted">{t('report.params')}:</span> <code>{dataSummary(c)}</code>
         </div>
         {!run.ok && <div className="small blocked-reason">⚠ {t('cases.wontRun', { reason: run.reason })}</div>}
-        {editing && <CaseParams wa={ctx.wa} base={ctx.base} tc={c} onChange={(patch) => ctx.updateCase(c.id, patch)} />}
+        {editing && <CaseParams wa={ctx.wa} base={ctx.base} tc={c} variables={ctx.variables} onChange={(patch) => ctx.updateCase(c.id, patch)} />}
       </div>
     </div>
   )
@@ -313,7 +325,7 @@ function CaseGroup({ title, hint, list, defaultOpen, ctx, extra }: { title: stri
   )
 }
 
-function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base: Record<string, any>; onAdd: (tc: TestCase) => void; onCancel: () => void }) {
+function NewCaseForm({ wa, base, variables, onAdd, onCancel }: { wa: WorkflowAnalysis; base: Record<string, any>; variables: string[]; onAdd: (tc: TestCase) => void; onCancel: () => void }) {
   const opSteps = wa.steps.filter((s) => s.op)
   const [title, setTitle] = useState('')
   const [stepId, setStepId] = useState(opSteps[opSteps.length - 1]?.step.stepId ?? '')
@@ -391,7 +403,7 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
       <div className="sub-head" style={{ marginTop: 14 }}>
         {t('cases.new.params')}
       </div>
-      <CaseParams wa={wa} base={base} tc={params} onChange={setParams} />
+      <CaseParams wa={wa} base={base} tc={params} variables={variables} onChange={setParams} />
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
         <button onClick={onCancel}>{t('common.cancel')}</button>
         <button
@@ -419,106 +431,70 @@ function NewCaseForm({ wa, base, onAdd, onCancel }: { wa: WorkflowAnalysis; base
   )
 }
 
-function WorkflowCases({ wa, list, p }: { wa: WorkflowAnalysis; list: TestCase[]; p: Props }) {
+/** Pestaña "Casos" de un journey: los generados y los propios, agrupados por tipo. */
+export function CasesView(p: Props) {
   const [adding, setAdding] = useState(false)
-  const base = p.inputs[wa.workflow.workflowId] ?? {}
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [importResult, setImportResult] = useState<ScenariosImport>()
+  const { wa, base, cases: list } = p
   const ctx: Ctx = { ...p, wa, base }
   const general = list.filter((c) => !c.scenario && c.origin !== 'datos')
   const scenarios = list.filter((c) => c.scenario)
   const own = list.filter((c) => c.origin === 'datos')
-  return (
-    <div className="case-groups">
-      <CaseGroup title={t('tc.happy.title')} hint={t('cases.group.happyHint')} list={general.filter((c) => c.origin === 'arazzo')} defaultOpen ctx={ctx} />
-      <CaseGroup
-        title={t('cases.group.own')}
-        hint={t('cases.group.ownHint')}
-        list={own}
-        defaultOpen
-        ctx={ctx}
-        extra={
-          adding ? (
-            <NewCaseForm
-              wa={wa}
-              base={base}
-              onCancel={() => setAdding(false)}
-              onAdd={(tc) => {
-                p.addCase(tc)
-                setAdding(false)
-              }}
-            />
-          ) : (
-            <button className="add-case" onClick={() => setAdding(true)}>
-              {t('cases.new.button')}
-            </button>
-          )
-        }
-      />
-      <CaseGroup title={t('cases.group.data')} hint={t('cases.group.dataHint')} list={general.filter((c) => c.origin === 'schema')} defaultOpen={false} ctx={ctx} />
-      <CaseGroup title={t('cases.group.security')} hint={t('cases.group.securityHint')} list={general.filter((c) => c.origin === 'security')} defaultOpen={false} ctx={ctx} />
-      <CaseGroup
-        title={t('cases.group.scenarios')}
-        hint={t('cases.group.scenariosHint')}
-        list={scenarios}
-        defaultOpen={false}
-        ctx={ctx}
-      />
-    </div>
-  )
-}
-
-export function CasesScreen(p: Props) {
-  const fileInput = useRef<HTMLInputElement>(null)
-  const [importResult, setImportResult] = useState<ScenariosImport>()
-  const enabled = p.cases.filter((c) => c.enabled)
+  const enabled = list.filter((c) => c.enabled)
   const ready = enabled.filter((c) => runnability(c, p.mode).ok)
+  const simulated = ready.filter((c) => isSimulated(c, p.mode)).length
   const blocked = enabled.length - ready.length
-  const realWfs = new Set(ready.filter((c) => !isSimulated(c, p.mode)).map((c) => c.workflowId))
-  const mutating = p.analysis.workflows
-    .filter((w) => realWfs.has(w.workflow.workflowId))
-    .flatMap((w) => w.steps.filter((s) => s.mutating && s.op).map((s) => ({ wf: w.workflow.workflowId, s })))
-  const needsConfirm = mutating.length > 0 && !p.confirmed
-  // Pasos de mensajería de los workflows que van contra la API real: se simulan igual, conviene saberlo antes.
-  const messageSteps = p.analysis.workflows
-    .filter((w) => realWfs.has(w.workflow.workflowId))
-    .flatMap((w) => w.steps.filter((s) => isAsyncOperation(s.op)).map((s) => ({ wf: w.workflow.workflowId, s })))
-  const canRun = ready.length > 0 && !needsConfirm && !p.running
-  const confirmRef = useRef<HTMLDivElement>(null)
-  // Lleva a la confirmación y la resalta un momento, para que se vea qué falta.
-  const goToConfirm = () => {
-    const box = confirmRef.current
-    if (!box) return
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    box.querySelector('input')?.focus({ preventScroll: true })
-    box.classList.remove('pulse')
-    void box.offsetWidth
-    box.classList.add('pulse')
-  }
-  const simulatedCount = ready.filter((c) => isSimulated(c, p.mode)).length
 
   return (
-    <>
-      <PageHeader
-        step={4}
-        title={t('cases.title')}
-        description={t('cases.description')}
-        actions={
-          <div className="row">
-            <button onClick={() => fileInput.current?.click()}>{t('cases.import')}</button>
-            <button onClick={p.onExportScenarios}>{t('cases.export')}</button>
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".yaml,.yml,.json"
-              hidden
-              onChange={async (e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (f) setImportResult(await p.onImportScenarios(f))
-              }}
-            />
-          </div>
-        }
-      />
+    <div className="ws-view">
+      <div className="ws-view-head">
+        <div className="cases-overview" aria-label={t('cases.overview')}>
+          <span className="co-total">{t('cases.overviewSelected', { n: enabled.length, total: list.length })}</span>
+          {ready.length - simulated > 0 && (
+            <span className="co-chip co-real">
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewReal', { n: ready.length - simulated })}
+            </span>
+          )}
+          {simulated > 0 && (
+            <span className="co-chip co-sim">
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewSim', { n: simulated })}
+            </span>
+          )}
+          {blocked > 0 && (
+            <span className="co-chip co-blocked" title={t('cases.overviewBlockedHint')}>
+              <span className="status-dot" aria-hidden="true" />
+              {t('cases.overviewBlocked', { n: blocked })}
+            </span>
+          )}
+        </div>
+        <span className="spacer" />
+        <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), true)}>
+          {t('cases.all')}
+        </button>
+        <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), false)}>
+          {t('cases.none')}
+        </button>
+        <button className="small" onClick={() => fileInput.current?.click()}>
+          {t('cases.import')}
+        </button>
+        <button className="small" onClick={p.onExportScenarios}>
+          {t('cases.export')}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".yaml,.yml,.json"
+          hidden
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) setImportResult(await p.onImportScenarios(f))
+          }}
+        />
+      </div>
 
       {importResult && (
         <div className={`callout ${importResult.errors.length ? 'warn' : 'info'} small`}>
@@ -535,132 +511,37 @@ export function CasesScreen(p: Props) {
         </div>
       )}
 
-      <div className="mode-card">
-        <div className="mode-row">
-          <div>
-            <strong>{t('cases.mode.title')}</strong>
-            <div className="muted small">{p.mode === 'real' ? t('cases.mode.realHint') : t('cases.mode.simHint')}</div>
-          </div>
-          <Segmented
-            options={[
-              { id: 'real', label: t('common.realApi') },
-              { id: 'simulado', label: t('cases.mode.simulation') },
-            ]}
-            value={p.mode}
-            onChange={p.setMode}
-          />
-        </div>
-        <div className="cases-overview" aria-label={t('cases.overview')}>
-          <span className="co-total">{t('cases.overviewSelected', { n: enabled.length, total: p.cases.length })}</span>
-          {ready.length - simulatedCount > 0 && (
-            <span className="co-chip co-real">
-              <span className="status-dot" aria-hidden="true" />
-              {t('cases.overviewReal', { n: ready.length - simulatedCount })}
-            </span>
-          )}
-          {simulatedCount > 0 && (
-            <span className="co-chip co-sim">
-              <span className="status-dot" aria-hidden="true" />
-              {t('cases.overviewSim', { n: simulatedCount })}
-            </span>
-          )}
-          {blocked > 0 && (
-            <span className="co-chip co-blocked" title={t('cases.overviewBlockedHint')}>
-              <span className="status-dot" aria-hidden="true" />
-              {t('cases.overviewBlocked', { n: blocked })}
-            </span>
-          )}
-        </div>
+      <div className="case-groups">
+        <CaseGroup title={t('tc.happy.title')} hint={t('cases.group.happyHint')} list={general.filter((c) => c.origin === 'arazzo')} defaultOpen ctx={ctx} />
+        <CaseGroup
+          title={t('cases.group.own')}
+          hint={t('cases.group.ownHint')}
+          list={own}
+          defaultOpen
+          ctx={ctx}
+          extra={
+            adding ? (
+              <NewCaseForm
+                wa={wa}
+                base={base}
+                variables={p.variables}
+                onCancel={() => setAdding(false)}
+                onAdd={(tc) => {
+                  p.addCase(tc)
+                  setAdding(false)
+                }}
+              />
+            ) : (
+              <button className="add-case" onClick={() => setAdding(true)}>
+                {t('cases.new.button')}
+              </button>
+            )
+          }
+        />
+        <CaseGroup title={t('cases.group.data')} hint={t('cases.group.dataHint')} list={general.filter((c) => c.origin === 'schema')} defaultOpen={false} ctx={ctx} />
+        <CaseGroup title={t('cases.group.security')} hint={t('cases.group.securityHint')} list={general.filter((c) => c.origin === 'security')} defaultOpen={false} ctx={ctx} />
+        <CaseGroup title={t('cases.group.scenarios')} hint={t('cases.group.scenariosHint')} list={scenarios} defaultOpen={false} ctx={ctx} />
       </div>
-
-      {p.analysis.workflows.map((w, i) => {
-        const list = p.cases.filter((c) => c.workflowId === w.workflow.workflowId)
-        const wfReady = list.filter((c) => c.enabled && runnability(c, p.mode).ok).length
-        return (
-          <Section
-            key={w.workflow.workflowId}
-            title={<span title={w.workflow.workflowId}>{humanizeId(w.workflow.workflowId)}</span>}
-            subtitle={w.workflow.summary}
-            defaultOpen={i === 0}
-            badges={<span className={`badge ${wfReady ? 'b-accent' : 'b-skip'}`}>{t('cases.readyN', { n: wfReady })}</span>}
-            actions={
-              <>
-                <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), true)}>
-                  {t('cases.all')}
-                </button>
-                <button className="link small" onClick={() => p.setMany(list.map((c) => c.id), false)}>
-                  {t('cases.none')}
-                </button>
-              </>
-            }
-          >
-            <WorkflowCases wa={w} list={list} p={p} />
-          </Section>
-        )
-      })}
-
-      {messageSteps.length > 0 && (
-        <div className="callout info small">
-          <strong>{t('cases.messageSteps', { n: messageSteps.length })}</strong>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            {messageSteps.map(({ wf, s }) => (
-              <li key={wf + s.step.stepId}>
-                <MethodBadge method={s.op!.method} /> <code>{s.op!.path}</code>{' '}
-                <span className="muted">
-                  · {wf} / {s.step.stepId}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {mutating.length > 0 && (
-        <div className="callout warn small" ref={confirmRef}>
-          <strong>{t('cases.mutatingEnv', { env: p.envName })}</strong>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            {mutating.map(({ wf, s }) => (
-              <li key={wf + s.step.stepId}>
-                <MethodBadge method={s.op!.method} /> <code>{(p.servers[s.op!.sourceName] || t('cases.noServer')) + s.op!.path}</code>{' '}
-                <span className="muted">
-                  · {wf} / {s.step.stepId}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <label>
-            <input type="checkbox" className="check" checked={p.confirmed} onChange={(e) => p.setConfirmed(e.target.checked)} />
-            {t('cases.confirm')}
-          </label>
-        </div>
-      )}
-
-      <ActionBar
-        left={<button onClick={p.onBack}>{t('common.back')}</button>}
-        info={[
-          t('cases.envShort', { env: p.envName }),
-          t('cases.readyN', { n: ready.length }) + (simulatedCount ? ` ${t('cases.simulatedN', { n: simulatedCount })}` : ''),
-          blocked ? t('cases.selectedBlocked', { n: blocked }) : '',
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-        right={
-          <>
-            {!p.running && ready.length === 0 && <span className="block-reason">{t('cases.block.none')}</span>}
-            {!p.running && ready.length > 0 && needsConfirm && (
-              <span className="block-reason">
-                {t('cases.block.confirm')}{' '}
-                <button className="link small" onClick={goToConfirm}>
-                  {t('cases.block.goConfirm')}
-                </button>
-              </span>
-            )}
-            <button className="primary" disabled={!canRun} onClick={p.onRun}>
-              {p.running ? t('cases.running') : t('cases.run', { n: ready.length })}
-            </button>
-          </>
-        }
-      />
-    </>
+    </div>
   )
 }

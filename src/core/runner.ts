@@ -10,6 +10,7 @@ import { getServerUrl, isAsyncOperation, operationRequestBody, type SecuritySche
 import { validateAgainstContract, validateMessage } from './contract'
 import { NetworkError, type HttpExecutor, type MessageExecutor } from './http'
 import { createSimulatedMessenger } from './simulator'
+import { redactSecrets } from './environments'
 import { t } from '../i18n'
 
 export type StepStatus = 'success' | 'warning' | 'failed' | 'skipped'
@@ -83,6 +84,8 @@ export interface RunOptions {
   signal?: AbortSignal
   onStep?: (r: StepResult) => void
   maxRetryWaitMs?: number
+  /** Valores que se envían pero no se muestran: aparecen como •••• en los resultados. */
+  secrets?: string[]
 }
 
 const MAX_EXECUTIONS = 200
@@ -544,6 +547,15 @@ async function executeMessageStep(
   return result
 }
 
+/** Copia del resultado con los secretos tapados; la petición real se conserva para copiarla como cURL. */
+function hideSecrets(result: StepResult, secrets: string[] = []): StepResult {
+  if (!secrets.length) return result
+  const shown = redactSecrets(result, secrets)
+  const real = result.request && realRequests.get(result.request)
+  if (real && shown.request) realRequests.set(shown.request, real)
+  return shown
+}
+
 function workflowById(project: Project, id: string): Workflow | undefined {
   return project.arazzo.workflows.find((w) => w.workflowId === id)
 }
@@ -691,7 +703,7 @@ export async function runWorkflow(
       result.actionType = action.type
       actions.push({ stepId: step.stepId, name: result.actionName, type: action.type ?? '' })
     }
-    opts.onStep?.(result)
+    opts.onStep?.(hideSecrets(result, opts.secrets))
 
     if (action?.type === 'retry' && !succeeded) {
       const limit = action.retryLimit ?? 1
@@ -780,10 +792,10 @@ export async function runWorkflow(
   return {
     workflowId,
     status,
-    steps: results,
-    outputs,
+    steps: results.map((r) => hideSecrets(r, opts.secrets)),
+    outputs: redactSecrets(outputs, opts.secrets ?? []),
     durationMs: Math.round(performance.now() - started),
-    reason: failure,
+    reason: redactSecrets(failure, opts.secrets ?? []),
     actions,
   }
 }

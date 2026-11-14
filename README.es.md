@@ -130,7 +130,7 @@ Los journeys suelen mezclar llamadas REST con eventos. Los pasos que envían (`s
 | 🛟 **Ayuda de conexión** | Si la API no responde, un panel guía qué revisar (URL, https/http, CORS) con los headers CORS exactos que hacen falta. |
 | ✅ **Elegir workflows** | Selecciona qué workflows probar. Los pasos siguientes solo muestran los elegidos. |
 | 💾 **Sesión guardada** | Tu trabajo, incluidos los cambios al Arazzo, se guarda en este equipo y se ofrece al volver. Las credenciales nunca se guardan. |
-| 🎲 **Generadores** | `{{email}}`, `{{uuid}}`, `{{numero:8}}`, `{{fecha}}`, `{{timestamp}}`, `{{cpf}}`, `{{rut}}`, para repetir casos sin choques de datos. |
+| 🎲 **Generadores** | Variables dinámicas al estilo de Postman generadas con [Faker](https://fakerjs.dev) (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomUserAgent}}`, `{{$guid}}`… 47 en total) más `{{cpf}}`, `{{rut}}` y `{{numero:8}}`, para repetir casos sin choques de datos. Escribe `{{` en cualquier campo para verlas. |
 | 🌙 **Modo oscuro** | Sigue el tema del sistema. |
 
 <details>

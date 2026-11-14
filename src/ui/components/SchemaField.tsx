@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { exampleValue, fieldKind, invalidPaths, isEmptyValue, leavesFirst, missingPaths, normalizeSchema, schemaType, setKey, typeLabel, validateValue, valueSummary } from '../../core/schemaForm'
 import { t } from '../../i18n'
 import { Chevron, Segmented } from './kit'
+import { TemplateInput } from './TemplateInput'
 
 interface Props {
   name: string
@@ -256,21 +257,18 @@ function LeafControl({ schema, value, onChange, label, invalid }: { schema: any;
     )
   }
   if (kind === 'number') {
+    // Texto y no type="number": así también acepta {{variables}}; los números se guardan como número.
     return (
-      <input
+      <TemplateInput
         {...common}
-        type="number"
-        step={schemaType(schema) === 'integer' ? 1 : 'any'}
-        min={schema.minimum}
-        max={schema.maximum}
+        inputMode="decimal"
         placeholder={placeholder}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+        value={value === undefined ? '' : String(value)}
+        onChange={(v) => onChange(v === '' ? undefined : /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : v)}
       />
     )
   }
-  const inputType = schema?.format === 'email' ? 'email' : schema?.format === 'uri' ? 'url' : 'text'
-  return <input {...common} type={inputType} placeholder={placeholder} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)} />
+  return <TemplateInput {...common} placeholder={placeholder} value={value ?? ''} onChange={(v) => onChange(v === '' ? undefined : v)} />
 }
 
 function JsonControl({ value, onChange, label, onError }: { value: any; onChange: (v: any) => void; label: string; onError: (e?: string) => void }) {

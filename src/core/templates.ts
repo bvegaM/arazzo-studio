@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Generadores de datos para que un caso se pueda repetir: un CPF o un email nuevos en cada corrida.
 import { t } from '../i18n'
+import { DYNAMIC_NAMES, generateDynamic, isDynamicName } from './dynamicVars'
 
 function randInt(max: number): number {
   return Math.floor(Math.random() * max)
@@ -90,18 +91,50 @@ function generate(name: string, arg?: string): string | undefined {
   return undefined
 }
 
-const TOKEN = /\{\{\s*([a-z]+)(?::(\d+))?\s*\}\}/gi
+const TOKEN = /\{\{\s*(\$?[A-Za-z_][\w.-]*)(?::(\d+))?\s*\}\}/g
 
-/** Reemplaza {{generador}} en cualquier valor. Los tokens desconocidos se dejan tal cual. */
-export function resolveTemplates(value: any): any {
+/** Nombres de los generadores (en los dos idiomas): una variable con el mismo nombre los tapa. */
+export const GENERATOR_NAMES = ['email', 'cpf', 'rut', 'uuid', 'numero', 'number', 'fecha', 'date', 'timestamp']
+
+/** Si {{nombre}} se genera solo: un generador propio o una variable dinámica ($randomFirstName…). */
+export function isGeneratorName(name: string): boolean {
+  return isDynamicName(name) || GENERATOR_NAMES.includes(name.toLowerCase())
+}
+
+/** Variables dinámicas con su descripción, para sugerirlas. */
+export function dynamicHelp(): { token: string; description: string }[] {
+  return DYNAMIC_NAMES.map((name) => ({ token: `{{${name}}}`, description: t(`dyn.${name}` as Parameters<typeof t>[0]) }))
+}
+
+/** Un valor de ejemplo de una variable dinámica (para mostrarlo en las sugerencias). */
+export function dynamicExample(name: string): string | undefined {
+  return generateDynamic(name)
+}
+
+/**
+ * Reemplaza {{variable}} (del ambiente activo) y {{generador}} en cualquier valor.
+ * Las variables tienen prioridad; los tokens desconocidos se dejan tal cual.
+ */
+export function resolveTemplates(value: any, variables: Record<string, string> = {}): any {
   if (typeof value === 'string') {
-    return value.replace(TOKEN, (all, name: string, arg?: string) => generate(name.toLowerCase(), arg) ?? all)
+    return value.replace(TOKEN, (all, name: string, arg?: string) =>
+      arg === undefined && Object.hasOwn(variables, name)
+        ? variables[name]
+        : (generateDynamic(name) ?? (name.startsWith('$') ? undefined : generate(name.toLowerCase(), arg)) ?? all),
+    )
   }
-  if (Array.isArray(value)) return value.map(resolveTemplates)
+  if (Array.isArray(value)) return value.map((v) => resolveTemplates(v, variables))
   if (value && typeof value === 'object') {
     const out: any = {}
-    for (const [k, v] of Object.entries(value)) out[k] = resolveTemplates(v)
+    for (const [k, v] of Object.entries(value)) out[k] = resolveTemplates(v, variables)
     return out
   }
   return value
+}
+
+/** Los {{nombre}} de un valor que no son variables ni generadores (para avisar antes de enviarlos). */
+export function unknownTemplates(value: unknown, variables: Record<string, string> = {}): string[] {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '')
+  const found = [...text.matchAll(TOKEN)].map((m) => m[1]).filter((n) => !Object.hasOwn(variables, n) && !isGeneratorName(n))
+  return [...new Set(found)]
 }

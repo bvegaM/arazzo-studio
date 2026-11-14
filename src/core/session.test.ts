@@ -13,7 +13,18 @@ const state: SessionState = {
   selected: 'wf',
   mode: 'real',
   screen: 3,
-  environments: [{ id: 'e1', name: 'QA', servers: { api: 'https://qa' }, credentials: { 'api:bearer': 'secreto' } }],
+  environments: [
+    {
+      id: 'e1',
+      name: 'QA',
+      servers: { api: 'https://qa' },
+      credentials: { 'api:bearer': 'secreto' },
+      variables: [
+        { name: 'clientId', value: 'cli-123', secret: false },
+        { name: 'apiKey', value: 'clave-super-privada', secret: true },
+      ],
+    },
+  ],
   activeEnv: 'e1',
 }
 
@@ -22,10 +33,21 @@ describe('sesión guardada', () => {
 
   it('no guarda credenciales ni valores sensibles', () => {
     const text = JSON.stringify(saved)
-    for (const secret of ['secreto', 'p4ss', '"k"', '"t"']) expect(text).not.toContain(secret)
+    for (const secret of ['secreto', 'p4ss', '"k"', '"t"', 'clave-super-privada']) expect(text).not.toContain(secret)
     expect(saved.inputs.wf).toEqual({ customerId: 'C1', nested: { ok: 1 } })
     expect(saved.cases[0].inputOverrides).toEqual({ limit: 5 })
-    expect(saved.environments).toEqual([{ id: 'e1', name: 'QA', servers: { api: 'https://qa' } }])
+    // Las variables se guardan; de los secretos, solo el nombre.
+    expect(saved.environments).toEqual([
+      {
+        id: 'e1',
+        name: 'QA',
+        servers: { api: 'https://qa' },
+        variables: [
+          { name: 'clientId', value: 'cli-123', secret: false },
+          { name: 'apiKey', value: '', secret: true },
+        ],
+      },
+    ])
   })
 
   it('guarda versión y fecha', () => {

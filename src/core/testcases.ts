@@ -290,14 +290,14 @@ function messageScenarioCases(wa: WorkflowAnalysis, rs: ResolvedStep): TestCase[
   return out
 }
 
-/** Inputs con los que corre el caso: base → cambios del caso → datos propios → generadores. */
-export function applyCaseInputs(tc: TestCase, inputs: Record<string, any>): Record<string, any> {
+/** Inputs con los que corre el caso: base → cambios del caso → datos propios → variables y generadores. */
+export function applyCaseInputs(tc: TestCase, inputs: Record<string, any>, variables: Record<string, string> = {}): Record<string, any> {
   const out = { ...inputs, ...(tc.inputOverrides ?? {}) }
   if (tc.omitInput) delete out[tc.omitInput]
   for (const k of tc.omitInputs ?? []) delete out[k]
   if (tc.setInput) out[tc.setInput.name] = tc.setInput.value
   for (const [k, v] of Object.entries(out)) if (v === undefined || v === '') delete out[k]
-  return resolveTemplates(out)
+  return resolveTemplates(out, variables)
 }
 
 /** Texto corto que dice con qué datos corre el caso. */

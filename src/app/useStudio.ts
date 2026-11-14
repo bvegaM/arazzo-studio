@@ -20,7 +20,9 @@ import {
 } from '../core/testcases'
 import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
-import { fillServers, newEnvironment, uniqueName, type Environment } from '../core/environments'
+import { fillServers, newEnvironment, redactSecrets, secretValues, uniqueName, variableValues, type Environment, type EnvVariable } from '../core/environments'
+import { resolveTemplates } from '../core/templates'
+import { loadFaker } from '../core/dynamicVars'
 import { readSavedSession, toSavedSession, type SavedSession } from '../core/session'
 import { download, readTextFiles, saveTextFile, type SaveResult } from '../lib/browser'
 import { createDesktopExecutor, desktop } from '../lib/desktop'
@@ -28,9 +30,6 @@ import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
 import { EXAMPLES, type ExampleId } from './example'
-
-export const Screen = { Load: 0, Contracts: 1, Params: 2, Cases: 3, Results: 4 } as const
-export type Screen = (typeof Screen)[keyof typeof Screen]
 
 type Inputs = Record<string, Record<string, any>>
 
@@ -40,10 +39,11 @@ const SESSION_KEY = 'session'
 const realExecutor = desktop ? createDesktopExecutor(desktop) : fetchExecutor
 
 export function useStudio() {
-  const [screen, setScreenState] = useState<Screen>(Screen.Load)
   const [files, setFiles] = useState<ParsedFile[]>([])
   // Texto original de lo cargado, para poder guardar la sesión y reconstruirla.
   const [texts, setTexts] = useState<LoadedFile[]>([])
+  // Texto de cada archivo tal como se cargó, para que el editor pueda descartar los cambios.
+  const [originals, setOriginals] = useState<Record<string, string>>({})
   const [attachments, setAttachments] = useState<SavedSession['attachments']>([])
   const [remotes, setRemotes] = useState<string[]>([])
   // Escritorio: carpeta abierta y ruta en disco de cada archivo cargado desde ella.
@@ -60,8 +60,6 @@ export function useStudio() {
     return { list: [first], active: first.id }
   })
   const [cases, setCases] = useState<TestCase[]>([])
-  // Workflows que el usuario sacó de las pruebas en el paso 2 (por defecto se prueban todos).
-  const [skipped, setSkipped] = useState<string[]>([])
   const [confirmed, setConfirmed] = useState(false)
   const [mode, setMode] = useState<RunMode>('real')
   const [runs, setRuns] = useState<CaseRun[]>([])
@@ -88,12 +86,14 @@ export function useStudio() {
       setConfirmed(false)
       setEnvs((prev) => {
         const current = prev.list.find((e) => e.id === prev.active) ?? prev.list[0]
-        const env = newEnvironment(uniqueName(name, prev.list.map((e) => e.name)), current.servers)
+        const env = newEnvironment(uniqueName(name, prev.list.map((e) => e.name)), current.servers, current.variables)
         return { list: [...prev.list, env], active: env.id }
       })
     },
     rename: (id: string, name: string) =>
       setEnvs((prev) => ({ ...prev, list: prev.list.map((e) => (e.id === id && name.trim() ? { ...e, name: name.trim() } : e)) })),
+    /** Reemplaza las variables y secretos del ambiente activo. */
+    setVariables: (variables: EnvVariable[]) => updateActiveEnv(() => ({ variables })),
     remove: (id: string) => {
       if (id === envs.active) setConfirmed(false)
       setEnvs((prev) => {
@@ -104,14 +104,6 @@ export function useStudio() {
     },
   }
 
-  // Lo que ven los pasos 3 a 5: solo los workflows marcados para probar.
-  const testAnalysis = analysis && skipped.length ? { ...analysis, workflows: analysis.workflows.filter((w) => !skipped.includes(w.workflow.workflowId)) } : analysis
-  const testCases = skipped.length ? cases.filter((c) => !skipped.includes(c.workflowId)) : cases
-
-  function goTo(s: Screen) {
-    setScreenState(s)
-    window.scrollTo(0, 0)
-  }
 
   /** Cambia el proyecto y recalcula lo que depende de él: análisis, valores por defecto, servidores y casos. */
   function applyProject(p: Project | undefined) {
@@ -146,6 +138,8 @@ export function useStudio() {
     const all = replace ? parsed : [...files.filter((f) => !parsed.some((p) => p.name === f.name)), ...parsed]
     setFiles(all)
     setTexts((prev) => (replace ? loaded : [...prev.filter((f) => !loaded.some((l) => l.name === f.name)), ...loaded]))
+    const loadedTexts = Object.fromEntries(loaded.map((f) => [f.name, f.text]))
+    setOriginals((prev) => (replace ? loadedTexts : { ...prev, ...loadedTexts }))
     if (replace) {
       setAttachments([])
       setRemotes([])
@@ -240,17 +234,18 @@ export function useStudio() {
         remotes,
         inputs,
         cases,
-        skipped,
+        // Campos del antiguo asistente: se guardan vacíos para que la sesión siga siendo compatible.
+        skipped: [],
         selected,
         mode,
-        screen,
+        screen: 0,
         environments: envs.list,
         activeEnv: envs.active,
       })
       void storeSet(SESSION_KEY, session)
     }, 500)
     return () => clearTimeout(timer)
-  }, [project, savedSession, texts, attachments, remotes, inputs, cases, skipped, selected, mode, screen, envs])
+  }, [project, savedSession, texts, attachments, remotes, inputs, cases, selected, mode, envs])
 
   /** Continúa la sesión guardada: vuelve a armar el proyecto y recupera las elecciones del usuario. */
   async function restoreSession() {
@@ -259,16 +254,16 @@ export function useStudio() {
     setSavedSession(undefined)
     setInputs(saved.inputs)
     setCases(saved.cases)
-    setSkipped(saved.skipped)
     setSelected(saved.selected)
     setMode(saved.mode)
     if (saved.environments.length) {
-      const list = saved.environments.map((e) => ({ ...e, credentials: {} }))
+      const list = saved.environments.map((e) => ({ ...e, credentials: {}, variables: e.variables ?? [] }))
       setEnvs({ list, active: list.some((e) => e.id === saved.activeEnv) ? saved.activeEnv : list[0].id })
     }
     const parsed = saved.files.map(parseFile)
     const attached = saved.attachments.map((a) => ({ source: a.source, parsed: parseFile(a.file) }))
     setTexts(saved.files)
+    setOriginals(Object.fromEntries(saved.files.map((f) => [f.name, f.text])))
     setAttachments(saved.attachments)
     setFiles([...parsed, ...attached.map((a) => a.parsed)])
     const built = buildProject(parsed)
@@ -278,8 +273,6 @@ export function useStudio() {
     setRemotes(saved.remotes)
     applyProject(p)
     setErrors(built.errors)
-    // Los resultados no se guardan: si estaba en el paso 5, vuelve a los casos.
-    goTo(p ? (Math.min(saved.screen, Screen.Cases) as Screen) : Screen.Load)
   }
 
   function discardSession() {
@@ -298,39 +291,48 @@ export function useStudio() {
     setErrors([])
     setInputs({})
     setCases([])
-    setSkipped([])
     setRuns([])
     setRunEnv(undefined)
     setConfirmed(false)
-    goTo(Screen.Load)
   }
 
-  /** Ejecuta los casos elegidos; con `runMode` se fuerza un modo (ej. reintentar en simulación). */
-  async function runAll(runMode: RunMode = mode) {
-    if (!project || !analysis) return
+  /**
+   * Ejecuta los casos elegidos de un journey (o solo `onlyIds`); con `runMode` se fuerza un modo
+   * (ej. reintentar en simulación). Los resultados de los demás journeys se conservan.
+   */
+  async function runJourney(workflowId: string, runMode: RunMode = mode, onlyIds?: string[]) {
+    if (!project || !analysis || running) return
     if (runMode !== mode) setMode(runMode)
-    const selectedCases = testCases.filter((c) => c.enabled && runnability(c, runMode).ok)
-    setRuns(selectedCases.map((tc) => ({ tc, state: 'pending', steps: [] })))
-    goTo(Screen.Results)
-    setRunEnv({ name: activeEnv.name, servers })
+    const selectedCases = cases.filter(
+      (c) => c.workflowId === workflowId && (onlyIds ? onlyIds.includes(c.id) : c.enabled) && runnability(c, runMode).ok,
+    )
+    if (!selectedCases.length) return
+    setRuns((prev) => [...prev.filter((r) => r.tc.workflowId !== workflowId), ...selectedCases.map((tc) => ({ tc, state: 'pending' as const, steps: [] }))])
+    // {{variables}} del ambiente en URLs y credenciales; los secretos se envían pero no se muestran.
+    await loadFaker()
+    const variables = variableValues(activeEnv)
+    const runServers: Record<string, string> = resolveTemplates(servers, variables)
+    const runCredentials: Record<string, string> = resolveTemplates(credentials, variables)
+    const secrets = secretValues({ variables: activeEnv.variables, credentials: runCredentials })
+    setRunEnv({ name: activeEnv.name, servers: runServers })
     setRunning(true)
     const controller = new AbortController()
     abort.current = controller
 
-    for (let i = 0; i < selectedCases.length; i++) {
+    for (const tc of selectedCases) {
       if (controller.signal.aborted) break
-      const tc = selectedCases[i]
-      const update = (patch: Partial<CaseRun>) => setRuns((rs) => rs.map((r, n) => (n === i ? { ...r, ...patch } : r)))
+      const update = (patch: Partial<CaseRun>) => setRuns((rs) => rs.map((r) => (r.tc.id === tc.id ? { ...r, ...patch } : r)))
       update({ state: 'running' })
       const live: CaseRun['steps'] = []
       const wf = project.arazzo.workflows.find((w) => w.workflowId === tc.workflowId)
       const simulate = isSimulated(tc, runMode)
-      const inputsUsed = applyCaseInputs(tc, inputs[tc.workflowId] ?? {})
-      update({ inputsUsed, simulated: simulate })
+      const inputsUsed = applyCaseInputs(tc, inputs[tc.workflowId] ?? {}, variables)
+      update({ inputsUsed: redactSecrets(inputsUsed, secrets), simulated: simulate })
       const result = await runWorkflow(project, analysis, tc.workflowId, {
         inputs: inputsUsed,
-        credentials,
-        servers,
+        credentials: runCredentials,
+        servers: runServers,
+        secrets,
         dropAuth: tc.dropAuth,
         executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : realExecutor,
         messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
@@ -352,14 +354,6 @@ export function useStudio() {
     setLocale(l)
     document.documentElement.lang = l
     if (project) applyProject(project)
-  }
-
-  function toggleWorkflow(id: string, include: boolean) {
-    setSkipped((prev) => (include ? prev.filter((x) => x !== id) : [...new Set([...prev, id])]))
-  }
-
-  function setAllWorkflows(include: boolean) {
-    setSkipped(include ? [] : (analysis?.workflows.map((w) => w.workflow.workflowId) ?? []))
   }
 
   function cancelRun() {
@@ -403,17 +397,11 @@ export function useStudio() {
   }
 
   return {
-    screen,
-    goTo,
     locale,
     changeLocale,
     files,
     project,
     analysis,
-    testAnalysis,
-    skipped,
-    toggleWorkflow,
-    setAllWorkflows,
     errors,
     selected,
     setSelected,
@@ -430,7 +418,6 @@ export function useStudio() {
       updateActiveEnv((e) => ({ servers: { ...e.servers, [n]: v } }))
     },
     cases,
-    testCases,
     caseActions,
     mode,
     setMode,
@@ -444,6 +431,7 @@ export function useStudio() {
     addFiles,
     attachFile,
     arazzoText: project ? texts.find((f) => f.name === project.arazzoFileName)?.text : undefined,
+    arazzoOriginal: project ? originals[project.arazzoFileName] : undefined,
     editArazzo,
     saveArazzo,
     isDesktop: !!desktop,
@@ -452,7 +440,7 @@ export function useStudio() {
     fetchRemote,
     loadExample,
     reset,
-    runAll,
+    runJourney,
     cancelRun,
     exportReport,
     exportScenariosFile,

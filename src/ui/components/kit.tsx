@@ -93,40 +93,6 @@ export function Pill({ active, onClick, children }: { active: boolean; onClick: 
   )
 }
 
-export function PageHeader({ step, title, description, actions }: { step: number; title: string; description?: ReactNode; actions?: ReactNode }) {
-  return (
-    <header className="page-head">
-      <div>
-        <div className="eyebrow">{t('kit.stepOf', { step, total: 5 })}</div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
-      {actions && <div className="page-actions">{actions}</div>}
-    </header>
-  )
-}
-
-export function ActionBar({ left, right, info }: { left?: ReactNode; right?: ReactNode; info?: ReactNode }) {
-  return (
-    <div className="action-bar">
-      <div className="action-bar-inner">
-        <div>{left}</div>
-        <div className="action-bar-info">{info}</div>
-        <div className="row">{right}</div>
-      </div>
-    </div>
-  )
-}
-
-export function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'ok' | 'err' | 'warn' }) {
-  return (
-    <div className={`metric ${tone ? `m-${tone}` : ''}`}>
-      <div className="metric-value">{value}</div>
-      <div className="metric-label">{label}</div>
-    </div>
-  )
-}
-
 /** Ícono de línea (path SVG de 24×24) que toma el color del texto. */
 export function Icon({ d, size = 15 }: { d: string; size?: number }) {
   return (

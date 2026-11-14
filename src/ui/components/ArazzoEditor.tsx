@@ -30,7 +30,10 @@ interface Props {
   onChange: (text: string) => string | undefined
   /** Guarda el texto: sobre el archivo original (escritorio), donde elija el usuario o como descarga. */
   onSave: (text: string) => Promise<SaveResult>
-  onClose: () => void
+  /** Sin él, el editor no muestra el botón de cerrar (vive en una pestaña). */
+  onClose?: () => void
+  /** Mostrar el diagrama junto a los problemas (por defecto sí). */
+  showDiagram?: boolean
 }
 
 // Colores de la app (variables CSS): el resaltado sigue el tema claro u oscuro.
@@ -187,13 +190,15 @@ export function ArazzoEditor(p: Props) {
           >
             <Icon d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14" /> {t('editor.save')}
           </button>
-          <button onClick={p.onClose}>
-            <Icon d="M6 6l12 12M18 6L6 18" /> {t('editor.close')}
-          </button>
+          {p.onClose && (
+            <button onClick={p.onClose}>
+              <Icon d="M6 6l12 12M18 6L6 18" /> {t('editor.close')}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="editor-body">
+      <div className={`editor-body ${p.showDiagram === false ? 'stacked' : ''}`}>
         <div className="editor-code" ref={host} />
         <aside className="editor-side">
           <h4>{t('editor.problems')}</h4>
@@ -217,7 +222,7 @@ export function ArazzoEditor(p: Props) {
               </ul>
             )}
           </div>
-          {wa && (
+          {wa && p.showDiagram !== false && (
             <>
               <h4>
                 {t('contracts.diagram')} · <code>{wa.workflow.workflowId}</code>

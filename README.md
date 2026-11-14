@@ -130,7 +130,7 @@ Journeys often mix REST calls with events. Steps that `send` or `receive` an Asy
 | 🛟 **Connection help** | If the API does not answer, a guided panel explains what to check (URL, https/http, CORS) and gives you the exact CORS headers to add. |
 | ✅ **Pick your workflows** | Select which workflows to test. The following steps only show the ones you picked. |
 | 💾 **Session restore** | Your work, including edits to the Arazzo, is saved on this device and offered back when you return. Credentials are never stored. |
-| 🎲 **Generators** | `{{email}}`, `{{uuid}}`, `{{number:8}}`, `{{date}}`, `{{timestamp}}`, `{{cpf}}`, `{{rut}}`, so cases can be repeated without clashes. |
+| 🎲 **Generators** | Postman-style dynamic variables powered by [Faker](https://fakerjs.dev) (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomUserAgent}}`, `{{$guid}}`… 47 in total) plus `{{cpf}}`, `{{rut}}` and `{{number:8}}`, so cases can be repeated without clashes. Type `{{` in any field to see them. |
 | 🌙 **Dark mode** | Follows your system theme. |
 
 <details>
