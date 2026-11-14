@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { ParsedFile, Project } from '../../core/loader'
 import { isRemote } from '../../core/loader'
 import type { SavedSession } from '../../core/session'
+import type { ExampleId } from '../../app/example'
 import { timeAgo } from '../../core/format'
 import { t } from '../../i18n'
 import { ActionBar, PageHeader, Section } from '../components/kit'
@@ -13,7 +14,7 @@ interface Props {
   onFiles: (files: File[]) => void
   onAttach: (sourceName: string, file: File) => void
   onFetchRemote: (sourceName: string) => void
-  onExample: () => void
+  onExample: (id: ExampleId) => void
   onReset: () => void
   onNext: () => void
   savedSession?: SavedSession
@@ -47,13 +48,15 @@ function ResumeBanner({ session, onRestore, onDiscard }: { session: SavedSession
   )
 }
 
-const KIND_LABEL = { arazzo: 'Arazzo', openapi: 'OpenAPI' }
+const KIND_LABEL = { arazzo: 'Arazzo', openapi: 'OpenAPI', asyncapi: 'AsyncAPI' }
 
 export function LoadScreen(p: Props) {
   const [over, setOver] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const sources = p.project?.sources ?? []
   const missing = sources.filter((s) => s.status !== 'loaded')
+  // Contratos cargados a los que les faltan archivos de $ref: tampoco están completos.
+  const missingRefs = sources.filter((s) => s.status === 'loaded' && s.missingRefs?.length).length + (p.project?.arazzoMissingRefs?.length ? 1 : 0)
 
   return (
     <>
@@ -93,9 +96,14 @@ export function LoadScreen(p: Props) {
             {t('load.choose')}
           </button>
           {!p.files.length && (
-            <button className="ghost" onClick={p.onExample}>
-              {t('load.example')}
-            </button>
+            <>
+              <button className="ghost" onClick={() => p.onExample('cards')}>
+                {t('load.example')}
+              </button>
+              <button className="ghost" onClick={() => p.onExample('miles')} title={t('load.exampleMilesHint')}>
+                {t('load.exampleMiles')}
+              </button>
+            </>
           )}
         </div>
         <input
@@ -144,8 +152,12 @@ export function LoadScreen(p: Props) {
               {p.project.arazzoFileName} · {t('load.version', { version: String(p.project.arazzo.arazzo) })} · {t('nav.workflows', { n: p.project.arazzo.workflows?.length ?? 0 })}
             </div>
           </div>
-          <span className={`badge ${missing.length ? 'b-err' : 'b-ok'}`}>
-            {missing.length ? `✕ ${t('load.missingContracts', { n: missing.length })}` : `✓ ${t('load.contractsComplete')}`}
+          <span className={`badge ${missing.length || missingRefs ? 'b-err' : 'b-ok'}`}>
+            {missing.length
+              ? `✕ ${t('load.missingContracts', { n: missing.length })}`
+              : missingRefs
+                ? `✕ ${t('load.missingRefFiles', { n: missingRefs })}`
+                : `✓ ${t('load.contractsComplete')}`}
           </span>
         </div>
       )}
@@ -155,8 +167,8 @@ export function LoadScreen(p: Props) {
           title={t('load.sourcesTitle')}
           badges={<span className="badge b-skip">{sources.length - missing.length}/{sources.length}</span>}
           subtitle={missing.length ? t('load.missingList', { names: missing.map((s) => s.name).join(', ') }) : t('load.allLinked')}
-          defaultOpen={missing.length > 0}
-          tone={missing.length ? 'err' : undefined}
+          defaultOpen={missing.length > 0 || missingRefs > 0}
+          tone={missing.length || missingRefs ? 'err' : undefined}
         >
           <ul className="list">
             {sources.map((s) => (
@@ -171,6 +183,9 @@ export function LoadScreen(p: Props) {
                     {s.fileName && s.status === 'loaded' && <> ← {s.fileName}</>}
                   </div>
                   {s.error && <div className="small" style={{ color: 'var(--err)' }}>{s.error}</div>}
+                  {s.status === 'loaded' && s.missingRefs?.length ? (
+                    <div className="small" style={{ color: 'var(--err)' }}>{t('load.missingRefs', { files: s.missingRefs.join(', ') })}</div>
+                  ) : null}
                 </div>
                 {s.status !== 'loaded' && (
                   <div className="row">
@@ -201,7 +216,14 @@ export function LoadScreen(p: Props) {
           <ul className="list">
             {p.files.map((f) => (
               <li key={f.name}>
-                <span className={`badge ${f.kind === 'unknown' ? 'b-err' : 'b-accent'}`}>{f.kind === 'unknown' ? t('load.unknownKind') : KIND_LABEL[f.kind]}</span>
+                {f.kind !== 'unknown' ? (
+                  <span className="badge b-accent">{KIND_LABEL[f.kind]}</span>
+                ) : f.error ? (
+                  <span className="badge b-err">{t('load.unknownKind')}</span>
+                ) : (
+                  // YAML/JSON sin cabecera de contrato: puede ser un archivo al que apuntan los $ref.
+                  <span className="badge b-skip">{t('load.refFile')}</span>
+                )}
                 <code className="grow">{f.name}</code>
                 {f.doc?.info?.title && <span className="muted small">{f.doc.info.title}</span>}
               </li>
@@ -212,7 +234,7 @@ export function LoadScreen(p: Props) {
 
       {p.project && (
         <ActionBar
-          info={missing.length ? t('load.continueWarning') : undefined}
+          info={missing.length ? t('load.continueWarning') : missingRefs ? t('load.continueRefsWarning') : undefined}
           right={
             <button className="primary" onClick={p.onNext}>
               {t('load.next')}

@@ -5,7 +5,7 @@ import { attachSource, buildProject, fetchRemoteSource, parseFile, type LoadedFi
 import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
 import { fetchExecutor } from '../core/http'
-import { createSimulatedExecutor } from '../core/simulator'
+import { createSimulatedExecutor, createSimulatedMessenger } from '../core/simulator'
 import { runWorkflow } from '../core/runner'
 import {
   applyCaseInputs,
@@ -26,7 +26,7 @@ import { download, readTextFiles } from '../lib/browser'
 import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
-import { EXAMPLE_FILES } from './example'
+import { EXAMPLES, type ExampleId } from './example'
 
 export const Screen = { Load: 0, Contracts: 1, Params: 2, Cases: 3, Results: 4 } as const
 export type Screen = (typeof Screen)[keyof typeof Screen]
@@ -153,8 +153,8 @@ export function useStudio() {
     loadFiles(await readTextFiles(fs), false)
   }
 
-  function loadExample() {
-    loadFiles(EXAMPLE_FILES, true)
+  function loadExample(id: ExampleId = 'cards') {
+    loadFiles(EXAMPLES[id], true)
   }
 
   async function attachFile(sourceName: string, f: File) {
@@ -284,6 +284,7 @@ export function useStudio() {
         servers,
         dropAuth: tc.dropAuth,
         executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : fetchExecutor,
+        messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
         onStep: (s) => {

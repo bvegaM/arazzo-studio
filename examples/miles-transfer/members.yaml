@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Members API
+  version: 1.0.0
+  description: Socios de un programa de fidelización (ejemplo de Arazzo Studio).
+servers:
+  - url: http://localhost:4010
+security:
+  - bearerAuth: []
+paths:
+  /members:
+    post:
+      operationId: createMember
+      summary: Inscribe un socio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'member-schemas.yaml#/NewMember'
+      responses:
+        '201':
+          description: Socio creado
+          content:
+            application/json:
+              schema:
+                $ref: 'member-schemas.yaml#/Member'
+              example:
+                member: { id: MBR-1001, tier: BLUE }
+                miles: 0
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: 'member-schemas.yaml#/Error'
+              example: { code: INVALID_FIELD, message: email no es válido }
+        '409':
+          description: Ya existe un socio con ese email
+          content:
+            application/json:
+              schema:
+                $ref: 'member-schemas.yaml#/Error'
+              example: { code: ALREADY_MEMBER, message: El email ya está inscrito }
+  /members/{memberId}:
+    get:
+      operationId: getMember
+      summary: Consulta un socio
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: expand
+          in: query
+          schema: { type: string, enum: [benefits] }
+      responses:
+        '200':
+          description: Socio
+          content:
+            application/json:
+              schema:
+                $ref: 'member-schemas.yaml#/Member'
+              example:
+                member: { id: MBR-1001, tier: BLUE }
+                miles: 500
+                benefits: [LOUNGE_ACCESS]
+        '404':
+          description: No existe
+          content:
+            application/json:
+              schema:
+                $ref: 'member-schemas.yaml#/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { decodePointerSegment, getByPointer } from './jsonPointer'
 import type { Project, SourceState } from './loader'
+import { isAsyncApi, listAsyncOperations, type AsyncMessage } from './asyncapi'
 
 export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 export const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
@@ -13,6 +14,16 @@ export interface OperationRef {
   operation: any
   pathItem: any
   doc: any
+  /** 'async' para operaciones de AsyncAPI (method = send | receive, path = dirección del canal). */
+  protocol?: 'http' | 'async'
+  /** AsyncAPI: nombre del canal, puntero de la operación y mensajes posibles. */
+  channel?: string
+  pointer?: string
+  messages?: AsyncMessage[]
+}
+
+export function isAsyncOperation(op: OperationRef | undefined): boolean {
+  return op?.protocol === 'async'
 }
 
 /** Resuelve $ref locales (#/...) de forma profunda. Las referencias externas se dejan tal cual. */
@@ -34,6 +45,7 @@ export function deref(doc: any, node: any, depth = 0, seen: string[] = []): any 
 
 export function listOperations(source: SourceState): OperationRef[] {
   const doc = source.doc
+  if (isAsyncApi(doc)) return listAsyncOperations(source)
   if (!doc?.paths) return []
   const ops: OperationRef[] = []
   for (const [path, rawItem] of Object.entries<any>(doc.paths)) {
@@ -115,19 +127,44 @@ export function findByOperationPath(project: Project, operationPath: string): Op
     pointer = operationPath.slice(idx + 1)
   }
   const segs = pointer.replace(/^\//, '').split('/').map(decodePointerSegment)
-  if (segs.length < 3 || segs[0] !== 'paths') return undefined
-  const path = segs[1]
-  const method = segs[2].toLowerCase()
   for (const s of project.sources) {
     if (s.status !== 'loaded') continue
     if (sourceName && s.name !== sourceName) continue
-    const op = listOperations(s).find((o) => o.path === path && o.method === method)
+    if (isAsyncApi(s.doc)) {
+      // AsyncAPI: '#/operations/<id>' (3.x) o '#/channels/<canal>/publish|subscribe' (2.x).
+      const op = listAsyncOperations(s).find((o) => o.pointer === `/${pointer.replace(/^\//, '')}`)
+      if (op) return op
+      continue
+    }
+    if (segs.length < 3 || segs[0] !== 'paths') continue
+    const op = listOperations(s).find((o) => o.path === segs[1] && o.method === segs[2].toLowerCase())
     if (op) return op
   }
   return undefined
 }
 
+/**
+ * Arazzo 1.1 channelPath: '{$sourceDescriptions.<nombre>.url}#/channels/<canal>'.
+ * Un canal puede tener una operación send y otra receive: se elige la que pide `action`.
+ */
+export function findByChannelPath(project: Project, channelPath: string, action?: string): OperationRef[] {
+  const m = channelPath.match(/\$sourceDescriptions\.([^.}]+)\.url\}?#(.*)$/)
+  const idx = channelPath.indexOf('#')
+  const sourceName = m?.[1]
+  const pointer = m ? m[2] : idx >= 0 ? channelPath.slice(idx + 1) : ''
+  const segs = pointer.replace(/^\//, '').split('/').map(decodePointerSegment)
+  if (segs.length < 2 || segs[0] !== 'channels') return []
+  const ops = project.sources
+    .filter((s) => s.status === 'loaded' && isAsyncApi(s.doc) && (!sourceName || s.name === sourceName))
+    .flatMap(listAsyncOperations)
+    .filter((o) => o.channel === segs[1])
+  const byAction = action ? ops.filter((o) => o.method === action) : ops
+  return byAction.length ? byAction : ops
+}
+
 export function getServerUrl(source: SourceState | undefined): string {
+  // Los servidores de AsyncAPI son brokers (Kafka, MQTT…): el navegador no se conecta a ellos.
+  if (isAsyncApi(source?.doc)) return ''
   const server = source?.doc?.servers?.[0]
   if (!server?.url) return ''
   let url: string = server.url
@@ -191,6 +228,7 @@ export interface SecurityScheme {
 }
 
 export function operationSecurity(op: OperationRef): SecurityScheme[] {
+  if (isAsyncOperation(op)) return []
   const reqs: any[] = op.operation?.security ?? op.doc?.security ?? []
   if (!reqs.length) return []
   // Varias alternativas (OR): se toma la primera que no sea vacía.

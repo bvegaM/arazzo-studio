@@ -6,7 +6,7 @@
 
 **Run and test [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflows against real APIs, right in your browser.**
 
-Load an Arazzo file and its OpenAPI contracts. Arazzo Studio turns them into a visual flow, generates the test cases for you and explains every result in plain words.
+Load an Arazzo file and its OpenAPI and AsyncAPI contracts. Arazzo Studio turns them into a visual flow, generates the test cases for you and explains every result in plain words.
 
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -15,8 +15,9 @@ Load an Arazzo file and its OpenAPI contracts. Arazzo Studio turns them into a v
 [![Vitest](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
 [![oxlint](https://img.shields.io/badge/lint-oxlint-2b9bd6)](https://oxc.rs)
 <br>
-[![Arazzo](https://img.shields.io/badge/Arazzo-1.0-6BA543)](https://spec.openapis.org/arazzo/latest.html)
+[![Arazzo](https://img.shields.io/badge/Arazzo-1.0%20%7C%201.1-6BA543)](https://spec.openapis.org/arazzo/latest.html)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA543?logo=openapiinitiative&logoColor=white)](https://spec.openapis.org/oas/latest.html)
+[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-2.x%20%7C%203.x-6BA543)](https://www.asyncapi.com/docs/reference/specification/latest)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-93C83D)](#languages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -61,7 +62,7 @@ Arazzo Studio closes that gap without writing test code:
     <td width="50%" valign="top">
       <img src="docs/screenshots/load.png" alt="Load screen with drag and drop and a three-step guide">
       <h3>1 · Load</h3>
-      Drop the Arazzo file and the OpenAPI files it references. Missing contracts are pointed out, and they can be attached by hand or fetched from their URL.
+      Drop the Arazzo file, the OpenAPI and AsyncAPI files it references and any file they point to with <code>$ref</code>. Missing contracts and referenced files are pointed out, and contracts can be attached by hand or fetched from their URL.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/defaults.png" alt="Form generated from the inputs schema, with nested objects and lists">
@@ -147,6 +148,8 @@ flowchart LR
 4. **Results.** Every case ends with a verdict (passed, failed or inconclusive) and a reason in plain words.
 
 > [!IMPORTANT]
+> AsyncAPI steps (`send` / `receive`) are always simulated from the contract examples and schemas: a browser cannot connect to a broker such as Kafka, AMQP or MQTT. They are marked as simulated in the results, also when the rest of the workflow runs against the real API.
+>
 > Requests are sent from the browser, so the API under test must allow **CORS** from the app's origin (for example `http://localhost:5173`) and list the headers your workflows send in `Access-Control-Allow-Headers`. When a request is blocked, the app shows a guided panel with the exact headers to add. Browsers also cannot send cookies or the `Host` header, and they only read the response headers the API exposes.
 
 ## Privacy and security
@@ -160,18 +163,28 @@ flowchart LR
 
 | Feature | Status |
 |---|---|
+Arazzo **1.0.x** and **1.1.x** documents are supported.
+
+| Feature | Status |
+|---|---|
 | `operationId` (plain and `$sourceDescriptions.x.opId`) | ✅ Supported |
 | `operationPath` | ✅ Supported |
 | Steps with `workflowId` (sub-workflows) | ✅ Supported |
 | Path, query and header parameters | ✅ Supported |
+| `in: querystring` parameters (1.1) | ✅ Supported |
 | Cookie parameters | ❌ Not supported (browser restriction) |
-| `requestBody` with `payload` and `replacements` | ✅ Supported |
+| `requestBody` with `payload` and `replacements` | ✅ Supported (`targetSelectorType` JSON Pointer and JSONPath) |
 | `successCriteria`: simple, regex and JSONPath | ✅ Supported (JSONPath with jsonpath-plus syntax) |
-| `successCriteria`: XPath | ❌ Not supported |
+| `successCriteria` and selectors: XPath | ❌ Not supported |
 | `onSuccess` / `onFailure`: `end`, `goto`, `retry` | ✅ Supported |
+| `parameters` on success and failure actions (1.1) | ✅ Supported for `goto` and `retry` with `workflowId` |
+| Selector Object in outputs, parameters and payloads (1.1) | ✅ Supported (JSONPath and JSON Pointer) |
 | `components` (parameters, successActions, failureActions, inputs) | ✅ Supported |
-| `dependsOn` | ⚠️ Not run automatically |
-| External `$ref` in OpenAPI files | ❌ Not supported; local `#/...` references only |
+| AsyncAPI sources (1.1): `channelPath`, `action`, `correlationId`, `$message` | ✅ Supported, always simulated (see above) |
+| Step `timeout` (1.1) | ✅ Supported |
+| Step `dependsOn` (1.1) | ✅ Checked in the analysis and before each step; steps run in document order |
+| Workflow `dependsOn` | ⚠️ Not run automatically |
+| External `$ref` in OpenAPI, AsyncAPI and Arazzo files | ✅ Supported between loaded files (and fetched next to a contract downloaded from its URL) |
 
 ## Languages
 

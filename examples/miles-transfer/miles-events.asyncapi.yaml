@@ -1,0 +1,58 @@
+asyncapi: 3.0.0
+info:
+  title: Miles Events
+  version: 1.0.0
+  description: Eventos del traspaso de millas (ejemplo de Arazzo Studio).
+channels:
+  transferRequested:
+    address: miles.transfer.requested
+    messages:
+      transferRequested:
+        $ref: '#/components/messages/TransferRequested'
+  transferResult:
+    address: miles.transfer.result
+    messages:
+      transferResult:
+        $ref: '#/components/messages/TransferResult'
+operations:
+  requestTransfer:
+    action: send
+    channel:
+      $ref: '#/channels/transferRequested'
+  onTransferResult:
+    action: receive
+    channel:
+      $ref: '#/channels/transferResult'
+components:
+  messages:
+    TransferRequested:
+      headers:
+        type: object
+        properties:
+          correlationId: { type: string }
+      payload:
+        type: object
+        required: [memberId, miles, partner]
+        properties:
+          memberId: { type: string }
+          miles: { type: integer, minimum: 1 }
+          partner: { type: string }
+    TransferResult:
+      correlationId:
+        location: '$message.header#/correlationId'
+      headers:
+        type: object
+        properties:
+          correlationId: { type: string }
+      payload:
+        type: object
+        required: [status]
+        properties:
+          status: { type: string, enum: [COMPLETED, REJECTED] }
+          balance: { type: integer }
+          reason: { type: string }
+      examples:
+        - name: completed
+          payload: { status: COMPLETED, balance: 500 }
+        - name: rejected
+          payload: { status: REJECTED, reason: PARTNER_LIMIT_EXCEEDED }

@@ -34,6 +34,8 @@
   --put: #9a6100;
   --patch: #7a4bc2;
   --delete: #b42318;
+  --send: #0b7285;
+  --receive: #a61e4d;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.05);
@@ -72,6 +74,8 @@
     --put: #e4a73c;
     --patch: #b48cf2;
     --delete: #f27066;
+    --send: #3bb3c9;
+    --receive: #e0679a;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
     color-scheme: dark;
   }
@@ -634,6 +638,13 @@ pre {
 }
 .m-delete {
   background: var(--delete);
+}
+/* AsyncAPI */
+.m-send {
+  background: var(--send);
+}
+.m-receive {
+  background: var(--receive);
 }
 
 /* ---------- Kit ---------- */

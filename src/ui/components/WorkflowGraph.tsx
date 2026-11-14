@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css'
 import type { Issue, ResolvedStep, WorkflowAnalysis } from '../../core/analyze'
 import { MethodBadge } from './badges'
 import { requirementsFromCriteria, statusesInCriteria } from '../../core/criteria'
+import { isAsyncOperation } from '../../core/openapi'
 import type { Action } from '../../core/types'
 import { Pill } from './kit'
 import { t } from '../../i18n'
@@ -104,6 +105,8 @@ function actionRows(rs: ResolvedStep, wa: WorkflowAnalysis): ActionRow[] {
     ['onSuccess', rs.step.onSuccess ?? wf.successActions ?? []],
     ['onFailure', rs.step.onFailure ?? wf.failureActions ?? []],
   ]
+  // En un receive (AsyncAPI) las acciones dependen del mensaje que llega, o de que no llegue ninguno.
+  const receive = isAsyncOperation(rs.op) && (rs.step.action ?? rs.op?.method) === 'receive'
   for (const [trigger, actions] of groups) {
     for (const a of actions) {
       const statuses = statusesInCriteria(a.criteria)
@@ -113,7 +116,13 @@ function actionRows(rs: ResolvedStep, wa: WorkflowAnalysis): ActionRow[] {
       const kind = (a.type ?? 'none') as ActionRow['kind']
       rows.push({
         trigger,
-        statuses: statuses.length ? statuses.join(' | ') : trigger === 'onSuccess' ? t('graph.successShort') : t('graph.otherError'),
+        statuses: statuses.length
+          ? statuses.join(' | ')
+          : trigger === 'onSuccess'
+            ? t('graph.successShort')
+            : receive
+              ? t(detail ? 'graph.message' : 'graph.noMessage')
+              : t('graph.otherError'),
         detail,
         name: a.name ?? a.type ?? t('common.unnamed'),
         effect:

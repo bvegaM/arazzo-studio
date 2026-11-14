@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Project } from './loader'
-import type { Action, Workflow } from './types'
-import type { ProjectAnalysis, ResolvedStep, WorkflowAnalysis } from './analyze'
+import { JSONPath } from 'jsonpath-plus'
+import type { Action, RequestBody, Workflow } from './types'
+import { resolveParameters, type ProjectAnalysis, type ResolvedStep, type WorkflowAnalysis } from './analyze'
 import { evaluateCriterion, type CriterionResult } from './criteria'
-import { evaluateExpression, interpolate, isRuntimeExpression, type ExprContext } from './expressions'
+import { evaluateValue, interpolate, selectorType, type ExprContext } from './expressions'
 import { setByPointer } from './jsonPointer'
-import { getServerUrl, operationRequestBody, type SecurityScheme } from './openapi'
-import { validateAgainstContract } from './contract'
-import { NetworkError, type HttpExecutor } from './http'
+import { getServerUrl, isAsyncOperation, operationRequestBody, type SecurityScheme } from './openapi'
+import { validateAgainstContract, validateMessage } from './contract'
+import { NetworkError, type HttpExecutor, type MessageExecutor } from './http'
+import { createSimulatedMessenger } from './simulator'
 import { t } from '../i18n'
 
 export type StepStatus = 'success' | 'warning' | 'failed' | 'skipped'
@@ -22,6 +24,7 @@ export type ReasonCategory =
   | 'dependencia'
   | 'error-api'
   | 'output'
+  | 'mensajeria'
 
 export function reasonLabel(category: ReasonCategory): string {
   return t(`reason.${category}`)
@@ -42,6 +45,8 @@ export interface StepResult {
   attempts: number
   request?: { method: string; url: string; headers: Record<string, string>; body?: any }
   response?: { status: number; statusText: string; headers: Record<string, string>; body: any; durationMs: number }
+  /** Pasos AsyncAPI: el mensaje enviado (send) o recibido (receive). */
+  message?: { action: 'send' | 'receive'; channel: string; headers: Record<string, any>; payload: any; correlationId?: unknown; durationMs: number }
   criteria: CriterionResult[]
   outputs: Record<string, any>
   missingOutputs: string[]
@@ -73,6 +78,8 @@ export interface RunOptions {
   servers: Record<string, string>
   dropAuth?: boolean
   executor: HttpExecutor
+  /** Mensajería AsyncAPI. Sin ella (API real), los pasos de mensajería se simulan y quedan con advertencia. */
+  messenger?: MessageExecutor
   signal?: AbortSignal
   onStep?: (r: StepResult) => void
   maxRetryWaitMs?: number
@@ -98,6 +105,12 @@ function resolveAction(project: Project, a: Action): Action {
   const m = a.reference.match(/^\$components\.(successActions|failureActions)\.(.+)$/)
   const base = m ? (project.arazzo.components as any)?.[m[1]]?.[m[2]] : undefined
   return base ? { ...base, ...a } : a
+}
+
+/** Arazzo 1.1: los parameters de una acción son los inputs del workflow al que salta. */
+function actionInputs(project: Project, action: Action, ctx: ExprContext, fallback: Record<string, any>): Record<string, any> {
+  if (!action.parameters?.length) return fallback
+  return Object.fromEntries(resolveParameters(project, action.parameters).map((p) => [p.name, interpolate(p.value, ctx)]))
 }
 
 function chooseAction(project: Project, actions: Action[] | undefined, ctx: ExprContext): Action | undefined {
@@ -162,6 +175,38 @@ function parseBody(text: string, contentType: string): any {
   return text
 }
 
+/** Payload del paso: expresiones resueltas y reemplazos aplicados (JSON Pointer o JSONPath). */
+function buildPayload(body: RequestBody, ctx: ExprContext): any {
+  let payload = interpolate(structuredClone(body.payload ?? null), ctx)
+  for (const r of body.replacements ?? []) {
+    const value = interpolate(r.value, ctx)
+    const type = selectorType(r.targetSelectorType)
+    if (type === 'jsonpath') {
+      let pointers: string[] = []
+      try {
+        pointers = JSONPath({ path: r.target, json: payload, resultType: 'pointer', wrap: true }) as string[]
+      } catch {
+        /* JSONPath inválido: no se reemplaza nada */
+      }
+      if (!pointers.length) ctx.unresolved?.push(r.target)
+      for (const pointer of pointers) payload = setByPointer(payload, pointer, value)
+    } else if (type === 'xpath') {
+      ctx.unresolved?.push(r.target)
+    } else payload = setByPointer(payload, r.target, value)
+  }
+  return payload
+}
+
+/** Calcula los outputs del paso y los deja disponibles como $steps.<id>.outputs. */
+function collectOutputs(result: StepResult, outputs: Record<string, unknown> | undefined, ctx: ExprContext) {
+  for (const [name, expr] of Object.entries(outputs ?? {})) {
+    const r = evaluateValue(expr, ctx)
+    if (r.found) result.outputs[name] = r.value
+    else result.missingOutputs.push(name)
+  }
+  ctx.steps[result.stepId] = { outputs: result.outputs }
+}
+
 async function executeOperationStep(
   rs: ResolvedStep,
   project: Project,
@@ -176,6 +221,7 @@ async function executeOperationStep(
   ctx.unresolved = unresolved
   ctx.request = undefined
   ctx.response = undefined
+  ctx.message = undefined
 
   const source = project.sources.find((s) => s.name === op.sourceName)
   const server = (opts.servers[op.sourceName] || getServerUrl(source)).replace(/\/$/, '')
@@ -201,6 +247,9 @@ async function executeOperationStep(
     } else if (p.in === 'header') {
       headers[p.name] = String(value)
       displayHeaders[p.name] = SENSITIVE_HEADER.test(p.name) ? mask(String(value)) : String(value)
+    } else if (p.in === 'querystring') {
+      // Arazzo 1.1: la query completa ya armada ('a=1&b=2').
+      for (const [k, v] of new URLSearchParams(String(value).replace(/^\?/, ''))) query.append(k, v)
     }
   }
 
@@ -213,8 +262,7 @@ async function executeOperationStep(
     const contract = operationRequestBody(op)
     const contentType =
       step.requestBody.contentType ?? Object.keys(contract?.content ?? {})[0] ?? 'application/json'
-    payload = interpolate(structuredClone(step.requestBody.payload ?? null), ctx)
-    for (const r of step.requestBody.replacements ?? []) payload = setByPointer(payload, r.target, interpolate(r.value, ctx))
+    payload = buildPayload(step.requestBody, ctx)
     if (/json/i.test(contentType)) bodyText = payload === undefined ? undefined : JSON.stringify(payload)
     else if (/x-www-form-urlencoded/i.test(contentType) && payload && typeof payload === 'object') {
       bodyText = new URLSearchParams(
@@ -268,9 +316,23 @@ async function executeOperationStep(
     return result
   }
 
+  // Arazzo 1.1 timeout: si la API no responde a tiempo, se corta la petición y el paso falla.
+  let signal = opts.signal
+  let timedOut = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  if (step.timeout && step.timeout > 0) {
+    const controller = new AbortController()
+    opts.signal?.addEventListener('abort', () => controller.abort(), { once: true })
+    timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, step.timeout)
+    signal = controller.signal
+  }
+
   let response
   try {
-    response = await opts.executor({ method: op.method, url, headers, body: bodyText }, opts.signal, {
+    response = await opts.executor({ method: op.method, url, headers, body: bodyText }, signal, {
       stepId: step.stepId,
       sourceName: op.sourceName,
       method: op.method,
@@ -278,12 +340,16 @@ async function executeOperationStep(
     })
   } catch (e) {
     const cancelled = opts.signal?.aborted
-    result.reason = {
-      category: 'red',
-      code: e instanceof NetworkError ? (cancelled ? 'cancelled' : 'network') : undefined,
-      message: e instanceof NetworkError ? e.message : t('run.unexpected', { error: (e as Error).message }),
-    }
+    result.reason = timedOut
+      ? { category: 'red', message: t('run.timeout', { ms: step.timeout ?? 0 }) }
+      : {
+          category: 'red',
+          code: e instanceof NetworkError ? (cancelled ? 'cancelled' : 'network') : undefined,
+          message: e instanceof NetworkError ? e.message : t('run.unexpected', { error: (e as Error).message }),
+        }
     return result
+  } finally {
+    clearTimeout(timer)
   }
 
   const contentType = response.headers['content-type'] ?? ''
@@ -315,15 +381,7 @@ async function executeOperationStep(
 
   result.contractIssues = validateAgainstContract(op, response.status, body, contentType)
 
-  // Outputs
-  for (const [name, expr] of Object.entries(step.outputs ?? {})) {
-    const r = isRuntimeExpression(expr)
-      ? evaluateExpression(expr, ctx)
-      : { found: true, value: interpolate(expr, { ...ctx, unresolved: [] }) }
-    if (r.found) result.outputs[name] = r.value
-    else result.missingOutputs.push(name)
-  }
-  ctx.steps[step.stepId] = { outputs: result.outputs }
+  collectOutputs(result, step.outputs, ctx)
 
   // Los inputs opcionales sin valor no explican un fallo; los datos de pasos previos e inputs obligatorios sí.
   const relevantUnresolved = [...new Set(unresolved)].filter((u) => {
@@ -376,6 +434,116 @@ async function executeOperationStep(
   return result
 }
 
+/**
+ * Paso de AsyncAPI: envía un mensaje al canal (send) o espera uno (receive, filtrado por
+ * correlationId y limitado por timeout). Los parámetros `in: header` van como headers del mensaje.
+ */
+async function executeMessageStep(
+  rs: ResolvedStep,
+  ctx: ExprContext,
+  opts: RunOptions,
+  requiredInputs: string[],
+  consumedOutputs: string[],
+): Promise<StepResult> {
+  const op = rs.op!
+  const step = rs.step
+  const action = step.action ?? (op.method === 'receive' ? 'receive' : 'send')
+  const unresolved: string[] = []
+  ctx.unresolved = unresolved
+  ctx.request = undefined
+  ctx.response = undefined
+  ctx.message = undefined
+
+  const headers: Record<string, any> = {}
+  const displayHeaders: Record<string, string> = {}
+  for (const p of rs.parameters) {
+    if (p.in && p.in !== 'header') continue
+    const value = interpolate(p.value, ctx)
+    if (value === undefined || value === null) continue
+    headers[p.name] = value
+    displayHeaders[p.name] = SENSITIVE_HEADER.test(p.name) ? mask(String(value)) : String(value)
+  }
+  const payload = action === 'send' && step.requestBody ? buildPayload(step.requestBody, ctx) : undefined
+  const correlationId = action === 'receive' && step.correlationId !== undefined ? interpolate(step.correlationId, ctx) : undefined
+
+  const result: StepResult = {
+    stepId: step.stepId,
+    label: rs.label,
+    description: step.description,
+    status: 'failed',
+    attempts: 1,
+    request: { method: action.toUpperCase(), url: op.path, headers: displayHeaders, body: payload },
+    criteria: [],
+    outputs: {},
+    missingOutputs: [],
+    contractIssues: [],
+    unresolved,
+  }
+
+  // Contra la API real no hay broker al que conectarse: el paso se simula y queda con advertencia.
+  const messenger = opts.messenger ?? createSimulatedMessenger([step])
+  let res
+  try {
+    res = await messenger({ action, channel: op.path, headers, payload, correlationId, timeoutMs: step.timeout }, opts.signal, {
+      stepId: step.stepId,
+      op,
+    })
+  } catch (e) {
+    result.reason = { category: 'mensajeria', message: t('run.unexpected', { error: (e as Error).message }) }
+    return result
+  }
+  result.simulated = res.simulated
+
+  if (res.status === 'timeout') {
+    const waited = step.timeout ? t('run.msg.waited', { ms: step.timeout }) : ''
+    result.criteria = [{ condition: t('run.msg.expected'), type: 'simple', passed: false, detail: t('run.msg.none', { channel: op.path, waited }) }]
+    result.reason = { category: 'mensajeria', message: t('run.msg.timeout', { channel: op.path, waited }) }
+    collectOutputs(result, step.outputs, ctx)
+    return result
+  }
+
+  const message = res.message ?? { headers: {}, payload: undefined }
+  ctx.message = message
+  result.message = { action, channel: op.path, headers: message.headers, payload: message.payload, correlationId, durationMs: res.durationMs }
+
+  if (step.successCriteria?.length) {
+    result.criteria = step.successCriteria.map((c) => evaluateCriterion(c, ctx))
+  } else {
+    result.criteria = [
+      {
+        condition: t(action === 'send' ? 'run.msg.implicitSent' : 'run.msg.implicitReceived'),
+        type: 'simple',
+        passed: true,
+        detail: t(action === 'send' ? 'run.msg.sent' : 'run.msg.received', { channel: op.path }),
+      },
+    ]
+  }
+  if (action === 'receive') result.contractIssues = validateMessage(op, message.payload)
+  collectOutputs(result, step.outputs, ctx)
+
+  const failedCriterion = result.criteria.find((c) => !c.passed)
+  if (failedCriterion) {
+    const relevantUnresolved = [...new Set(unresolved)].filter((u) => {
+      const m = u.match(/^\$inputs\.([^.#[]+)/)
+      return !m || requiredInputs.includes(m[1])
+    })
+    result.reason = relevantUnresolved.length
+      ? { category: 'dato-previo', message: t('run.msg.unresolved', { refs: relevantUnresolved.join(', ') }) }
+      : { category: 'criterio', message: failedCriterion.detail }
+    return result
+  }
+  const usedMissing = result.missingOutputs.filter((o) => consumedOutputs.includes(o))
+  result.status = 'warning'
+  if (result.contractIssues.length) {
+    result.reason = { category: 'contrato', message: t('run.msg.contractWarning', { issue: result.contractIssues[0] }) }
+  } else if (usedMissing.length) {
+    result.reason = { category: 'output', message: t('run.outputMissing', { outputs: usedMissing.map((o) => `"${o}"`).join(', ') }) }
+  } else if (!opts.messenger) {
+    result.reason = { category: 'mensajeria', message: t('run.msg.simulatedInReal') }
+  } else result.status = 'success'
+  return result
+}
+
 function workflowById(project: Project, id: string): Workflow | undefined {
   return project.arazzo.workflows.find((w) => w.workflowId === id)
 }
@@ -396,10 +564,13 @@ export async function runWorkflow(
     workflows: {},
     sourceUrls: Object.fromEntries(project.sources.map((s) => [s.name, s.url])),
     components: project.arazzo.components,
+    self: project.arazzo.$self ?? project.arazzoFileName,
   }
 
   const results: StepResult[] = []
   const executed = new Set<string>()
+  // Pasos que terminaron sin fallar: los que pide dependsOn tienen que estar aquí.
+  const completed = new Set<string>()
   let status: 'success' | 'failed' = 'success'
   let failure: Reason | undefined
   let i = 0
@@ -421,8 +592,24 @@ export async function runWorkflow(
     const rs = wa.steps[i]
     const step = rs.step
     let result: StepResult
+    // dependsOn de otros workflows ($workflows.x.steps.y) no se controla aquí.
+    const pending = (step.dependsOn ?? []).filter((d) => !d.startsWith('$') && !completed.has(d))
 
-    if (rs.kind === 'unresolved') {
+    if (pending.length) {
+      result = {
+        stepId: step.stepId,
+        label: rs.label,
+        description: step.description,
+        status: 'failed',
+        attempts: 1,
+        criteria: [],
+        outputs: {},
+        missingOutputs: [],
+        contractIssues: [],
+        unresolved: [],
+        reason: { category: 'dependencia', message: t('run.dependsOn', { steps: pending.map((d) => `"${d}"`).join(', ') }) },
+      }
+    } else if (rs.kind === 'unresolved') {
       result = {
         stepId: step.stepId,
         label: rs.label,
@@ -447,7 +634,7 @@ export async function runWorkflow(
       const outputs: Record<string, any> = {}
       const missing: string[] = []
       for (const [name, expr] of Object.entries(step.outputs ?? {})) {
-        const r = evaluateExpression(expr, { ...ctx, outputs: sub?.outputs ?? {} })
+        const r = evaluateValue(expr, { ...ctx, outputs: sub?.outputs ?? {} })
         if (r.found) outputs[name] = r.value
         else missing.push(name)
       }
@@ -484,18 +671,15 @@ export async function runWorkflow(
         }
       }
     } else {
-      result = await executeOperationStep(
-        rs,
-        project,
-        ctx,
-        opts,
-        wa.requiredInputs,
-        wa.dataEdges.filter((e) => e.fromStep === step.stepId).map((e) => e.output),
-      )
+      const consumed = wa.dataEdges.filter((e) => e.fromStep === step.stepId).map((e) => e.output)
+      result = isAsyncOperation(rs.op)
+        ? await executeMessageStep(rs, ctx, opts, wa.requiredInputs, consumed)
+        : await executeOperationStep(rs, project, ctx, opts, wa.requiredInputs, consumed)
     }
 
     result.attempts = (retries[step.stepId] ?? 0) + 1
     executed.add(step.stepId)
+    if (result.status !== 'failed') completed.add(step.stepId)
     results.push(result)
 
     const succeeded = result.status !== 'failed'
@@ -515,6 +699,10 @@ export async function runWorkflow(
       if (done < limit) {
         retries[step.stepId] = done + 1
         result.action = t('run.action.retry', { n: done + 1, limit, action: action.name ?? 'retry' })
+        // Con workflowId, primero corre ese workflow (p. ej. renovar un token) y después se reintenta.
+        if (action.workflowId && workflowById(project, action.workflowId)) {
+          result.subRun = await runWorkflow(project, analysis, action.workflowId, { ...opts, inputs: actionInputs(project, action, ctx, opts.inputs), onStep: undefined }, depth + 1)
+        }
         const wait = Math.min((action.retryAfter ?? 0) * 1000, opts.maxRetryWaitMs ?? 10000)
         if (wait > 0) await new Promise((r) => setTimeout(r, wait))
         continue
@@ -532,7 +720,7 @@ export async function runWorkflow(
         }
       } else if (action.workflowId && workflowById(project, action.workflowId)) {
         result.action = t('run.action.gotoWorkflow', { workflow: action.workflowId })
-        const sub = await runWorkflow(project, analysis, action.workflowId, { ...opts, onStep: undefined }, depth + 1)
+        const sub = await runWorkflow(project, analysis, action.workflowId, { ...opts, inputs: actionInputs(project, action, ctx, opts.inputs), onStep: undefined }, depth + 1)
         result.subRun = sub
         status = sub.status
         failure = sub.reason
@@ -585,7 +773,7 @@ export async function runWorkflow(
   // Outputs del workflow
   const outputs: Record<string, any> = {}
   for (const [name, expr] of Object.entries(wf.outputs ?? {})) {
-    const r = evaluateExpression(expr, ctx)
+    const r = evaluateValue(expr, ctx)
     if (r.found) outputs[name] = r.value
   }
 

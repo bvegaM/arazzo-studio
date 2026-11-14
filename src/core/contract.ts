@@ -66,3 +66,21 @@ export function validateAgainstContract(op: OperationRef, status: number, body: 
     return [t('contract.validationError', { error: (e as Error).message })]
   }
 }
+
+/** Valida el payload de un mensaje AsyncAPI contra los mensajes posibles de la operación. */
+export function validateMessage(op: OperationRef, payload: any): string[] {
+  const schemas = (op.messages ?? []).map((m) => m.payload).filter((s) => s && typeof s === 'object')
+  if (!schemas.length) return []
+  let best: string[] | undefined
+  for (const raw of schemas) {
+    try {
+      const validate = compile(toJsonSchema(deref(op.doc, raw)))
+      if (validate(payload)) return []
+      const issues = (validate.errors ?? []).slice(0, 8).map(describeError)
+      if (!best || issues.length < best.length) best = issues
+    } catch (e) {
+      best ??= [t('contract.validationError', { error: (e as Error).message })]
+    }
+  }
+  return best ?? []
+}

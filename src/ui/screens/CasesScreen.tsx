@@ -6,6 +6,7 @@ import type { ScenariosImport } from '../../core/scenariosFile'
 import { templateHelp } from '../../core/templates'
 import { statusesInCriteria } from '../../core/criteria'
 import { humanizeId } from '../../core/format'
+import { isAsyncOperation } from '../../core/openapi'
 import { fieldKind, typeLabel, valueSummary } from '../../core/schemaForm'
 import { MethodBadge } from '../components/badges'
 import { ActionBar, Chevron, PageHeader, Section, Segmented } from '../components/kit'
@@ -237,6 +238,8 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
   const run = runnability(c, ctx.mode)
   const simulated = isSimulated(c, ctx.mode)
   const custom = Object.values(c.inputOverrides ?? {}).filter((v) => v !== undefined && v !== '').length + (c.omitInputs?.length ?? 0)
+  // Un escenario de mensajería (AsyncAPI) siempre se simula: no hay broker al que pasarlo.
+  const messageScenario = !!c.scenario && isAsyncOperation(ctx.wa.steps.find((s) => s.step.stepId === c.scenario!.stepId)?.op)
   return (
     <div className={`case-row ${run.ok ? '' : 'blocked'}`}>
       <input type="checkbox" className="check" checked={c.enabled} onChange={(e) => ctx.toggle(c.id, e.target.checked)} />
@@ -248,7 +251,7 @@ function CaseRow({ c, ctx }: { c: TestCase; ctx: Ctx }) {
           <span className={`badge ${simulated ? 'b-sim' : 'b-info'}`}>{simulated ? t('common.simulated') : t('common.realApi')}</span>
           {custom > 0 && <span className="badge b-warn">{t('cases.changedParams', { n: custom })}</span>}
           <span className="spacer" />
-          {c.scenario && (
+          {c.scenario && !messageScenario && (
             <Segmented
               options={[
                 { id: 'simulado', label: t('common.simulated') },
@@ -474,6 +477,10 @@ export function CasesScreen(p: Props) {
     .filter((w) => realWfs.has(w.workflow.workflowId))
     .flatMap((w) => w.steps.filter((s) => s.mutating && s.op).map((s) => ({ wf: w.workflow.workflowId, s })))
   const needsConfirm = mutating.length > 0 && !p.confirmed
+  // Pasos de mensajería de los workflows que van contra la API real: se simulan igual, conviene saberlo antes.
+  const messageSteps = p.analysis.workflows
+    .filter((w) => realWfs.has(w.workflow.workflowId))
+    .flatMap((w) => w.steps.filter((s) => isAsyncOperation(s.op)).map((s) => ({ wf: w.workflow.workflowId, s })))
   const canRun = ready.length > 0 && !needsConfirm && !p.running
   const confirmRef = useRef<HTMLDivElement>(null)
   // Lleva a la confirmación y la resalta un momento, para que se vea qué falta.
@@ -591,6 +598,22 @@ export function CasesScreen(p: Props) {
           </Section>
         )
       })}
+
+      {messageSteps.length > 0 && (
+        <div className="callout info small">
+          <strong>{t('cases.messageSteps', { n: messageSteps.length })}</strong>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {messageSteps.map(({ wf, s }) => (
+              <li key={wf + s.step.stepId}>
+                <MethodBadge method={s.op!.method} /> <code>{s.op!.path}</code>{' '}
+                <span className="muted">
+                  · {wf} / {s.step.stepId}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {mutating.length > 0 && (
         <div className="callout warn small" ref={confirmRef}>

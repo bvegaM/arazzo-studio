@@ -6,7 +6,7 @@ Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/
 
 ## Flujo
 
-1. **Cargar**: subes el Arazzo y los OpenAPI que referencia (`sourceDescriptions`). Si falta un contrato, la pantalla lo indica.
+1. **Cargar**: subes el Arazzo, los OpenAPI y AsyncAPI que referencia (`sourceDescriptions`) y los archivos a los que apuntan sus `$ref`. Si falta un contrato o un archivo referenciado, la pantalla lo indica.
 2. **Contratos**: cada paso se resuelve a su operación del OpenAPI. Incluye una tabla de cobertura: qué respuestas documentadas en el contrato maneja el Arazzo y cuáles no. Ves el grafo del workflow, con flechas que muestran qué output alimenta a qué paso, y la validación (operaciones inexistentes, parámetros obligatorios que no se envían, referencias rotas). Aquí marcas qué workflows quieres probar: los pasos siguientes solo muestran los marcados.
 3. **Valores por defecto**: formulario generado desde el schema de `inputs` (los objetos anidados y las listas se llenan campo por campo), con avisos en vivo cuando un valor no cumple el contrato (patrón, longitud, mínimos, formato). Estos valores se usan en todos los casos.
    - **Ambientes** (DEV, QA, UAT…): cada uno guarda sus URLs base y sus credenciales (detectadas desde los `securitySchemes`). Se cambia con un clic y el reporte indica contra cuál se corrió. Cambiar de ambiente vuelve a pedir la confirmación antes de ejecutar pasos que modifican datos.
@@ -58,7 +58,11 @@ Las peticiones salen del navegador, así que la API probada debe permitir CORS d
 
 Otras limitaciones del navegador: no se pueden enviar cookies ni el header `Host`, y solo se leen los headers de respuesta que la API exponga.
 
+Los pasos de AsyncAPI (`send` / `receive`) siempre se simulan con los ejemplos y schemas del contrato: el navegador no puede conectarse a un broker como Kafka, AMQP o MQTT. En los resultados aparecen como simulados, también cuando el resto del workflow corre contra la API real.
+
 ## Soporte de Arazzo
+
+Se soportan documentos Arazzo **1.0.x** y **1.1.x**.
 
 | Elemento | Estado |
 |---|---|
@@ -66,14 +70,20 @@ Otras limitaciones del navegador: no se pueden enviar cookies ni el header `Host
 | `operationPath` | Soportado |
 | Pasos con `workflowId` (sub-workflows) | Soportado |
 | Parámetros path, query y header | Soportado |
+| Parámetros `in: querystring` (1.1) | Soportado |
 | Parámetros cookie | No soportado (restricción del navegador) |
-| `requestBody` con `payload` y `replacements` | Soportado |
+| `requestBody` con `payload` y `replacements` | Soportado (`targetSelectorType` JSON Pointer y JSONPath) |
 | `successCriteria` simple, regex y JSONPath | Soportado (JSONPath con sintaxis de jsonpath-plus) |
-| `successCriteria` XPath | No soportado |
+| `successCriteria` y selectores XPath | No soportado |
 | `onSuccess` / `onFailure`: end, goto, retry | Soportado |
+| `parameters` en las acciones (1.1) | Soportado en `goto` y `retry` con `workflowId` |
+| Selector Object en outputs, parámetros y payloads (1.1) | Soportado (JSONPath y JSON Pointer) |
 | `components` (parameters, successActions, failureActions, inputs) | Soportado |
-| `dependsOn` | No se ejecuta automáticamente |
-| `$ref` externos en los OpenAPI | No soportado; solo referencias locales `#/...` |
+| Fuentes AsyncAPI (1.1): `channelPath`, `action`, `correlationId`, `$message` | Soportado, siempre simulado (ver arriba) |
+| `timeout` de un paso (1.1) | Soportado |
+| `dependsOn` de un paso (1.1) | Se valida en el análisis y antes de cada paso; los pasos corren en el orden del documento |
+| `dependsOn` de un workflow | No se ejecuta automáticamente |
+| `$ref` externos en OpenAPI, AsyncAPI y Arazzo | Soportado entre los archivos cargados (y descargados junto a un contrato que se baja de su URL) |
 
 ## Estructura
 
