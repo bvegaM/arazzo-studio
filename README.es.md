@@ -1,34 +1,143 @@
+<div align="center">
+
+<img src="public/favicon.svg" width="72" height="72" alt="Arazzo Studio">
+
 # Arazzo Studio
+
+**Prueba tus journeys de APIs sin escribir tests.**
+
+Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los contratos OpenAPI y AsyncAPI que lo respaldan. Arazzo Studio dibuja el journey, genera los casos de prueba, los ejecuta contra tu API o en simulación y explica cada resultado en lenguaje claro. Todo en el navegador: quien lo usa no instala nada y nada sale de su equipo.
+
+[![Arazzo](https://img.shields.io/badge/Arazzo-1.0%20%7C%201.1-6BA543)](https://spec.openapis.org/arazzo/latest.html)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA543?logo=openapiinitiative&logoColor=white)](https://spec.openapis.org/oas/latest.html)
+[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-2.x%20%7C%203.x-6BA543)](https://www.asyncapi.com/docs/reference/specification/latest)
+[![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-93C83D)](#idiomas)
+[![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-yellow.svg)](LICENSE)
+<br>
+[![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
+[![React Flow](https://img.shields.io/badge/React_Flow-12-FF0072?logo=react&logoColor=white)](https://reactflow.dev)
+[![CodeMirror](https://img.shields.io/badge/CodeMirror-6-D30707)](https://codemirror.net)
+[![Vitest](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
 
 [English](README.md) · **Español**
 
-Interfaz para ejecutar y probar workflows de [Arazzo](https://spec.openapis.org/arazzo/latest.html) contra APIs reales. Todo corre en el navegador: los contratos, las credenciales y las respuestas no salen de tu máquina.
+<br>
 
-## Flujo
+<img src="docs/screenshots/contracts.png" alt="Un workflow Arazzo como diagrama interactivo, con las acciones que activa cada respuesta y los datos que pasan entre pasos" width="100%">
 
-1. **Cargar**: subes el Arazzo, los OpenAPI y AsyncAPI que referencia (`sourceDescriptions`) y los archivos a los que apuntan sus `$ref`. Si falta un contrato o un archivo referenciado, la pantalla lo indica.
-2. **Contratos**: cada paso se resuelve a su operación del OpenAPI. Incluye una tabla de cobertura: qué respuestas documentadas en el contrato maneja el Arazzo y cuáles no. Ves el grafo del workflow, con flechas que muestran qué output alimenta a qué paso, y la validación (operaciones inexistentes, parámetros obligatorios que no se envían, referencias rotas). Aquí marcas qué workflows quieres probar: los pasos siguientes solo muestran los marcados.
-3. **Valores por defecto**: formulario generado desde el schema de `inputs` (los objetos anidados y las listas se llenan campo por campo), con avisos en vivo cuando un valor no cumple el contrato (patrón, longitud, mínimos, formato). Estos valores se usan en todos los casos.
-   - **Ambientes** (DEV, QA, UAT…): cada uno guarda sus URLs base y sus credenciales (detectadas desde los `securitySchemes`). Se cambia con un clic y el reporte indica contra cuál se corrió. Cambiar de ambiente vuelve a pedir la confirmación antes de ejecutar pasos que modifican datos.
-4. **Casos de prueba**:
-   - Casos generales: camino feliz, inputs obligatorios faltantes, tipos y enums inválidos, y ejecución sin credenciales. Se ejecutan contra la API real o en simulación.
-   - Escenarios por respuesta: uno por cada acción `onFailure`/`onSuccess` con criterios. Se simulan siempre (con los ejemplos del contrato, o su schema si no hay ejemplos) y verifican que, ante esa respuesta, se active la acción correcta.
-   - Parámetros por caso: todos los casos parten de los **valores por defecto** del paso 3 y en cada caso puedes cambiar u omitir cualquier valor. Los escenarios por respuesta se pueden pasar a "API real" dándoles los datos que provocan esa respuesta, y puedes crear casos nuevos con datos propios y una expectativa (status, `code` del body y/o acción del Arazzo). Solo se ejecutan los casos que se pueden cumplir con sus datos.
-   - Generadores para que los casos se puedan repetir: `{{email}}`, `{{cpf}}`, `{{rut}}`, `{{uuid}}`, `{{numero:8}}`, `{{fecha}}`, `{{timestamp}}`.
-   - **Importar / exportar escenarios** en YAML (bases por workflow + datos de cada caso) para versionarlos junto al Arazzo.
-5. **Resultados**: entrada y salida de cada petición (con **Copiar como cURL** para reproducirla; los secretos quedan como `<secret>` salvo que elijas copiarlos), criterios evaluados con una comparación campo a campo de lo esperado contra lo recibido (y el campo resaltado en la respuesta), validación de la respuesta contra el contrato, outputs capturados, los valores con que corrió cada caso y una razón clara cuando algo falla. Mientras corre, se ve el caso actual, el progreso por resultado y el tiempo restante. Si la API no responde, un panel guía qué revisar (URL, https/http, CORS) con los headers CORS exactos que hacen falta. **Descargar reporte** genera un HTML autocontenido (se puede imprimir a PDF) con tokens y credenciales ocultos; también hay exportación en JSON.
+</div>
 
-## Sesión guardada
+<br>
 
-Lo que haces se guarda solo en este equipo (IndexedDB): archivos, valores, casos, workflows elegidos, ambientes y el paso en que estabas. Al volver, un aviso ofrece continuar o descartar. **Las credenciales y los inputs con nombre sensible (token, password…) nunca se guardan.** "Empezar de nuevo" borra la sesión.
+## Contenido
 
-## Idiomas
+- [Por qué Arazzo Studio](#por-qué-arazzo-studio)
+- [Para quién es](#para-quién-es)
+- [Funciones](#funciones)
+- [Primeros pasos](#primeros-pasos)
+- [Cómo funciona](#cómo-funciona)
+- [Privacidad y seguridad](#privacidad-y-seguridad)
+- [Soporte de las especificaciones](#soporte-de-las-especificaciones)
+- [Limitaciones conocidas](#limitaciones-conocidas)
+- [Hoja de ruta](#hoja-de-ruta)
+- [Idiomas](#idiomas)
+- [Para quien contribuye](#para-quien-contribuye)
+- [Licencia](#licencia)
 
-La interfaz está en **español** e **inglés**. El idioma inicial se toma del navegador y se puede cambiar en la barra lateral (se recuerda para la próxima visita). También se traducen los mensajes del motor y el reporte HTML. Los archivos de escenarios mantienen sus claves (`bases`, `casos`, `espera`…) en cualquier idioma, para que sigan siendo compatibles. Los generadores aceptan también `{{number:8}}` y `{{date}}`.
+## Por qué Arazzo Studio
 
-Para agregar un texto: añade la clave en `src/i18n/locales/es/` y su traducción en `src/i18n/locales/en/`. TypeScript avisa si falta alguna.
+La mayoría de las integraciones no son una sola llamada, sino un **journey**: inscribir un socio, agregar beneficios de tarjeta, traspasar millas. Cada API suele documentarse y probarse por separado, así que nadie puede comprobar fácilmente que el journey completo funciona, y solo los perfiles técnicos pueden probarlo.
 
-## Uso local
+[Arazzo](https://spec.openapis.org/arazzo/latest.html), la especificación de workflows del OpenAPI Initiative, describe esos journeys sobre tus contratos actuales. Arazzo Studio convierte esa descripción en algo que cualquiera del equipo puede ejecutar:
+
+- 🧭 **Ve el journey.** Cada workflow se convierte en un diagrama con sus pasos, las acciones que activa cada respuesta y los datos que pasan entre pasos.
+- 🧪 **Casos de prueba sin escribirlos.** Camino feliz, inputs faltantes o inválidos, llamadas sin credenciales y un escenario por cada acción `onSuccess` / `onFailure`, derivados de los contratos.
+- 🎛️ **Prueba con tus propios datos.** Agrega casos con otros parámetros, reutilízalos en YAML y repítelos con generadores como `{{email}}` o `{{uuid}}`.
+- 🔍 **Entiende los fallos de un vistazo.** En lugar de un JSON crudo, lees *"`status` vale `INACTIVE` pero se esperaba `ACTIVE`"*, con el campo resaltado en la respuesta.
+- ✍️ **Corrige el workflow donde lo pruebas.** Un editor integrado valida el Arazzo mientras escribes y sugiere operaciones, pasos y outputs a partir de los contratos.
+- 🔒 **Todo local.** Sin backend ni cuenta. Los contratos, las credenciales y las respuestas no salen del navegador.
+
+## Para quién es
+
+- **Equipos de producto de APIs y de partners** que venden o documentan journeys formados por varias APIs y necesitan mostrar que funcionan de punta a punta.
+- **Product managers y roles de negocio** que necesitan probar un journey con sus propios datos, sin CLI, sin herramientas de pago y sin código de pruebas.
+- **QA e ingeniería de integración**, que quieren casos negativos generados, veredictos claros y un reporte para compartir.
+- **Quienes diseñan APIs** y escriben archivos Arazzo, con validación en vivo contra los contratos reales.
+
+Arazzo Studio está pensado para **explorar, depurar y mostrar** journeys a mano. No es un runner de CI: para pipelines encaja mejor un runner de línea de comandos como [Redocly Respect](https://redocly.com/docs/respect), y ambos pueden usar los mismos archivos Arazzo.
+
+## Funciones
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/load.png" alt="Pantalla de carga con arrastrar y soltar, ejemplos incluidos y una guía de tres pasos">
+      <h3>1 · Cargar</h3>
+      Suelta el archivo Arazzo, los contratos OpenAPI y AsyncAPI que referencia y los archivos a los que apuntan con <code>$ref</code>. La app indica qué contratos o archivos faltan; los contratos se pueden adjuntar a mano o descargar desde su URL.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/defaults.png" alt="Formulario generado desde el schema de inputs, con objetos anidados y listas">
+      <h3>2 · Completar los datos</h3>
+      Un formulario generado desde el schema de <code>inputs</code>, con objetos anidados y listas que se llenan campo por campo. Los valores se validan contra el contrato mientras escribes (patrón, longitud, rango, formato).
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/cases.png" alt="Casos de prueba generados agrupados por tipo, con un resumen de lo que se va a ejecutar">
+      <h3>3 · Elegir los casos</h3>
+      Casos generados agrupados por tipo, cada uno con sus parámetros. Ejecútalos contra la API real o en simulación, agrega casos con datos propios e importa o exporta escenarios en YAML.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/results.png" alt="Resultados con el estado de cada paso, tiempos y un resumen por veredicto">
+      <h3>4 · Revisar los resultados</h3>
+      Progreso en vivo mientras corre y, después, la petición, la respuesta, los criterios, la validación de contrato y los outputs de cada paso. Descarga un reporte HTML autocontenido o una exportación en JSON.
+    </td>
+  </tr>
+</table>
+
+### Editar el Arazzo con validación en vivo
+
+Abre **Editar Arazzo** desde la pantalla de contratos para cambiar el workflow junto a su diagrama. Cada problema queda subrayado en el valor exacto al que se refiere, el diagrama se actualiza mientras escribes y el autocompletado ofrece lo que cuesta recordar: los `operationId` de los contratos cargados (HTTP y AsyncAPI), los canales, `$steps.<paso>.outputs.<nombre>`, `$inputs` y los destinos de `dependsOn` y `goto`. Guarda el archivo en tu equipo o descárgalo; los contratos nunca se modifican.
+
+<img src="docs/screenshots/editor.png" alt="El editor del Arazzo con un error subrayado, autocompletado de operaciones y el diagrama al lado" width="100%">
+
+### Esperado contra recibido, lado a lado
+
+Cuando un criterio falla, Arazzo Studio muestra exactamente qué campo está mal y lo resalta en el body de la respuesta. También funciona con criterios regex sobre un body JSON.
+
+<img src="docs/screenshots/diff.png" alt="Un criterio fallido con los valores esperado y recibido, y el campo resaltado en el body de la respuesta" width="100%">
+
+### Pasos de eventos (AsyncAPI)
+
+Los journeys suelen mezclar llamadas REST con eventos. Los pasos que envían (`send`) o reciben (`receive`) un mensaje AsyncAPI aparecen en el diagrama y en los resultados como cualquier otro paso: el mensaje enviado, el mensaje recibido (filtrado por `correlationId`), su validación de contrato y los outputs que salen de `$message`. Los escenarios generados cubren el mensaje que activa cada acción y el caso en que no llega ningún mensaje antes del `timeout`.
+
+<img src="docs/screenshots/messaging.png" alt="Un paso receive con el canal, el correlationId y el payload del mensaje recibido" width="100%">
+
+> [!NOTE]
+> Un navegador no puede conectarse a un broker como Kafka, AMQP o MQTT, así que los pasos de mensajería **siempre se simulan** con los ejemplos y schemas del AsyncAPI. La app lo avisa antes de ejecutar y marca esos pasos como simulados, también cuando el resto del journey corre contra la API real.
+
+### Además
+
+| Función | Qué hace |
+|---|---|
+| 🌍 **Ambientes** | DEV, QA, UAT…, cada uno con sus URLs base y credenciales. Al cambiar de ambiente se vuelve a pedir confirmación antes de ejecutar pasos que modifican datos. |
+| 🗺️ **Diagrama interactivo** | Arrastra los pasos: sus acciones se mueven con ellos, la disposición se mantiene mientras editas y **Reordenar** vuelve a la automática. |
+| 📋 **Copiar como cURL** | Reproduce cualquier petición desde tu terminal. Los secretos quedan como `<secret>` salvo que elijas copiarlos. |
+| 🛟 **Ayuda de conexión** | Si la API no responde, un panel guía qué revisar (URL, https/http, CORS) con los headers CORS exactos que hacen falta. |
+| ✅ **Elegir workflows** | Selecciona qué workflows probar. Los pasos siguientes solo muestran los elegidos. |
+| 💾 **Sesión guardada** | Tu trabajo, incluidos los cambios al Arazzo, se guarda en este equipo y se ofrece al volver. Las credenciales nunca se guardan. |
+| 🎲 **Generadores** | `{{email}}`, `{{uuid}}`, `{{numero:8}}`, `{{fecha}}`, `{{timestamp}}`, `{{cpf}}`, `{{rut}}`, para repetir casos sin choques de datos. |
+| 🌙 **Modo oscuro** | Sigue el tema del sistema. |
+
+<details>
+<summary><strong>Vista en modo oscuro</strong></summary>
+<br>
+<img src="docs/screenshots/contracts-dark.png" alt="La pantalla de contratos en modo oscuro" width="100%">
+</details>
+
+## Primeros pasos
 
 Requiere **Node.js 20.19+ o 22.12+** (lo pide Vite 8).
 
@@ -37,83 +146,144 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-### Probar con el ejemplo incluido
+El build es un sitio estático (`npm run build` → `dist/`), así que se puede publicar en cualquier hosting estático o servidor interno. Quien lo usa solo necesita un navegador.
+
+### Probar los ejemplos incluidos
+
+Los dos ejemplos están a un clic en la pantalla de carga. Para ejecutarlos contra una API real en vez de en simulación, levanta el mock incluido:
 
 ```bash
-npm run mock         # API de tarjetas en http://localhost:4010
-npm run mock:bug     # misma API, pero con errores de contrato a propósito
+npm run mock         # APIs de ejemplo en http://localhost:4010
+npm run mock:bug     # las mismas APIs, con errores de contrato a propósito
 ```
 
-En la app, pulsa **Probar con el ejemplo de tarjetas**, usa cualquier token como credencial y `4321` como `last4Digits`.
+| Ejemplo | Qué muestra | Cómo ejecutarlo |
+|---|---|---|
+| **Tarjetas de crédito** | Un onboarding de cuatro pasos sobre un contrato OpenAPI: casos generados, escenarios por respuesta y errores de contrato. | Cualquier token como credencial y `4321` como `last4Digits`. |
+| **Traspaso de millas** | Un journey Arazzo 1.1: un OpenAPI repartido en archivos con `$ref` externos, pasos AsyncAPI `send` / `receive`, `correlationId`, `timeout` y `dependsOn`. | Cualquier token como credencial. Los pasos de mensajería se simulan. |
 
-### Tests
+Los archivos de los ejemplos están en [examples/](examples/).
 
-```bash
-npm test             # core: expresiones, criterios, análisis y ejecución contra el mock
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    A[Arazzo + OpenAPI + AsyncAPI] --> B[Análisis<br/>resuelve pasos y $ref, cobertura, validación]
+    B <--> E[Editor<br/>validación en vivo, autocompletado]
+    B --> C[Valores por defecto<br/>inputs, ambiente, credenciales]
+    C --> D[Casos de prueba<br/>generados + propios]
+    D --> R{Ejecución}
+    R -->|API real| F[fetch]
+    R -->|simulación| G[ejemplos de los contratos]
+    R -->|pasos de mensajería| G
+    F --> H[Resultados + reporte]
+    G --> H
 ```
 
-## Requisito importante: CORS
+1. **Contratos.** Cada paso se resuelve a su operación OpenAPI o a su canal AsyncAPI. Una tabla de cobertura muestra qué respuestas documentadas maneja el Arazzo, y la validación señala operaciones inexistentes, parámetros obligatorios que nunca se envían, referencias rotas y pasos que dependen de otros que corren después.
+2. **Valores por defecto.** Los valores con que parte cada caso, más el ambiente (URLs base y credenciales tomadas de los `securitySchemes`).
+3. **Casos de prueba.** Los casos generales corren contra la API real o en simulación. Los escenarios por respuesta y por mensaje se simulan con los ejemplos del contrato (o su schema si no hay ejemplos) y verifican que se active la acción correcta. Los escenarios HTTP se pueden pasar a la API real dándoles los datos que provocan esa respuesta.
+4. **Resultados.** Cada caso termina con un veredicto (pasó, no pasó o no concluyente) y una razón en lenguaje claro.
 
-Las peticiones salen del navegador, así que la API probada debe permitir CORS desde el origen de la app (por ejemplo `http://localhost:5173`) e incluir en `Access-Control-Allow-Headers` los headers que envían los workflows. Cuando el navegador bloquea una petición por CORS no da más detalle; la app lo reporta como "Red o CORS".
+> [!IMPORTANT]
+> Las peticiones salen del navegador, así que la API probada debe permitir **CORS** desde el origen de la app (por ejemplo `http://localhost:5173`) e incluir en `Access-Control-Allow-Headers` los headers que envían los workflows. Cuando una petición se bloquea, la app muestra un panel con los headers exactos que hay que agregar.
 
-Otras limitaciones del navegador: no se pueden enviar cookies ni el header `Host`, y solo se leen los headers de respuesta que la API exponga.
+## Privacidad y seguridad
 
-Los pasos de AsyncAPI (`send` / `receive`) siempre se simulan con los ejemplos y schemas del contrato: el navegador no puede conectarse a un broker como Kafka, AMQP o MQTT. En los resultados aparecen como simulados, también cuando el resto del workflow corre contra la API real.
+- Todo corre **en el navegador**. No hay backend ni cuenta.
+- Las credenciales viven **solo en la pestaña abierta**: nunca se guardan, se exportan ni van en los reportes.
+- Tokens, contraseñas y API keys se **enmascaran** en resultados, reportes, exportaciones y comandos cURL (salvo que elijas copiarlos).
+- La sesión guardada (IndexedDB) omite las credenciales y cualquier input con nombre sensible (`token`, `password`, `secret`…).
 
-## Soporte de Arazzo
+## Soporte de las especificaciones
 
-Se soportan documentos Arazzo **1.0.x** y **1.1.x**.
+Se soportan documentos Arazzo **1.0.x** y **1.1.x**, con contratos OpenAPI **3.x** y AsyncAPI **2.x** y **3.x**.
 
 | Elemento | Estado |
 |---|---|
-| `operationId` (simple y `$sourceDescriptions.x.opId`) | Soportado |
-| `operationPath` | Soportado |
-| Pasos con `workflowId` (sub-workflows) | Soportado |
-| Parámetros path, query y header | Soportado |
-| Parámetros `in: querystring` (1.1) | Soportado |
-| Parámetros cookie | No soportado (restricción del navegador) |
-| `requestBody` con `payload` y `replacements` | Soportado (`targetSelectorType` JSON Pointer y JSONPath) |
-| `successCriteria` simple, regex y JSONPath | Soportado (JSONPath con sintaxis de jsonpath-plus) |
-| `successCriteria` y selectores XPath | No soportado |
-| `onSuccess` / `onFailure`: end, goto, retry | Soportado |
-| `parameters` en las acciones (1.1) | Soportado en `goto` y `retry` con `workflowId` |
-| Selector Object en outputs, parámetros y payloads (1.1) | Soportado (JSONPath y JSON Pointer) |
-| `components` (parameters, successActions, failureActions, inputs) | Soportado |
-| Fuentes AsyncAPI (1.1): `channelPath`, `action`, `correlationId`, `$message` | Soportado, siempre simulado (ver arriba) |
-| `timeout` de un paso (1.1) | Soportado |
-| `dependsOn` de un paso (1.1) | Se valida en el análisis y antes de cada paso; los pasos corren en el orden del documento |
-| `dependsOn` de un workflow | No se ejecuta automáticamente |
-| `$ref` externos en OpenAPI, AsyncAPI y Arazzo | Soportado entre los archivos cargados (y descargados junto a un contrato que se baja de su URL) |
+| `operationId` (simple y `$sourceDescriptions.x.opId`) | ✅ Soportado |
+| `operationPath` | ✅ Soportado |
+| Pasos con `workflowId` (sub-workflows) | ✅ Soportado |
+| Parámetros path, query y header | ✅ Soportado |
+| Parámetros `in: querystring` (1.1) | ✅ Soportado |
+| Parámetros cookie | ❌ No soportado (restricción del navegador) |
+| `requestBody` con `payload` y `replacements` | ✅ Soportado (`targetSelectorType` JSON Pointer y JSONPath) |
+| `successCriteria` simple, regex y JSONPath | ✅ Soportado (JSONPath con sintaxis de jsonpath-plus) |
+| `successCriteria` y selectores XPath | ❌ No soportado |
+| `onSuccess` / `onFailure`: `end`, `goto`, `retry` | ✅ Soportado |
+| `parameters` en las acciones (1.1) | ✅ Soportado en `goto` y `retry` con `workflowId` |
+| Selector Object en outputs, parámetros y payloads (1.1) | ✅ Soportado (JSONPath y JSON Pointer) |
+| `components` (parameters, successActions, failureActions, inputs) | ✅ Soportado |
+| Fuentes AsyncAPI (1.1): `channelPath`, `action`, `correlationId`, `$message` | ✅ Soportado, siempre simulado |
+| `timeout` de un paso (1.1) | ✅ Soportado |
+| `dependsOn` de un paso (1.1) | ✅ Se valida en el análisis y antes de cada paso; los pasos corren en el orden del documento |
+| `dependsOn` de un workflow | ⚠️ No se ejecuta automáticamente |
+| `$ref` externos en OpenAPI, AsyncAPI y Arazzo | ✅ Soportado entre los archivos cargados (y descargados junto a un contrato que se baja de su URL) |
 
-## Estructura
+## Limitaciones conocidas
+
+- **Los pasos de mensajería se simulan.** El navegador no puede conectarse a brokers.
+- **CORS.** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga.
+- **XPath** en criterios y selectores no está soportado.
+- **`retry` con `stepId`** y el **`dependsOn` de un workflow** no se ejecutan automáticamente.
+- **No es un runner de CI.** Las ejecuciones las inicia una persona desde el navegador.
+- **Todavía no hay versión publicada en línea.** Se ejecuta localmente o publicando el build estático.
+
+## Hoja de ruta
+
+Próximos pasos previstos, sin un orden fijo:
+
+- **Demo en línea** con los ejemplos incluidos, para probar la app sin instalar nada.
+- **Edición asistida por IA** (opcional, con tu propia API key): describe un cambio en lenguaje natural y revísalo como diff antes de aplicarlo.
+- **Diagrama más completo:** flechas de `dependsOn` y `timeout` en los pasos.
+- **Simulaciones editables:** ajustar la respuesta o el mensaje simulado de un escenario para probar casos de negocio sin tocar YAML.
+- **Cargar una carpeta completa,** para que los contratos de varios archivos entren de una vez.
+
+Las ideas y comentarios son bienvenidos en los [issues](https://github.com/bvegaM/arazzo-studio/issues).
+
+## Idiomas
+
+La interfaz está en **inglés** y **español**. El idioma inicial se toma del navegador y se puede cambiar en la barra lateral. También se traducen los mensajes del motor y el reporte HTML. Los archivos de escenarios mantienen las mismas claves en ambos idiomas, para que sigan siendo compatibles.
+
+## Para quien contribuye
+
+### Estructura del proyecto
 
 ```
 src/
-  main.tsx            punto de entrada
-  app/                composición de la app
-    App.tsx           enruta entre pantallas
-    useStudio.ts      estado y acciones del flujo (cargar, ejecutar, exportar)
-    Sidebar.tsx       navegación lateral con el resumen de cada paso
-    example.ts        ejemplo de tarjetas incluido
-  core/               motor independiente de la UI (sin React ni DOM)
-    loader, analyze, openapi, expressions, criteria, runner, testcases,
-    contract, simulator, report, scenariosFile, templates, schemaForm,
-    environments, session, curl, jsonPointer, format, http, types
-  i18n/               traducciones (es, en), t() y el hook useLocale
-  lib/                utilidades del navegador (descargas, portapapeles, IndexedDB)
+  app/          composición de la app: navegación entre pantallas, estado (useStudio) y barra lateral
+  core/         motor independiente de la UI (sin React ni DOM): carga y resolución de $ref,
+                resolución de OpenAPI y AsyncAPI, análisis, runner, criterios,
+                simulador, casos de prueba, ayudas del editor, reporte, ambientes, sesión…
+  i18n/         traducciones (en, es), t() y el hook useLocale
+  lib/          utilidades del navegador (descargas, portapapeles, IndexedDB)
   ui/
-    components/       piezas reutilizables (kit, badges, WorkflowGraph, SchemaField,
-                      WorkflowPicker, EnvironmentBar)
-    screens/          una pantalla por paso del flujo
-examples              contrato, Arazzo y mock de ejemplo
+    components/ piezas reutilizables (diagrama, editor del Arazzo, formulario de schema, selector de workflows…)
+    screens/    una pantalla por paso
+examples/       ejemplos de tarjetas de crédito y traspaso de millas, y la API mock
+docs/           capturas de pantalla
 ```
 
-Reglas de dependencia: `ui` y `app` usan `core`; `core` no importa nada de `ui`, `app` ni `lib` (solo `i18n`, que no depende de React). El diagrama (React Flow) se carga bajo demanda para aligerar el bundle inicial.
+`core` nunca importa de `ui`, `app` ni `lib`, así que el motor se puede reutilizar fuera del navegador. Las llamadas HTTP pasan por un `HttpExecutor` (`fetch` o el simulador basado en el contrato) y los pasos de mensajería por un `MessageExecutor` (hoy, el simulador). El diagrama (React Flow) y el editor (CodeMirror) se cargan solo cuando se usan, para que la carga inicial sea liviana.
 
-La ejecución HTTP está detrás de `HttpExecutor` (`src/core/http.ts`). Hay dos implementaciones: `fetch` (API real) y el simulador (`src/core/simulator.ts`).
+### Scripts
 
-`npm run typecheck` verifica tipos de la app, la config y los tests.
+| Comando | Qué hace |
+|---|---|
+| `npm run dev` | Levanta el servidor de desarrollo |
+| `npm run build` | Revisa tipos y genera el build de producción |
+| `npm run preview` | Sirve el build de producción |
+| `npm test` | Corre las pruebas (motor, criterios, análisis, ayudas del editor, ejecución contra el mock) |
+| `npm run typecheck` | Revisa tipos de la app, la configuración y las pruebas |
+| `npm run lint` | Lint con oxlint |
+| `npm run mock` / `npm run mock:bug` | Levanta las APIs de ejemplo (correctas / con errores de contrato) |
+
+### Agregar un texto
+
+Añade la clave en `src/i18n/locales/es/` y su traducción en `src/i18n/locales/en/`. TypeScript avisa si falta alguna.
 
 ## Licencia
 
 [MIT](LICENSE) © bvegam
+
+<sub>Arazzo y OpenAPI son especificaciones del <a href="https://www.openapis.org">OpenAPI Initiative</a>, y AsyncAPI de la <a href="https://www.asyncapi.com">AsyncAPI Initiative</a>. Este proyecto no está afiliado ni respaldado por ninguna de ellas.</sub>

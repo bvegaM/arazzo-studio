@@ -69,7 +69,7 @@ export const core = {
   'an.noWorkflows': 'El Arazzo no tiene workflows.',
   'an.dupWorkflow': 'workflowId duplicado: "{id}".',
   'an.dupStep': 'stepId duplicado: "{id}".',
-  'an.stepKind': 'Cada paso debe tener exactamente uno de: operationId, operationPath o workflowId.',
+  'an.stepKind': 'Cada paso debe tener exactamente uno de: operationId, operationPath, channelPath o workflowId.',
   'an.noOperation': '(sin operación)',
   'an.looseOpId': '"{id}" no es la forma estándar de Arazzo. Se resolvió como {op}; corrígelo a "{fixed}".',
   'an.opMissing': 'La operación "{id}" no existe en los contratos cargados.',

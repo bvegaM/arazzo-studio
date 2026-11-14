@@ -70,7 +70,7 @@ export const core: Record<keyof typeof es, string> = {
   'an.noWorkflows': 'The Arazzo has no workflows.',
   'an.dupWorkflow': 'Duplicate workflowId: "{id}".',
   'an.dupStep': 'Duplicate stepId: "{id}".',
-  'an.stepKind': 'Each step must have exactly one of: operationId, operationPath or workflowId.',
+  'an.stepKind': 'Each step must have exactly one of: operationId, operationPath, channelPath or workflowId.',
   'an.noOperation': '(no operation)',
   'an.looseOpId': '"{id}" is not the standard Arazzo form. It was resolved as {op}; change it to "{fixed}".',
   'an.opMissing': 'Operation "{id}" does not exist in the loaded contracts.',
