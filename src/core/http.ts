@@ -1,6 +1,7 @@
 // Ejecución HTTP. Hoy solo usa fetch del navegador; si algún día se necesita un proxy,
 // basta con otra implementación de HttpExecutor.
 import { t } from '../i18n'
+import type { OperationRef } from './openapi'
 
 export interface HttpRequest {
   method: string
@@ -64,3 +65,31 @@ export const fetchExecutor: HttpExecutor = async (req, signal) => {
     durationMs: Math.round(performance.now() - started),
   }
 }
+
+// Mensajería AsyncAPI. El navegador no puede conectarse a un broker (Kafka, AMQP, MQTT…),
+// así que hoy la única implementación es la simulada; otra (p. ej. WebSocket) cabría aquí.
+
+export interface MessageRequest {
+  action: 'send' | 'receive'
+  channel: string
+  headers: Record<string, any>
+  payload?: any
+  /** Solo receive: el mensaje esperado debe traer este identificador. */
+  correlationId?: unknown
+  timeoutMs?: number
+}
+
+export interface MessageResult {
+  /** sent: se envió; received: llegó un mensaje; timeout: no llegó ninguno a tiempo. */
+  status: 'sent' | 'received' | 'timeout'
+  message?: { headers: Record<string, any>; payload: any }
+  durationMs: number
+  simulated?: boolean
+}
+
+export interface MessageMeta {
+  stepId: string
+  op: OperationRef
+}
+
+export type MessageExecutor = (msg: MessageRequest, signal?: AbortSignal, meta?: MessageMeta) => Promise<MessageResult>

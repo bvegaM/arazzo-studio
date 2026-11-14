@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { WorkflowAnalysis } from './analyze'
+import type { ResolvedStep, WorkflowAnalysis } from './analyze'
 import { collectReferences } from './expressions'
-import { documentedStatuses } from './openapi'
+import { documentedStatuses, isAsyncOperation } from './openapi'
 import type { StepResult, WorkflowRunResult } from './runner'
 import { requirementsFromCriteria } from './criteria'
 import type { Scenario } from './simulator'
@@ -57,8 +57,9 @@ export function verdictLabel(verdict: Verdict): string {
   return t(`verdict.${verdict}`)
 }
 
+// Solo pasos HTTP: los de mensajería no responden con un error a un dato inválido.
 function firstConsumer(wa: WorkflowAnalysis, input: string) {
-  return wa.steps.find((s) => collectReferences({ ...s.step, parameters: s.parameters }).inputs.includes(input))
+  return wa.steps.find((s) => !isAsyncOperation(s.op) && collectReferences({ ...s.step, parameters: s.parameters }).inputs.includes(input))
 }
 
 function expectedClientErrors(wa: WorkflowAnalysis, stepId: string, preferred: number[]): number[] {
@@ -181,6 +182,10 @@ function scenarioCases(wa: WorkflowAnalysis): TestCase[] {
   const out: TestCase[] = []
   for (const rs of wa.steps) {
     if (rs.kind !== 'operation') continue
+    if (isAsyncOperation(rs.op)) {
+      out.push(...messageScenarioCases(wa, rs))
+      continue
+    }
     const step = rs.step
     const groups: ['onFailure' | 'onSuccess', Action[]][] = [
       ['onFailure', step.onFailure ?? wf.failureActions ?? []],
@@ -215,6 +220,72 @@ function scenarioCases(wa: WorkflowAnalysis): TestCase[] {
         })
       })
     }
+  }
+  return out
+}
+
+/**
+ * Escenarios de un paso AsyncAPI receive: un mensaje con los valores que activa cada acción
+ * con criterios, y "no llega ningún mensaje" para la acción onFailure sin criterios.
+ */
+function messageScenarioCases(wa: WorkflowAnalysis, rs: ResolvedStep): TestCase[] {
+  const wf = wa.workflow
+  const step = rs.step
+  if ((step.action ?? rs.op?.method) !== 'receive') return []
+  const out: TestCase[] = []
+  const success = requirementsFromCriteria(step.successCriteria)
+  const push = (trigger: 'onFailure' | 'onSuccess', action: Action, name: string, scenario: Scenario, title: string, description: string) =>
+    out.push({
+      id: `${wf.workflowId}::scenario-${step.stepId}-${trigger}-${name}`,
+      workflowId: wf.workflowId,
+      title,
+      origin: 'escenario',
+      description,
+      scenario,
+      expectation: {
+        type: 'action',
+        stepId: step.stepId,
+        actionName: name,
+        text: t('tc.scenario.expectation', { step: step.stepId, action: name, trigger, effect: actionEffect(action) }),
+      },
+      enabled: true,
+    })
+
+  const groups: ['onFailure' | 'onSuccess', Action[]][] = [
+    ['onFailure', step.onFailure ?? wf.failureActions ?? []],
+    ['onSuccess', step.onSuccess ?? wf.successActions ?? []],
+  ]
+  for (const [trigger, actions] of groups) {
+    actions.forEach((action, index) => {
+      const name = action.name ?? `${trigger}[${index}]`
+      if (!action.criteria?.length) return
+      const req = requirementsFromCriteria(action.criteria)
+      if (!req.bodyValues.length) return
+      const bodyValues = trigger === 'onSuccess' ? [...success.bodyValues, ...req.bodyValues] : req.bodyValues
+      const detail = bodyValues.map((b) => `${b.pointer.slice(1)} = ${JSON.stringify(b.value)}`).join(', ')
+      push(
+        trigger,
+        action,
+        name,
+        { stepId: step.stepId, status: 0, bodyValues },
+        t('tc.msg.title', { step: step.stepId, detail: ` ${bodyValues.map((b) => String(b.value)).join(' ')}`, action: name }),
+        t('tc.msg.description', { step: step.stepId, body: detail }),
+      )
+    })
+  }
+  const failures = step.onFailure ?? wf.failureActions ?? []
+  const catchAll = failures.findIndex((a) => !a.criteria?.length)
+  if (catchAll >= 0) {
+    const action = failures[catchAll]
+    const name = action.name ?? `onFailure[${catchAll}]`
+    push(
+      'onFailure',
+      action,
+      name,
+      { stepId: step.stepId, status: 0, bodyValues: [], timeout: true },
+      t('tc.msg.timeoutTitle', { step: step.stepId, action: name }),
+      t('tc.msg.timeoutDescription', { step: step.stepId }),
+    )
   }
   return out
 }
@@ -299,6 +370,13 @@ export function createDataCase(params: {
   }
 }
 
+/** Cómo terminó un paso, para los textos: status HTTP o, en mensajería, si llegó mensaje. */
+function responseLabel(step: StepResult): string | number {
+  if (step.response) return step.response.status
+  if (step.message?.action === 'receive') return t('ev.msg.received')
+  return step.request?.method === 'RECEIVE' ? t('ev.msg.none') : ''
+}
+
 export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: Verdict; explanation: string } {
   const failed = run.steps.find((s) => s.status === 'failed')
 
@@ -377,18 +455,18 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
     if (triggered && triggered.name === tc.expectation.actionName) {
       return {
         verdict: 'passed',
-        explanation: t('ev.action.ok', { status: first.response?.status ?? '', step: stepId ?? '', action: triggered.name, type: triggered.type, then }),
+        explanation: t('ev.action.ok', { status: responseLabel(first), step: stepId ?? '', action: triggered.name, type: triggered.type, then }),
       }
     }
     if (triggered) {
       return {
         verdict: 'failed',
-        explanation: t('ev.action.other', { status: first.response?.status ?? '', step: stepId ?? '', action: triggered.name, expected: tc.expectation.actionName ?? '' }),
+        explanation: t('ev.action.other', { status: responseLabel(first), step: stepId ?? '', action: triggered.name, expected: tc.expectation.actionName ?? '' }),
       }
     }
     return {
       verdict: 'failed',
-      explanation: t('ev.action.none', { status: first.response?.status ?? '', step: stepId ?? '', expected: tc.expectation.actionName ?? '' }),
+      explanation: t('ev.action.none', { status: responseLabel(first), step: stepId ?? '', expected: tc.expectation.actionName ?? '' }),
     }
   }
 

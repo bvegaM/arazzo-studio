@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { JSONPath } from 'jsonpath-plus'
 import { getByPointer } from './jsonPointer'
+import type { Selector } from './types'
 
 export interface ExchangeRequest {
   method: string
@@ -16,6 +18,12 @@ export interface ExchangeResponse {
   body: any
 }
 
+/** Mensaje de AsyncAPI enviado o recibido por el paso ($message). */
+export interface ExchangeMessage {
+  headers: Record<string, any>
+  payload: any
+}
+
 export interface ExprContext {
   inputs: Record<string, any>
   steps: Record<string, { outputs: Record<string, any> }>
@@ -24,6 +32,9 @@ export interface ExprContext {
   components?: any
   request?: ExchangeRequest
   response?: ExchangeResponse
+  message?: ExchangeMessage
+  /** Valor de $self (identidad del documento Arazzo). */
+  self?: string
   /** Outputs de un sub-workflow, disponibles como $outputs en un paso que lo invoca. */
   outputs?: Record<string, any>
   /** Expresiones que no pudieron resolverse (para explicar errores). */
@@ -65,10 +76,13 @@ export function evaluateExpression(expr: string, ctx: ExprContext): EvalResult {
   if (e === '$url') return { found: !!ctx.request, value: ctx.request?.url }
   if (e === '$method') return { found: !!ctx.request, value: ctx.request?.method.toUpperCase() }
   if (e === '$statusCode') return { found: !!ctx.response, value: ctx.response?.status }
+  if (e === '$self') return { found: ctx.self !== undefined, value: ctx.self }
 
   let m: RegExpMatchArray | null
   if ((m = e.match(/^\$response\.header\.(.+)$/))) return headerLookup(ctx.response?.headers, m[1])
   if ((m = e.match(/^\$response\.body(.*)$/))) return ctx.response ? walk(ctx.response.body, m[1]) : { found: false, value: undefined }
+  if ((m = e.match(/^\$message\.header\.(.+)$/))) return headerLookup(ctx.message?.headers, m[1])
+  if ((m = e.match(/^\$message\.(?:payload|body)(.*)$/))) return ctx.message ? walk(ctx.message.payload, m[1]) : { found: false, value: undefined }
   if ((m = e.match(/^\$request\.header\.(.+)$/))) return headerLookup(ctx.request?.headers, m[1])
   if ((m = e.match(/^\$request\.query\.(.+)$/))) {
     const v = ctx.request?.query[m[1]]
@@ -97,15 +111,68 @@ export function evaluateExpression(expr: string, ctx: ExprContext): EvalResult {
   return { found: false, value: undefined }
 }
 
-const FULL_EXPR = /^\$(url|method|statusCode|request|response|inputs|outputs|steps|workflows|sourceDescriptions|components)\b[^\s{}]*$/
+const FULL_EXPR = /^\$(url|method|statusCode|request|response|message|inputs|outputs|steps|workflows|sourceDescriptions|components|self)\b[^\s{}]*$/
 const EMBEDDED = /\{(\$[^{}]+)\}/g
 
 export function isRuntimeExpression(s: unknown): boolean {
   return typeof s === "string" && FULL_EXPR.test(s.trim())
 }
 
+/** Arazzo 1.1: un objeto { context, selector, type } en lugar de un valor literal. */
+export function isSelector(value: unknown): value is Selector {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  return (
+    Object.keys(v).length === 3 &&
+    typeof v.context === 'string' &&
+    typeof v.selector === 'string' &&
+    (typeof v.type === 'string' || (!!v.type && typeof v.type === 'object'))
+  )
+}
+
+export function selectorType(type: Selector['type'] | undefined): string {
+  return (typeof type === 'object' ? type.type : type) ?? ''
+}
+
+/** Aplica un Selector Object. XPath no está soportado: queda sin resolver. */
+export function evaluateSelector(sel: Selector, ctx: ExprContext): EvalResult {
+  const base = evaluateExpression(sel.context, ctx)
+  if (!base.found) return base
+  let data = base.value
+  if (typeof data === 'string' && /^\s*[[{]/.test(data)) {
+    try {
+      data = JSON.parse(data)
+    } catch {
+      /* se deja como texto */
+    }
+  }
+  const type = selectorType(sel.type)
+  if (type === 'jsonpointer') return getByPointer(data, sel.selector)
+  if (type === 'jsonpath') {
+    try {
+      const out = JSONPath({ path: sel.selector, json: data, wrap: true }) as any[]
+      return out.length ? { found: true, value: out[0] } : { found: false, value: undefined }
+    } catch {
+      return { found: false, value: undefined }
+    }
+  }
+  return { found: false, value: undefined }
+}
+
+/** Valor de un output o parámetro: expresión, Selector Object o literal (con expresiones embebidas). */
+export function evaluateValue(value: unknown, ctx: ExprContext): EvalResult {
+  if (isRuntimeExpression(value)) return evaluateExpression(value as string, ctx)
+  if (isSelector(value)) return evaluateSelector(value, ctx)
+  return { found: true, value: interpolate(value, { ...ctx, unresolved: [] }) }
+}
+
 /** Sustituye expresiones en cualquier valor (profundo). Una expresión completa conserva su tipo. */
 export function interpolate(value: any, ctx: ExprContext): any {
+  if (isSelector(value)) {
+    const r = evaluateSelector(value, ctx)
+    if (!r.found) ctx.unresolved?.push(`${value.context} → ${value.selector}`)
+    return r.value
+  }
   if (typeof value === 'string') {
     if (isRuntimeExpression(value)) {
       const r = evaluateExpression(value, ctx)

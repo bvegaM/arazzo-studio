@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Estado de la app y acciones del flujo (cargar, configurar, ejecutar, exportar).
 import { useEffect, useRef, useState } from 'react'
-import { attachSource, buildProject, fetchRemoteSource, parseFile, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
+import { attachSource, buildProject, fetchRemoteSource, parseFile, replaceArazzo, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
 import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
 import { fetchExecutor } from '../core/http'
-import { createSimulatedExecutor } from '../core/simulator'
+import { createSimulatedExecutor, createSimulatedMessenger } from '../core/simulator'
 import { runWorkflow } from '../core/runner'
 import {
   applyCaseInputs,
@@ -26,7 +26,7 @@ import { download, readTextFiles } from '../lib/browser'
 import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
-import { EXAMPLE_FILES } from './example'
+import { EXAMPLES, type ExampleId } from './example'
 
 export const Screen = { Load: 0, Contracts: 1, Params: 2, Cases: 3, Results: 4 } as const
 export type Screen = (typeof Screen)[keyof typeof Screen]
@@ -153,8 +153,8 @@ export function useStudio() {
     loadFiles(await readTextFiles(fs), false)
   }
 
-  function loadExample() {
-    loadFiles(EXAMPLE_FILES, true)
+  function loadExample(id: ExampleId = 'cards') {
+    loadFiles(EXAMPLES[id], true)
   }
 
   async function attachFile(sourceName: string, f: File) {
@@ -164,6 +164,22 @@ export function useStudio() {
     setFiles((prev) => [...prev.filter((x) => x.name !== parsed.name), parsed])
     setAttachments((prev) => [...prev.filter((a) => a.source !== sourceName), { source: sourceName, file: loaded }])
     applyProject(attachSource(project, sourceName, parsed))
+  }
+
+  /**
+   * Cambios del editor: el texto se guarda siempre (también en la sesión) y, si es un Arazzo
+   * válido, reemplaza al anterior y se vuelve a analizar. Si no se puede leer, el análisis
+   * queda como estaba y el editor muestra el error.
+   */
+  function editArazzo(text: string): string | undefined {
+    if (!project) return
+    const name = project.arazzoFileName
+    setTexts((prev) => (prev.some((f) => f.name === name) ? prev.map((f) => (f.name === name ? { ...f, text } : f)) : [...prev, { name, text }]))
+    const parsed = parseFile({ name, text })
+    if (parsed.error) return parsed.error
+    if (parsed.kind !== 'arazzo') return t('load.noArazzo')
+    setFiles((prev) => prev.map((f) => (f.name === name ? parsed : f)))
+    applyProject(replaceArazzo(project, parsed))
   }
 
   async function fetchRemote(sourceName: string) {
@@ -284,6 +300,7 @@ export function useStudio() {
         servers,
         dropAuth: tc.dropAuth,
         executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : fetchExecutor,
+        messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
         onStep: (s) => {
@@ -393,6 +410,8 @@ export function useStudio() {
     discardSession,
     addFiles,
     attachFile,
+    arazzoText: project ? texts.find((f) => f.name === project.arazzoFileName)?.text : undefined,
+    editArazzo,
     fetchRemote,
     loadExample,
     reset,

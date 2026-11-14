@@ -1,0 +1,95 @@
+arazzo: 1.1.0
+info:
+  title: Traspaso de millas
+  version: 1.0.0
+  description: >-
+    Inscribe a un socio, pide un traspaso de millas desde un partner (evento AsyncAPI),
+    espera la confirmación y consulta el saldo final.
+sourceDescriptions:
+  - name: members
+    url: ./members.yaml
+    type: openapi
+  - name: milesEvents
+    url: ./miles-events.asyncapi.yaml
+    type: asyncapi
+workflows:
+  - workflowId: enrollAndTransfer
+    summary: Inscribir socio y traspasar millas
+    inputs:
+      type: object
+      required: [email, firstName, miles, correlationId]
+      properties:
+        email: { type: string, format: email, example: '{{email}}' }
+        firstName: { type: string, example: Ana }
+        miles: { type: integer, minimum: 1, example: 500 }
+        partner: { type: string, example: COBRAND_BANK }
+        correlationId: { type: string, example: '{{uuid}}' }
+    steps:
+      - stepId: createMember
+        description: Inscribe al socio en el programa.
+        operationId: $sourceDescriptions.members.createMember
+        requestBody:
+          contentType: application/json
+          payload:
+            email: $inputs.email
+            firstName: $inputs.firstName
+        successCriteria:
+          - condition: $statusCode == 201
+        onFailure:
+          - name: alreadyMember
+            type: end
+            criteria:
+              - condition: $statusCode == 409
+        outputs:
+          memberId:
+            context: $response.body
+            selector: $.member.id
+            type: jsonpath
+      - stepId: requestTransfer
+        description: Publica el pedido de traspaso de millas del partner.
+        operationId: $sourceDescriptions.milesEvents.requestTransfer
+        action: send
+        parameters:
+          - name: correlationId
+            in: header
+            value: $inputs.correlationId
+        requestBody:
+          payload:
+            memberId: $steps.createMember.outputs.memberId
+            miles: $inputs.miles
+            partner: $inputs.partner
+      - stepId: awaitTransfer
+        description: Espera la confirmación del traspaso.
+        channelPath: '{$sourceDescriptions.milesEvents.url}#/channels/transferResult'
+        action: receive
+        correlationId: $inputs.correlationId
+        timeout: 10000
+        dependsOn: [requestTransfer]
+        successCriteria:
+          - condition: $message.payload#/status == 'COMPLETED'
+        onFailure:
+          - name: transferRejected
+            type: end
+            criteria:
+              - condition: $message.payload#/status == 'REJECTED'
+          - name: noConfirmation
+            type: end
+        outputs:
+          balance: $message.payload#/balance
+      - stepId: getMember
+        description: Consulta el saldo final del socio.
+        operationId: $sourceDescriptions.members.getMember
+        parameters:
+          - name: memberId
+            in: path
+            value: $steps.createMember.outputs.memberId
+          - name: expand
+            in: query
+            value: benefits
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          miles: $response.body#/miles
+    outputs:
+      memberId: $steps.createMember.outputs.memberId
+      balance: $steps.getMember.outputs.miles

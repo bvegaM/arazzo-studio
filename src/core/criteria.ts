@@ -36,7 +36,8 @@ export interface CriterionResult {
   mismatches?: Mismatch[]
 }
 
-const BODY_POINTER = /^\$response\.body(?:#(\/.*))?$/
+// El body de una respuesta HTTP o el payload de un mensaje AsyncAPI ($message.payload).
+const BODY_POINTER = /^\$(?:response\.body|message\.payload)(?:#(\/.*))?$/
 
 /** Ruta dentro del body si la expresión apunta a él ("$response.body#/a/b" → "/a/b", "$response.body" → ""). */
 function bodyPointer(expr: string): string | undefined {
@@ -285,7 +286,7 @@ const OP_KEY = {
 export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResult {
   let type = typeof c.type === 'object' ? c.type.type : (c.type ?? 'simple')
   // Condición simple marcada por error como jsonpath ($response.body#/x == 'y'): se evalúa como simple.
-  if (type === 'jsonpath' && /^\s*\$(statusCode|response|request|inputs|steps|url|method)\b.*(==|!=|<=|>=|<|>)/.test(c.condition)) {
+  if (type === 'jsonpath' && /^\s*\$(statusCode|response|request|message|inputs|steps|url|method)\b.*(==|!=|<=|>=|<|>)/.test(c.condition)) {
     type = 'simple'
   }
   const base = { condition: c.condition, type, context: c.context }
@@ -365,7 +366,7 @@ export interface BodyValue {
 }
 
 const STATUS_EQ = /\$statusCode\s*==\s*(\d{3})/g
-const BODY_EQ = /\$response\.body#(\/[^\s=!<>]*)\s*==\s*('([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?)|true|false|null)/g
+const BODY_EQ = /\$(?:response\.body|message\.payload)#(\/[^\s=!<>]*)\s*==\s*('([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?)|true|false|null)/g
 
 /** Todos los status que aparecen en las condiciones (incluye todas las alternativas de un OR). */
 export function statusesInCriteria(criteria: Criterion[] | undefined): number[] {

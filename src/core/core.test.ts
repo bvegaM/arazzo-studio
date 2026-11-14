@@ -108,7 +108,7 @@ describe('análisis del proyecto de ejemplo', () => {
 function startMock(bug: boolean, port: number): Promise<ChildProcess> {
   return new Promise((resolve) => {
     const p = spawn('node', ['examples/mock-server.mjs'], { env: { ...process.env, PORT: String(port), MOCK_BUG: bug ? '1' : '0' } })
-    p.stdout.on('data', (d) => String(d).includes('Mock Credit Cards API') && resolve(p))
+    p.stdout.on('data', (d) => String(d).includes(`http://localhost:${port}`) && resolve(p))
   })
 }
 

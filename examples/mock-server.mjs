@@ -1,4 +1,4 @@
-// Mock de la Credit Cards API para probar Arazzo Studio en local.
+// Mock de las APIs de ejemplo (Credit Cards y Members) para probar Arazzo Studio en local.
 //   npm run mock              → se comporta según el contrato
 //   MOCK_BUG=1 npm run mock   → introduce errores de contrato para ver las advertencias
 import http from 'node:http'
@@ -9,6 +9,7 @@ const CARD_LAST4 = '4321'
 
 const applications = new Map()
 const cards = new Map([['CARD-1000', { cardId: 'CARD-1000', status: 'ACTIVE', productCode: 'LATAM_PASS_VISA', creditLimit: 2000 }]])
+const members = new Map()
 let seq = 1
 
 const cors = {
@@ -48,9 +49,28 @@ const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${path}`)
 
   if (!/^Bearer\s+\S+/i.test(req.headers.authorization ?? '')) return error(res, 401, 'UNAUTHORIZED', 'Token ausente o inválido')
-  if (!req.headers['x-channel'] || !req.headers['x-country']) return error(res, 400, 'MISSING_HEADERS', 'X-Channel y X-Country son obligatorios')
 
   let m
+  // Members API (ejemplo de traspaso de millas). Las millas solo cambian por eventos, que se simulan en la app.
+  if (req.method === 'POST' && path === '/members') {
+    const body = await readBody(req)
+    if (!body || typeof body !== 'object') return error(res, 400, 'INVALID_BODY', 'Body JSON requerido')
+    if (!/^[^@\s]+@[^@\s]+$/.test(body.email ?? '')) return error(res, 400, 'INVALID_FIELD', 'email no es válido')
+    if (!body.firstName) return error(res, 400, 'MISSING_FIELD', 'firstName es obligatorio')
+    if ([...members.values()].some((x) => x.email === body.email)) return error(res, 409, 'ALREADY_MEMBER', 'El email ya está inscrito')
+    const id = `MBR-${1000 + seq++}`
+    members.set(id, { id, email: body.email, tier: 'BLUE', miles: 0 })
+    return send(res, 201, { member: { id, tier: 'BLUE' }, miles: 0 })
+  }
+  if (req.method === 'GET' && (m = path.match(/^\/members\/([^/]+)$/))) {
+    const member = members.get(decodeURIComponent(m[1]))
+    if (!member) return error(res, 404, 'NOT_FOUND', `Socio ${m[1]} no existe`)
+    const out = { member: { id: member.id, tier: member.tier }, miles: member.miles }
+    return send(res, 200, url.searchParams.get('expand') === 'benefits' ? { ...out, benefits: [] } : out)
+  }
+
+  if (!req.headers['x-channel'] || !req.headers['x-country']) return error(res, 400, 'MISSING_HEADERS', 'X-Channel y X-Country son obligatorios')
+
   if (req.method === 'POST' && path === '/card-applications') {
     const body = await readBody(req)
     if (!body || typeof body !== 'object') return error(res, 400, 'INVALID_BODY', 'Body JSON requerido')
@@ -92,6 +112,6 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`Mock Credit Cards API en http://localhost:${PORT}${BUG ? ' (con errores de contrato)' : ''}`)
+  console.log(`Mock Credit Cards y Members API en http://localhost:${PORT}${BUG ? ' (con errores de contrato)' : ''}`)
   console.log(`Los últimos 4 dígitos válidos para activar son ${CARD_LAST4}. Cualquier token Bearer sirve.`)
 })

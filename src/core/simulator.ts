@@ -7,13 +7,15 @@ import type { Step } from './types'
 import { requirementsFromCriteria, type BodyValue } from './criteria'
 import { getByPointer, setByPointer } from './jsonPointer'
 import { deref, listOperations, type OperationRef } from './openapi'
-import type { HttpExecutor, HttpResponse } from './http'
+import type { HttpExecutor, HttpResponse, MessageExecutor, MessageResult } from './http'
 
 export interface Scenario {
   stepId: string
   status: number
   /** Valores del body que exige la acción (de condiciones $response.body#/x == 'y'). */
   bodyValues: BodyValue[]
+  /** AsyncAPI receive: no llega ningún mensaje antes del timeout. */
+  timeout?: boolean
 }
 
 /** Genera un valor de ejemplo a partir de un schema (usa example/default/enum cuando existen). */
@@ -122,5 +124,54 @@ export function createSimulatedExecutor(project: Project, steps: Step[], scenari
       durationMs: 0,
       simulated: true,
     }
+  }
+}
+
+/** Un mensaje de ejemplo de la operación AsyncAPI que cumpla los valores pedidos. */
+export function exampleMessage(op: OperationRef, bodyValues: BodyValue[]): { headers: Record<string, any>; payload: any } {
+  const messages = op.messages ?? []
+  const candidates = messages.flatMap((m) => m.examples.map((ex) => ({ m, ex })))
+  const matches = (payload: any) => bodyValues.every((bv) => getByPointer(payload, bv.pointer).value === bv.value)
+  const picked = candidates.find((c) => matches(c.ex.payload)) ?? candidates[0]
+  const message = picked?.m ?? messages[0]
+  let payload = picked?.ex.payload ?? (message?.payload ? exampleFromSchema(message.payload) : undefined)
+  let headers = picked?.ex.headers ?? (message?.headers ? exampleFromSchema(message.headers) : undefined)
+  payload = structuredClone(payload ?? {})
+  headers = structuredClone(headers && typeof headers === 'object' ? headers : {})
+  for (const bv of bodyValues) payload = setByPointer(payload, bv.pointer, bv.value)
+  return { headers, payload }
+}
+
+/** Escribe el identificador de correlación donde lo declara el AsyncAPI ('$message.header#/id'). */
+function applyCorrelation(op: OperationRef, message: { headers: Record<string, any>; payload: any }, value: unknown) {
+  if (value === undefined || value === null || value === '') return
+  const location = op.messages?.find((m) => m.correlationLocation)?.correlationLocation
+  const m = location?.match(/^\$message\.(header|payload)#(\/.*)$/)
+  if (!m) return
+  if (m[1] === 'header') message.headers = setByPointer(message.headers, m[2], value)
+  else message.payload = setByPointer(message.payload, m[2], value)
+}
+
+/**
+ * Mensajería simulada. send siempre se envía; receive recibe un mensaje de ejemplo que cumple
+ * los criterios de éxito del paso (con el identificador de correlación esperado), salvo el paso
+ * del escenario, que la primera vez recibe el mensaje del escenario o ninguno (timeout).
+ */
+export function createSimulatedMessenger(steps: Step[], scenario?: Scenario): MessageExecutor {
+  let scenarioServed = false
+  return async (msg, _signal, meta): Promise<MessageResult> => {
+    if (msg.action === 'send') {
+      return { status: 'sent', message: { headers: msg.headers, payload: msg.payload }, durationMs: 0, simulated: true }
+    }
+    const op = meta?.op
+    let bodyValues = requirementsFromCriteria(steps.find((s) => s.stepId === meta?.stepId)?.successCriteria).bodyValues
+    if (scenario && meta?.stepId === scenario.stepId && !scenarioServed) {
+      scenarioServed = true
+      if (scenario.timeout) return { status: 'timeout', durationMs: msg.timeoutMs ?? 0, simulated: true }
+      bodyValues = scenario.bodyValues
+    }
+    const message = op ? exampleMessage(op, bodyValues) : { headers: {}, payload: {} }
+    if (op) applyCorrelation(op, message, msg.correlationId)
+    return { status: 'received', message, durationMs: 0, simulated: true }
   }
 }

@@ -96,11 +96,18 @@ function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void
 function StepCard({ s, index }: { s: StepResult; index: number }) {
   const [open, setOpen] = useState(s.status === 'failed' || s.status === 'warning')
   const [tab, setTab] = useState<StepTab>('resumen')
-  const reasonTone = s.reason ? (REASON_CLS[s.reason.category] ?? (s.status === 'skipped' ? 'skip' : 'err')) : ''
+  // Mensajería es un aviso (paso simulado) salvo que el paso haya fallado (no llegó el mensaje).
+  const reasonTone = !s.reason
+    ? ''
+    : s.reason.category === 'mensajeria' && s.status !== 'failed'
+      ? 'warn'
+      : (REASON_CLS[s.reason.category] ?? (s.status === 'skipped' ? 'skip' : 'err'))
   const failedCriteria = s.criteria.filter((c) => !c.passed).length
   const outputs = Object.keys(s.outputs).length
   // Diferencias campo a campo de los criterios que fallaron (para compararlas y resaltarlas en la respuesta).
   const mismatches = s.criteria.filter((c) => !c.passed).flatMap((c) => c.mismatches ?? [])
+  // Pasos AsyncAPI: no hay petición HTTP; lo que se recibe es un mensaje.
+  const received = s.message?.action === 'receive' ? s.message : undefined
   const showInResponse = () => {
     setOpen(true)
     setTab('respuesta')
@@ -127,6 +134,16 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
             <strong className={s.response.status < 400 ? 'ok' : 'err'}>{s.response.status}</strong> · {s.response.durationMs} ms
           </span>
         )}
+        {s.message && (
+          <span className="http muted small">
+            <strong className="ok">{t(s.message.action === 'send' ? 'results.msgSent' : 'results.msgReceived')}</strong>
+          </span>
+        )}
+        {!s.message && s.request?.method === 'RECEIVE' && (
+          <span className="http muted small">
+            <strong className="err">{t('results.msgNone')}</strong>
+          </span>
+        )}
         {s.status !== 'skipped' && <Chevron open={open} />}
       </button>
 
@@ -136,7 +153,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
             (s.reason.category === 'criterio' && mismatches.length ? (
               <div className={`note n-${reasonTone} note-diff`}>
                 <strong>{reasonLabel(s.reason.category)}</strong>
-                <MismatchList mismatches={mismatches} onShow={s.response ? showInResponse : undefined} />
+                <MismatchList mismatches={mismatches} onShow={s.response || received ? showInResponse : undefined} />
               </div>
             ) : (
               <div className={`note n-${reasonTone}`}>
@@ -155,8 +172,8 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
             tabs={[
               { id: 'resumen', label: t('report.criteria'), count: s.criteria.length, tone: failedCriteria ? 'err' : 'ok' },
               { id: 'peticion', label: t('report.request') },
-              { id: 'respuesta', label: t('report.response') },
-              { id: 'contrato', label: t('report.contract'), count: s.response ? s.contractIssues.length : undefined, tone: s.contractIssues.length ? 'warn' : 'ok' },
+              { id: 'respuesta', label: received || s.message ? t('results.message') : t('report.response') },
+              { id: 'contrato', label: t('report.contract'), count: s.response || received ? s.contractIssues.length : undefined, tone: s.contractIssues.length ? 'warn' : 'ok' },
               { id: 'outputs', label: 'Outputs', count: outputs },
             ]}
           />
@@ -190,7 +207,7 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
             {tab === 'peticion' &&
               (s.request ? (
                 <>
-                  <CurlActions request={s.request} />
+                  {!s.message && <CurlActions request={s.request} />}
                   <div className="io">
                     <div>
                       <h4>{t('results.lineHeaders')}</h4>
@@ -217,11 +234,22 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
                     <JsonView value={s.response.body} highlight={mismatches.map((m) => m.pointer ?? '')} />
                   </div>
                 </div>
+              ) : received ? (
+                <div className="io">
+                  <div>
+                    <h4>{t('results.messageHeaders')}</h4>
+                    <pre>{`${s.message!.channel}\n${headersText(received.headers)}`}</pre>
+                  </div>
+                  <div>
+                    <h4>Payload</h4>
+                    <JsonView value={received.payload} highlight={mismatches.map((m) => m.pointer ?? '')} />
+                  </div>
+                </div>
               ) : (
-                <Empty>{t('report.noResponse')}</Empty>
+                <Empty>{t(s.message ? 'results.sentOnly' : 'report.noResponse')}</Empty>
               ))}
             {tab === 'contrato' &&
-              (!s.response ? (
+              (!s.response && !received ? (
                 <Empty>{t('results.nothingToValidate')}</Empty>
               ) : s.contractIssues.length === 0 ? (
                 <span className="badge b-ok">✓ {t('report.contractOk')}</span>

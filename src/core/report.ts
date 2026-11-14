@@ -58,8 +58,9 @@ function verdictBadge(v?: Verdict): string {
   return v ? `<span class="badge ${VERDICT_CLASS[v]}">${verdictLabel(v)}</span>` : `<span class="badge skip">${t('report.notRun')}</span>`
 }
 
-function headers(h: Record<string, string>): string {
+function headers(h: Record<string, unknown>): string {
   return Object.entries(h)
+    .map(([k, raw]) => [k, String(raw)])
     .map(([k, v]) => `${k}: ${SENSITIVE.test(k) && !v.includes('••') ? maskValue(v) : v}`)
     .join('\n')
 }
@@ -70,10 +71,13 @@ function stepHtml(s: StepResult, i: number): string {
     parts.push(`<div class="io"><div><h5>${t('report.request')}</h5><pre>${esc(`${s.request.method} ${s.request.url}\n${headers(s.request.headers)}`)}</pre>${
       s.request.body !== undefined ? `<pre>${esc(maskDeep(s.request.body))}</pre>` : ''
     }</div>`)
+    const received = s.message?.action === 'receive' ? s.message : undefined
     parts.push(
       s.response
         ? `<div><h5>${t('report.response')}</h5><pre>${esc(`HTTP ${s.response.status} ${s.response.statusText}\n${headers(s.response.headers)}`)}</pre><pre>${esc(maskDeep(s.response.body))}</pre></div></div>`
-        : `<div><h5>${t('report.response')}</h5><p class="muted">${t('report.noResponse')}</p></div></div>`,
+        : received
+          ? `<div><h5>${t('report.message')}</h5><pre>${esc(`${received.channel}\n${headers(received.headers)}`)}</pre><pre>${esc(maskDeep(received.payload))}</pre></div></div>`
+          : `<div><h5>${t('report.response')}</h5><p class="muted">${t(s.message ? 'report.noReply' : 'report.noResponse')}</p></div></div>`,
     )
   }
   if (s.criteria.length) {
@@ -88,7 +92,7 @@ function stepHtml(s: StepResult, i: number): string {
         .join('')}</table>`,
     )
   }
-  if (s.response) {
+  if (s.response || s.message?.action === 'receive') {
     parts.push(
       `<h5>${t('report.contract')}</h5>${
         s.contractIssues.length

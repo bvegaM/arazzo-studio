@@ -4,11 +4,13 @@ import type { ArazzoParameter, Criterion, JsonSchema, Step, Workflow } from './t
 import {
   MUTATING_METHODS,
   deref,
+  findByChannelPath,
   findByLooseOperationId,
   findByOperationId,
   findByOperationPath,
   findByPathSuffix,
   getServerUrl,
+  isAsyncOperation,
   operationParameters,
   operationRequestBody,
   operationSecurity,
@@ -99,16 +101,24 @@ export function analyzeProject(project: Project): ProjectAnalysis {
   const issues: Issue[] = []
   const a = project.arazzo
 
-  if (!/^1\./.test(String(a.arazzo))) {
+  const version = String(a.arazzo).match(/^(\d+)\.(\d+)/)
+  if (!version || version[1] !== '1') {
     issues.push({ level: 'warning', message: t('an.version', { version: String(a.arazzo) }) })
+  } else if (Number(version[2]) > 1) {
+    issues.push({ level: 'warning', message: t('an.versionNewer', { version: String(a.arazzo) }) })
+  }
+  if (project.arazzoMissingRefs?.length) {
+    issues.push({ level: 'error', message: t('an.refsMissing', { name: project.arazzoFileName, files: project.arazzoMissingRefs.join(', ') }) })
   }
   if (!a.info?.title) issues.push({ level: 'warning', message: t('an.noTitle') })
   if (!a.sourceDescriptions?.length) issues.push({ level: 'error', message: t('an.noSources') })
   for (const s of project.sources) {
-    if (s.type !== 'openapi') {
+    if (s.type !== 'openapi' && s.type !== 'asyncapi') {
       issues.push({ level: 'warning', message: t('an.sourceType', { name: s.name, type: s.type }) })
     } else if (s.status !== 'loaded') {
       issues.push({ level: 'error', message: t('an.sourceMissing', { name: s.name, url: s.url }) })
+    } else if (s.missingRefs?.length) {
+      issues.push({ level: 'error', message: t('an.refsMissing', { name: s.fileName ?? s.name, files: s.missingRefs.join(', ') }) })
     }
   }
   if (!a.workflows?.length) issues.push({ level: 'error', message: t('an.noWorkflows') })
@@ -120,6 +130,9 @@ export function analyzeProject(project: Project): ProjectAnalysis {
   }
 
   const workflows = (a.workflows ?? []).map((wf) => analyzeWorkflow(project, wf, wfIds))
+  if (workflows.some((w) => w.steps.some((s) => isAsyncOperation(s.op)))) {
+    issues.push({ level: 'info', message: t('an.asyncSimulated') })
+  }
   const credentials = new Map<string, SecurityScheme>()
   for (const w of workflows) for (const c of w.credentials) credentials.set(c.key, c)
 
@@ -143,7 +156,7 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
 
   ;(wf.steps ?? []).forEach((step, index) => {
     if (stepIds.has(step.stepId)) add('error', t('an.dupStep', { id: step.stepId }), step.stepId)
-    const kinds = [step.operationId, step.operationPath, step.workflowId].filter(Boolean).length
+    const kinds = [step.operationId, step.operationPath, step.channelPath, step.workflowId].filter(Boolean).length
     if (kinds !== 1) {
       add('error', t('an.stepKind'), step.stepId)
     }
@@ -153,29 +166,32 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
       step,
       kind: 'unresolved',
       mutating: false,
-      label: step.operationId ?? step.operationPath ?? step.workflowId ?? t('an.noOperation'),
+      label: step.operationId ?? step.operationPath ?? step.channelPath ?? step.workflowId ?? t('an.noOperation'),
       security: [],
       parameters,
     }
 
-    if (step.operationId) {
-      let matches = findByOperationId(project, step.operationId)
+    // Forma sin fragmento ('$sourceDescriptions.x.op', usada en ejemplos de la 1.1): equivale a un operationId.
+    const operationId =
+      step.operationId ?? (step.operationPath && !step.operationPath.includes('#') && /^\$sourceDescriptions\./.test(step.operationPath) ? step.operationPath : undefined)
+    if (operationId) {
+      let matches = findByOperationId(project, operationId)
       if (matches.length === 0) {
-        matches = findByLooseOperationId(project, step.operationId)
+        matches = findByLooseOperationId(project, operationId)
         if (matches.length) {
           const src = matches[0].sourceName
-          const opName = step.operationId.slice(src.length + 1)
+          const opName = operationId.slice(src.length + 1)
           add(
             'warning',
-            t('an.looseOpId', { id: step.operationId, op: `${matches[0].method.toUpperCase()} ${matches[0].path}`, fixed: `$sourceDescriptions.${src}.${opName}` }),
+            t('an.looseOpId', { id: operationId, op: `${matches[0].method.toUpperCase()} ${matches[0].path}`, fixed: `$sourceDescriptions.${src}.${opName}` }),
             step.stepId,
           )
         }
       }
-      if (matches.length === 0) add('error', t('an.opMissing', { id: step.operationId }), step.stepId)
+      if (matches.length === 0) add('error', t('an.opMissing', { id: operationId }), step.stepId)
       else {
         if (matches.length > 1) {
-          add('warning', t('an.opAmbiguous', { id: step.operationId, source: matches[0].sourceName }), step.stepId)
+          add('warning', t('an.opAmbiguous', { id: operationId, source: matches[0].sourceName }), step.stepId)
         }
         resolved = withOperation(resolved, matches[0])
       }
@@ -193,12 +209,25 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
           resolved = withOperation(resolved, suggestion)
         } else add('error', t('an.pathMissing', { path: step.operationPath }), step.stepId)
       }
+    } else if (step.channelPath) {
+      const matches = findByChannelPath(project, step.channelPath, step.action)
+      if (matches.length === 0) add('error', t('an.channelMissing', { path: step.channelPath }), step.stepId)
+      else {
+        if (matches.length > 1) add('warning', t('an.channelAmbiguous', { path: step.channelPath, action: matches[0].method }), step.stepId)
+        resolved = withOperation(resolved, matches[0])
+      }
     } else if (step.workflowId) {
       if (!wfIds.has(step.workflowId)) add('error', t('an.subMissing', { id: step.workflowId }), step.stepId)
       else resolved = { ...resolved, kind: 'workflow', subWorkflowId: step.workflowId, label: `workflow: ${step.workflowId}` }
     }
 
-    if (resolved.op) {
+    const isAsync = isAsyncOperation(resolved.op)
+    if (isAsync) checkMessageStep(resolved, add)
+    else if (resolved.op && (step.action || step.correlationId !== undefined)) {
+      add('warning', t('an.asyncOnly'), step.stepId)
+    }
+
+    if (resolved.op && !isAsync) {
       const documented = Object.keys(resolved.op.operation?.responses ?? {})
       const expected = statusesInCriteria(step.successCriteria)
       const undocumented = expected.filter((c) => !documented.includes(String(c)) && !documented.includes(`${String(c)[0]}XX`))
@@ -246,8 +275,21 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
         step.stepId,
       )
     }
-    if (!step.successCriteria?.length) {
+    if (Array.isArray(step.successCriteria) && step.successCriteria.length === 0) {
+      add('warning', t('an.emptyCriteria'), step.stepId)
+    } else if (!step.successCriteria?.length && !isAsync) {
       add('info', t('an.noCriteria'), step.stepId)
+    }
+    for (const dep of step.dependsOn ?? []) {
+      const other = dep.match(/^\$workflows\.([^.]+)\.steps\.(.+)$/)
+      if (other) {
+        if (!wfIds.has(other[1])) add('error', t('an.dependsWorkflowMissing', { dep, workflow: other[1] }), step.stepId)
+        continue
+      }
+      if (dep.startsWith('$')) continue
+      const depIndex = (wf.steps ?? []).findIndex((s) => s.stepId === dep)
+      if (depIndex < 0) add('error', t('an.dependsMissing', { step: dep }), step.stepId)
+      else if (depIndex >= index) add('warning', t('an.dependsLater', { step: dep }), step.stepId)
     }
     for (const action of [...(step.onSuccess ?? []), ...(step.onFailure ?? [])]) {
       if (action.type !== 'retry' && (action.retryLimit !== undefined || action.retryAfter !== undefined)) {
@@ -268,7 +310,7 @@ function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): Wo
 
   return {
     workflow: wf,
-    coverage: steps.filter((s) => s.op).map((s) => stepCoverage(s, wf)),
+    coverage: steps.filter((s) => s.op && !isAsyncOperation(s.op)).map((s) => stepCoverage(s, wf)),
     steps,
     dataEdges,
     inputsSchema,
@@ -290,6 +332,20 @@ function withOperation(r: ResolvedStep, op: OperationRef): ResolvedStep {
   }
 }
 
+/** Reglas de la 1.1 para pasos de AsyncAPI. */
+function checkMessageStep(r: ResolvedStep, add: (l: IssueLevel, m: string, s?: string) => void) {
+  const step = r.step
+  const action = step.action ?? r.op!.method
+  if (step.action && step.action !== r.op!.method) {
+    add('info', t('an.actionDiffers', { action: step.action, op: r.op!.method }), step.stepId)
+  }
+  if (action === 'send' && step.correlationId !== undefined) add('warning', t('an.correlationSend'), step.stepId)
+  if (action === 'receive' && step.requestBody) add('warning', t('an.bodyOnReceive'), step.stepId)
+  if (action === 'receive' && !step.timeout) add('info', t('an.noTimeout'), step.stepId)
+  const ignored = r.parameters.filter((p) => p.in && p.in !== 'header').map((p) => p.name)
+  if (ignored.length) add('warning', t('an.asyncParamIn', { params: ignored.join(', ') }), step.stepId)
+}
+
 function checkOperationCoverage(r: ResolvedStep, add: (l: IssueLevel, m: string, s?: string) => void) {
   const op = r.op!
   const authHeaders = new Set(
@@ -309,9 +365,12 @@ function checkOperationCoverage(r: ResolvedStep, add: (l: IssueLevel, m: string,
   if (r.parameters.some((p) => p.in === 'cookie')) {
     add('warning', t('an.cookies'), r.step.stepId)
   }
+  if (r.parameters.some((p) => p.in === 'querystring') && r.parameters.some((p) => p.in === 'query')) {
+    add('warning', t('an.querystringMix'), r.step.stepId)
+  }
 }
 
-const RUNTIME_COMPARISON = /^\s*\$(statusCode|response|request|inputs|steps|url|method)\b.*(==|!=|<=|>=|<|>)/
+const RUNTIME_COMPARISON = /^\s*\$(statusCode|response|request|message|inputs|steps|url|method)\b.*(==|!=|<=|>=|<|>)/
 
 /** Valida criterios; devuelve las condiciones simples marcadas por error como jsonpath. */
 function checkCriteria(criteria: Criterion[] | undefined, where: string, add: (l: IssueLevel, m: string) => void): string[] {

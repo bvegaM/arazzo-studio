@@ -1,13 +1,16 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
+import type { Project } from '../../core/loader'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge, MethodBadge } from '../components/badges'
-import { ActionBar, Empty, MoreText, PageHeader, Section } from '../components/kit'
+import { ActionBar, Empty, Icon, MoreText, PageHeader, PENCIL_ICON, Section } from '../components/kit'
 import { WorkflowPicker, type PickerItem } from '../components/WorkflowPicker'
 
 // React Flow pesa bastante: se carga solo cuando se muestra el diagrama.
 const WorkflowGraph = lazy(() => import('../components/WorkflowGraph').then((m) => ({ default: m.WorkflowGraph })))
+// El editor (CodeMirror) también se carga solo al abrirlo.
+const ArazzoEditor = lazy(() => import('../components/ArazzoEditor').then((m) => ({ default: m.ArazzoEditor })))
 
 interface Props {
   analysis: ProjectAnalysis
@@ -19,6 +22,10 @@ interface Props {
   onAllWorkflows: (include: boolean) => void
   onBack: () => void
   onNext: () => void
+  project: Project
+  /** Texto del Arazzo cargado (para editarlo). */
+  arazzoText?: string
+  onEditArazzo: (text: string) => string | undefined
 }
 
 function stepsLabel(n: number) {
@@ -29,7 +36,33 @@ function count(issues: Issue[], level: Issue['level']) {
   return issues.filter((i) => i.level === level).length
 }
 
-export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggleWorkflow, onAllWorkflows, onBack, onNext }: Props) {
+export function ContractsScreen(props: Props) {
+  // Texto con el que se abrió el editor (para "Descartar cambios"); undefined = editor cerrado.
+  const [editing, setEditing] = useState<string>()
+  const { analysis, project, arazzoText } = props
+  if (editing !== undefined && arazzoText !== undefined) {
+    return (
+      <>
+        <PageHeader step={2} title={t('editor.title')} description={t('editor.description')} />
+        <Suspense fallback={<Empty>{t('editor.loading')}</Empty>}>
+          <ArazzoEditor
+            fileName={project.arazzoFileName}
+            text={arazzoText}
+            original={editing}
+            project={project}
+            analysis={analysis}
+            selected={props.selected}
+            onChange={props.onEditArazzo}
+            onClose={() => setEditing(undefined)}
+          />
+        </Suspense>
+      </>
+    )
+  }
+  return <ContractsView {...props} onEdit={arazzoText !== undefined ? () => setEditing(arazzoText) : undefined} />
+}
+
+function ContractsView({ analysis, selected, onSelect, skipped, onToggleWorkflow, onAllWorkflows, onBack, onNext, onEdit }: Props & { onEdit?: () => void }) {
   const wa = analysis.workflows.find((w) => w.workflow.workflowId === selected) ?? analysis.workflows[0]
   const allIssues = [...analysis.issues, ...analysis.workflows.flatMap((w) => w.issues)]
   const errorCount = count(allIssues, 'error')
@@ -45,7 +78,18 @@ export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggl
 
   return (
     <>
-      <PageHeader step={2} title={t('contracts.title')} description={t('contracts.description')} />
+      <PageHeader
+        step={2}
+        title={t('contracts.title')}
+        description={t('contracts.description')}
+        actions={
+          onEdit && (
+            <button className="accent" onClick={onEdit} title={t('editor.openHint')}>
+              <Icon d={PENCIL_ICON} size={16} /> {t('editor.open')}
+            </button>
+          )
+        }
+      />
 
       <div className="summary-strip">
         <span>
@@ -54,6 +98,11 @@ export function ContractsScreen({ analysis, selected, onSelect, skipped, onToggl
         {errorCount > 0 && <span className="badge b-err">{t('nav.errors', { n: errorCount })}</span>}
         {warningCount > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warningCount })}</span>}
         {errorCount + warningCount === 0 && <span className="badge b-ok">✓ {t('contracts.allValid')}</span>}
+        {onEdit && errorCount + warningCount > 0 && (
+          <button className="link" onClick={onEdit}>
+            <Icon d={PENCIL_ICON} size={14} /> {t('editor.fixInEditor')}
+          </button>
+        )}
       </div>
 
       {analysis.issues.length > 0 && <IssuesSection title={t('contracts.generalValidation')} issues={analysis.issues} />}
