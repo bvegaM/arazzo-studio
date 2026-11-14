@@ -6,7 +6,7 @@
 
 **Test your API journeys without writing tests.**
 
-Load an [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflow and the OpenAPI and AsyncAPI contracts behind it. Arazzo Studio draws the journey, generates the test cases, runs them against your API or in simulation, and explains every result in plain words. All in the browser, with nothing to install for the people who use it and nothing that leaves their machine.
+Load an [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflow and the OpenAPI and AsyncAPI contracts behind it. Arazzo Studio draws the journey, generates the test cases, runs them against your API or in simulation, and explains every result in plain words. Use it in the browser or as a desktop app, with no account and nothing that leaves your machine.
 
 [![Arazzo](https://img.shields.io/badge/Arazzo-1.0%20%7C%201.1-6BA543)](https://spec.openapis.org/arazzo/latest.html)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA543?logo=openapiinitiative&logoColor=white)](https://spec.openapis.org/oas/latest.html)
@@ -20,6 +20,7 @@ Load an [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflow and the 
 [![React Flow](https://img.shields.io/badge/React_Flow-12-FF0072?logo=react&logoColor=white)](https://reactflow.dev)
 [![CodeMirror](https://img.shields.io/badge/CodeMirror-6-D30707)](https://codemirror.net)
 [![Vitest](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
+[![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](https://www.electronjs.org)
 
 **English** · [Español](README.es.md)
 
@@ -57,7 +58,8 @@ Most integrations are not one API call but a **journey**: enroll a member, add c
 - 🎛️ **Try your own data.** Add cases with different parameters, reuse them as YAML and repeat them with generators like `{{email}}` or `{{uuid}}`.
 - 🔍 **Understand failures at a glance.** Instead of a raw JSON dump, you read *"`status` is `INACTIVE` but `ACTIVE` was expected"*, with the field highlighted in the response.
 - ✍️ **Fix the workflow where you test it.** A built-in editor validates the Arazzo as you type and suggests operations, steps and outputs from the contracts.
-- 🔒 **Stay local.** No backend and no account. Contracts, credentials and responses never leave the browser.
+- 🔒 **Stay local.** No backend and no account. Contracts, credentials and responses never leave your machine.
+- 🖥️ **Browser or desktop.** The desktop app works on folders like an API client such as Bruno: it opens your project folder, saves the Arazzo back to its file and sends requests without CORS restrictions.
 
 ## Who it is for
 
@@ -116,7 +118,7 @@ Journeys often mix REST calls with events. Steps that `send` or `receive` an Asy
 <img src="docs/screenshots/messaging.png" alt="A receive step showing the channel, the correlation id and the payload of the message received" width="100%">
 
 > [!NOTE]
-> A browser cannot connect to a broker such as Kafka, AMQP or MQTT, so messaging steps are **always simulated** from the AsyncAPI examples and schemas. The app says so before running and marks those steps as simulated, also when the rest of the journey runs against the real API.
+> Arazzo Studio does not connect to brokers such as Kafka, AMQP or MQTT yet, so messaging steps are **always simulated** from the AsyncAPI examples and schemas. The app says so before running and marks those steps as simulated, also when the rest of the journey runs against the real API.
 
 ### And also
 
@@ -147,6 +149,18 @@ npm run dev          # http://localhost:5173
 ```
 
 The build is a static site (`npm run build` → `dist/`), so it can be served from any static host or an internal server. The people who use it only need a browser.
+
+### Desktop app
+
+The same app, packaged with Electron. It adds **Open folder** (every YAML and JSON file in a folder and its subfolders), saves the edited Arazzo **back to its file**, and sends requests from the app itself, so **CORS does not apply**.
+
+```bash
+npm run desktop:dev      # run the desktop app against the dev server
+npm run desktop:build    # build the installer for your OS into release/
+```
+
+> [!NOTE]
+> Installers are **not signed** yet. On macOS, open the app the first time with right click → **Open**; on Windows, choose **More info → Run anyway**.
 
 ### Try the built-in examples
 
@@ -186,11 +200,12 @@ flowchart LR
 4. **Results.** Every case ends with a verdict (passed, failed or inconclusive) and a reason in plain words.
 
 > [!IMPORTANT]
-> Requests are sent from the browser, so the API under test must allow **CORS** from the app's origin (for example `http://localhost:5173`) and list the headers your workflows send in `Access-Control-Allow-Headers`. When a request is blocked, the app shows a guided panel with the exact headers to add.
+> In the **browser version**, requests are sent from the browser, so the API under test must allow **CORS** from the app's origin (for example `http://localhost:5173`) and list the headers your workflows send in `Access-Control-Allow-Headers`. When a request is blocked, the app shows a guided panel with the exact headers to add. The **desktop app** sends requests from the app itself, so CORS does not apply.
 
 ## Privacy and security
 
-- Everything runs **client-side**. There is no backend and no account.
+- Everything runs **on your machine**, in the browser or the desktop app. There is no backend and no account.
+- The desktop app only writes to files you opened or chose in a dialog, and its interface has no direct access to Node or the file system.
 - Credentials live **only in the open tab**: they are never saved, exported or included in reports.
 - Tokens, passwords and API keys are **masked** in results, reports, exports and cURL commands (unless you explicitly copy them).
 - The saved session (IndexedDB) leaves out credentials and any input whose name looks sensitive (`token`, `password`, `secret`…).
@@ -222,18 +237,21 @@ Arazzo **1.0.x** and **1.1.x** documents are supported, with OpenAPI **3.x** and
 
 ## Known limitations
 
-- **Messaging steps are simulated.** There is no connection to brokers from the browser.
-- **CORS.** The API under test has to allow the app's origin. Browsers cannot send cookies or the `Host` header, and only read the response headers the API exposes.
+- **Messaging steps are simulated.** Arazzo Studio does not connect to brokers yet.
+- **CORS (browser version only).** The API under test has to allow the app's origin. Browsers cannot send cookies or the `Host` header, and only read the response headers the API exposes. The desktop app has none of these restrictions.
+- **Unsigned desktop installers.** macOS and Windows show a warning the first time the app is opened.
 - **XPath** in criteria and selectors is not supported.
 - **`retry` with `stepId`** and **workflow-level `dependsOn`** are not run automatically.
 - **Not a CI runner.** Runs are started by a person in the browser.
-- **No hosted version yet.** Run it locally or serve the static build yourself.
+- **No hosted version yet.** Run it locally, use the desktop app or serve the static build yourself.
 
 ## Roadmap
 
 Planned next steps, in no fixed order:
 
 - **Online demo** with the built-in examples, so the app can be tried without installing anything.
+- **Real messaging in the desktop app:** connect `send` / `receive` steps to Kafka, AMQP or MQTT instead of simulating them.
+- **Signed desktop installers** with automatic updates.
 - **AI-assisted editing** (opt-in, with your own API key): describe a change in plain words and review it as a diff before applying it.
 - **Richer diagram:** `dependsOn` arrows and timeouts on the steps.
 - **Editable simulations:** adjust the simulated response or message of a scenario to try business cases without touching YAML.
@@ -256,15 +274,16 @@ src/
                 OpenAPI and AsyncAPI resolution, analysis, runner, criteria,
                 simulator, test cases, editor helpers, report, environments, session…
   i18n/         translations (en, es), t() and the useLocale hook
-  lib/          browser utilities (downloads, clipboard, IndexedDB)
+  lib/          browser and desktop utilities (downloads, clipboard, IndexedDB, desktop bridge)
   ui/
     components/ reusable pieces (flow diagram, Arazzo editor, schema form, workflow picker…)
     screens/    one screen per step
+electron/       desktop app: main process (HTTP without CORS, files), preload bridge, dev launcher
 examples/       credit cards and miles transfer examples, and the mock API
 docs/           screenshots
 ```
 
-`core` never imports from `ui`, `app` or `lib`, so the engine can be reused outside the browser. HTTP calls go through an `HttpExecutor` (`fetch` or the contract-based simulator) and messaging steps through a `MessageExecutor` (today, the simulator). The flow diagram (React Flow) and the editor (CodeMirror) are loaded on demand to keep the initial bundle small.
+`core` never imports from `ui`, `app` or `lib`, so the engine can be reused outside the browser. HTTP calls go through an `HttpExecutor` (`fetch` in the browser, the Electron main process on desktop, or the contract-based simulator) and messaging steps through a `MessageExecutor` (today, the simulator). The flow diagram (React Flow) and the editor (CodeMirror) are loaded on demand to keep the initial bundle small.
 
 ### Scripts
 
@@ -277,6 +296,8 @@ docs/           screenshots
 | `npm run typecheck` | Type-check the app, the config and the tests |
 | `npm run lint` | Lint with oxlint |
 | `npm run mock` / `npm run mock:bug` | Start the example APIs (correct / with contract errors) |
+| `npm run desktop:dev` | Run the desktop app against the dev server |
+| `npm run desktop:build` | Build the desktop installer for the current OS into `release/` |
 
 ### Adding a text
 

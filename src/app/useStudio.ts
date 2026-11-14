@@ -22,7 +22,8 @@ import { exportScenarios, importScenarios } from '../core/scenariosFile'
 import { buildHtmlReport, buildJsonReport, reportFileName } from '../core/report'
 import { fillServers, newEnvironment, uniqueName, type Environment } from '../core/environments'
 import { readSavedSession, toSavedSession, type SavedSession } from '../core/session'
-import { download, readTextFiles } from '../lib/browser'
+import { download, readTextFiles, saveTextFile, type SaveResult } from '../lib/browser'
+import { createDesktopExecutor, desktop } from '../lib/desktop'
 import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
@@ -35,6 +36,9 @@ type Inputs = Record<string, Record<string, any>>
 
 const SESSION_KEY = 'session'
 
+// En la app de escritorio las peticiones salen del proceso principal (sin CORS).
+const realExecutor = desktop ? createDesktopExecutor(desktop) : fetchExecutor
+
 export function useStudio() {
   const [screen, setScreenState] = useState<Screen>(Screen.Load)
   const [files, setFiles] = useState<ParsedFile[]>([])
@@ -42,6 +46,8 @@ export function useStudio() {
   const [texts, setTexts] = useState<LoadedFile[]>([])
   const [attachments, setAttachments] = useState<SavedSession['attachments']>([])
   const [remotes, setRemotes] = useState<string[]>([])
+  // Escritorio: carpeta abierta y ruta en disco de cada archivo cargado desde ella.
+  const [folder, setFolder] = useState<{ root: string; paths: Record<string, string> }>()
   // Sesión anterior encontrada al abrir, a la espera de que el usuario decida si la continúa.
   const [savedSession, setSavedSession] = useState<SavedSession>()
   const [project, setProject] = useState<Project>()
@@ -143,6 +149,7 @@ export function useStudio() {
     if (replace) {
       setAttachments([])
       setRemotes([])
+      setFolder(undefined)
     }
     const { project: p, errors: e } = buildProject(all)
     applyProject(p)
@@ -180,6 +187,31 @@ export function useStudio() {
     if (parsed.kind !== 'arazzo') return t('load.noArazzo')
     setFiles((prev) => prev.map((f) => (f.name === name ? parsed : f)))
     applyProject(replaceArazzo(project, parsed))
+  }
+
+  /** Escritorio: carga todos los YAML/JSON de una carpeta, como una colección de Bruno. */
+  async function openFolder() {
+    const opened = await desktop?.openFolder()
+    if (!opened) return
+    loadFiles(opened.files.map((f) => ({ name: f.name, text: f.text })), true)
+    setFolder({ root: opened.root, paths: Object.fromEntries(opened.files.map((f) => [f.name, f.path])) })
+    if (opened.truncated) setErrors((prev) => [...prev, t('load.folderTruncated')])
+  }
+
+  /** Guarda el Arazzo editado: sobre su archivo en disco si se abrió desde una carpeta. */
+  async function saveArazzo(text: string): Promise<SaveResult> {
+    const name = project?.arazzoFileName ?? 'workflow.arazzo.yaml'
+    const baseName = name.split(/[\\/]/).pop() ?? name
+    if (!desktop) return saveTextFile(text, baseName)
+    const path = folder?.paths[name]
+    if (path) {
+      await desktop.writeFile(path, text)
+      return 'saved'
+    }
+    const saved = await desktop.saveAs(baseName, text)
+    if (!saved) return 'cancelled'
+    setFolder((prev) => ({ root: prev?.root ?? '', paths: { ...prev?.paths, [name]: saved } }))
+    return 'saved'
   }
 
   async function fetchRemote(sourceName: string) {
@@ -256,6 +288,7 @@ export function useStudio() {
   }
 
   function reset() {
+    setFolder(undefined)
     setFiles([])
     setTexts([])
     setAttachments([])
@@ -299,7 +332,7 @@ export function useStudio() {
         credentials,
         servers,
         dropAuth: tc.dropAuth,
-        executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : fetchExecutor,
+        executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : realExecutor,
         messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
@@ -412,6 +445,10 @@ export function useStudio() {
     attachFile,
     arazzoText: project ? texts.find((f) => f.name === project.arazzoFileName)?.text : undefined,
     editArazzo,
+    saveArazzo,
+    isDesktop: !!desktop,
+    folder: folder?.root,
+    openFolder,
     fetchRemote,
     loadExample,
     reset,

@@ -25,6 +25,8 @@ export default function App() {
               onAttach={studio.attachFile}
               onFetchRemote={studio.fetchRemote}
               onExample={studio.loadExample}
+              onOpenFolder={studio.isDesktop ? studio.openFolder : undefined}
+              folder={studio.folder}
               onReset={studio.reset}
               savedSession={studio.savedSession}
               onRestore={studio.restoreSession}
@@ -40,6 +42,7 @@ export default function App() {
               project={project}
               arazzoText={studio.arazzoText}
               onEditArazzo={studio.editArazzo}
+              onSaveArazzo={studio.saveArazzo}
               skipped={studio.skipped}
               onToggleWorkflow={studio.toggleWorkflow}
               onAllWorkflows={studio.setAllWorkflows}

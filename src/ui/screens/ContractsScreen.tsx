@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import type { Issue, ProjectAnalysis, WorkflowAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
+import type { SaveResult } from '../../lib/browser'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge, MethodBadge } from '../components/badges'
@@ -26,6 +27,7 @@ interface Props {
   /** Texto del Arazzo cargado (para editarlo). */
   arazzoText?: string
   onEditArazzo: (text: string) => string | undefined
+  onSaveArazzo: (text: string) => Promise<SaveResult>
 }
 
 function stepsLabel(n: number) {
@@ -53,6 +55,7 @@ export function ContractsScreen(props: Props) {
             analysis={analysis}
             selected={props.selected}
             onChange={props.onEditArazzo}
+            onSave={props.onSaveArazzo}
             onClose={() => setEditing(undefined)}
           />
         </Suspense>

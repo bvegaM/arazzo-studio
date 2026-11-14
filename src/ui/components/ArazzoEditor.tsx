@@ -10,7 +10,7 @@ import { tags } from '@lezer/highlight'
 import type { ProjectAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
 import { issueRanges, suggest, yamlProblems, type TextProblem } from '../../core/authoring'
-import { download } from '../../lib/browser'
+import type { SaveResult } from '../../lib/browser'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge } from './badges'
@@ -28,6 +28,8 @@ interface Props {
   selected: string
   /** Aplica el texto; devuelve el error si no se pudo leer como Arazzo. */
   onChange: (text: string) => string | undefined
+  /** Guarda el texto: sobre el archivo original (escritorio), donde elija el usuario o como descarga. */
+  onSave: (text: string) => Promise<SaveResult>
   onClose: () => void
 }
 
@@ -60,26 +62,6 @@ function toDiagnostics(problems: TextProblem[], length: number): Diagnostic[] {
   return problems
     .filter((p) => p.from <= length)
     .map((p) => ({ from: p.from, to: Math.min(p.to, length), severity: SEVERITY[p.level], message: p.message }))
-}
-
-/** Guarda sobre un archivo elegido por el usuario (Chrome, Edge) o, si no se puede, lo descarga. */
-async function saveFile(text: string, name: string): Promise<'saved' | 'downloaded' | 'cancelled'> {
-  const picker = (window as any).showSaveFilePicker
-  if (!picker) {
-    download(text, name, 'application/yaml')
-    return 'downloaded'
-  }
-  try {
-    const handle = await picker({ suggestedName: name, types: [{ description: 'Arazzo', accept: { 'application/yaml': ['.yaml', '.yml'] } }] })
-    const writable = await handle.createWritable()
-    await writable.write(text)
-    await writable.close()
-    return 'saved'
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') return 'cancelled'
-    download(text, name, 'application/yaml')
-    return 'downloaded'
-  }
 }
 
 export function ArazzoEditor(p: Props) {
@@ -199,7 +181,7 @@ export function ArazzoEditor(p: Props) {
           <button
             className={dirty && !saved ? 'primary' : undefined}
             onClick={async () => {
-              const r = await saveFile(view.current?.state.doc.toString() ?? p.text, p.fileName)
+              const r = await p.onSave(view.current?.state.doc.toString() ?? p.text)
               if (r !== 'cancelled') setSaved(t(r === 'saved' ? 'editor.saved' : 'editor.downloaded'))
             }}
           >

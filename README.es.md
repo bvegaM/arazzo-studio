@@ -6,7 +6,7 @@
 
 **Prueba tus journeys de APIs sin escribir tests.**
 
-Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los contratos OpenAPI y AsyncAPI que lo respaldan. Arazzo Studio dibuja el journey, genera los casos de prueba, los ejecuta contra tu API o en simulación y explica cada resultado en lenguaje claro. Todo en el navegador: quien lo usa no instala nada y nada sale de su equipo.
+Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los contratos OpenAPI y AsyncAPI que lo respaldan. Arazzo Studio dibuja el journey, genera los casos de prueba, los ejecuta contra tu API o en simulación y explica cada resultado en lenguaje claro. Úsalo en el navegador o como app de escritorio, sin cuenta y sin que nada salga de tu equipo.
 
 [![Arazzo](https://img.shields.io/badge/Arazzo-1.0%20%7C%201.1-6BA543)](https://spec.openapis.org/arazzo/latest.html)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA543?logo=openapiinitiative&logoColor=white)](https://spec.openapis.org/oas/latest.html)
@@ -20,6 +20,7 @@ Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los c
 [![React Flow](https://img.shields.io/badge/React_Flow-12-FF0072?logo=react&logoColor=white)](https://reactflow.dev)
 [![CodeMirror](https://img.shields.io/badge/CodeMirror-6-D30707)](https://codemirror.net)
 [![Vitest](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
+[![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](https://www.electronjs.org)
 
 [English](README.md) · **Español**
 
@@ -57,7 +58,8 @@ La mayoría de las integraciones no son una sola llamada, sino un **journey**: i
 - 🎛️ **Prueba con tus propios datos.** Agrega casos con otros parámetros, reutilízalos en YAML y repítelos con generadores como `{{email}}` o `{{uuid}}`.
 - 🔍 **Entiende los fallos de un vistazo.** En lugar de un JSON crudo, lees *"`status` vale `INACTIVE` pero se esperaba `ACTIVE`"*, con el campo resaltado en la respuesta.
 - ✍️ **Corrige el workflow donde lo pruebas.** Un editor integrado valida el Arazzo mientras escribes y sugiere operaciones, pasos y outputs a partir de los contratos.
-- 🔒 **Todo local.** Sin backend ni cuenta. Los contratos, las credenciales y las respuestas no salen del navegador.
+- 🔒 **Todo local.** Sin backend ni cuenta. Los contratos, las credenciales y las respuestas no salen de tu equipo.
+- 🖥️ **Navegador o escritorio.** La app de escritorio trabaja con carpetas como un cliente de APIs tipo Bruno: abre la carpeta del proyecto, guarda el Arazzo sobre su archivo y envía las peticiones sin las restricciones de CORS.
 
 ## Para quién es
 
@@ -116,7 +118,7 @@ Los journeys suelen mezclar llamadas REST con eventos. Los pasos que envían (`s
 <img src="docs/screenshots/messaging.png" alt="Un paso receive con el canal, el correlationId y el payload del mensaje recibido" width="100%">
 
 > [!NOTE]
-> Un navegador no puede conectarse a un broker como Kafka, AMQP o MQTT, así que los pasos de mensajería **siempre se simulan** con los ejemplos y schemas del AsyncAPI. La app lo avisa antes de ejecutar y marca esos pasos como simulados, también cuando el resto del journey corre contra la API real.
+> Arazzo Studio todavía no se conecta a brokers como Kafka, AMQP o MQTT, así que los pasos de mensajería **siempre se simulan** con los ejemplos y schemas del AsyncAPI. La app lo avisa antes de ejecutar y marca esos pasos como simulados, también cuando el resto del journey corre contra la API real.
 
 ### Además
 
@@ -147,6 +149,18 @@ npm run dev          # http://localhost:5173
 ```
 
 El build es un sitio estático (`npm run build` → `dist/`), así que se puede publicar en cualquier hosting estático o servidor interno. Quien lo usa solo necesita un navegador.
+
+### App de escritorio
+
+La misma app, empaquetada con Electron. Agrega **Abrir carpeta** (todos los YAML y JSON de una carpeta y sus subcarpetas), guarda el Arazzo editado **sobre su archivo** y envía las peticiones desde la propia app, así que **CORS no aplica**.
+
+```bash
+npm run desktop:dev      # la app de escritorio contra el servidor de desarrollo
+npm run desktop:build    # genera el instalador para tu sistema en release/
+```
+
+> [!NOTE]
+> Los instaladores todavía **no están firmados**. En macOS, abre la app la primera vez con clic derecho → **Abrir**; en Windows, elige **Más información → Ejecutar de todas formas**.
 
 ### Probar los ejemplos incluidos
 
@@ -186,11 +200,12 @@ flowchart LR
 4. **Resultados.** Cada caso termina con un veredicto (pasó, no pasó o no concluyente) y una razón en lenguaje claro.
 
 > [!IMPORTANT]
-> Las peticiones salen del navegador, así que la API probada debe permitir **CORS** desde el origen de la app (por ejemplo `http://localhost:5173`) e incluir en `Access-Control-Allow-Headers` los headers que envían los workflows. Cuando una petición se bloquea, la app muestra un panel con los headers exactos que hay que agregar.
+> En la **versión web**, las peticiones salen del navegador, así que la API probada debe permitir **CORS** desde el origen de la app (por ejemplo `http://localhost:5173`) e incluir en `Access-Control-Allow-Headers` los headers que envían los workflows. Cuando una petición se bloquea, la app muestra un panel con los headers exactos que hay que agregar. La **app de escritorio** envía las peticiones desde la propia app, así que CORS no aplica.
 
 ## Privacidad y seguridad
 
-- Todo corre **en el navegador**. No hay backend ni cuenta.
+- Todo corre **en tu equipo**, en el navegador o en la app de escritorio. No hay backend ni cuenta.
+- La app de escritorio solo escribe en archivos que abriste o elegiste en un diálogo, y su interfaz no tiene acceso directo a Node ni al sistema de archivos.
 - Las credenciales viven **solo en la pestaña abierta**: nunca se guardan, se exportan ni van en los reportes.
 - Tokens, contraseñas y API keys se **enmascaran** en resultados, reportes, exportaciones y comandos cURL (salvo que elijas copiarlos).
 - La sesión guardada (IndexedDB) omite las credenciales y cualquier input con nombre sensible (`token`, `password`, `secret`…).
@@ -222,18 +237,21 @@ Se soportan documentos Arazzo **1.0.x** y **1.1.x**, con contratos OpenAPI **3.x
 
 ## Limitaciones conocidas
 
-- **Los pasos de mensajería se simulan.** El navegador no puede conectarse a brokers.
-- **CORS.** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga.
+- **Los pasos de mensajería se simulan.** Arazzo Studio todavía no se conecta a brokers.
+- **CORS (solo en la versión web).** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga. La app de escritorio no tiene estas restricciones.
+- **Instaladores sin firmar.** macOS y Windows muestran una advertencia la primera vez que se abre la app.
 - **XPath** en criterios y selectores no está soportado.
 - **`retry` con `stepId`** y el **`dependsOn` de un workflow** no se ejecutan automáticamente.
 - **No es un runner de CI.** Las ejecuciones las inicia una persona desde el navegador.
-- **Todavía no hay versión publicada en línea.** Se ejecuta localmente o publicando el build estático.
+- **Todavía no hay versión publicada en línea.** Se ejecuta localmente, como app de escritorio o publicando el build estático.
 
 ## Hoja de ruta
 
 Próximos pasos previstos, sin un orden fijo:
 
 - **Demo en línea** con los ejemplos incluidos, para probar la app sin instalar nada.
+- **Mensajería real en la app de escritorio:** conectar los pasos `send` / `receive` a Kafka, AMQP o MQTT en lugar de simularlos.
+- **Instaladores de escritorio firmados** y con actualizaciones automáticas.
 - **Edición asistida por IA** (opcional, con tu propia API key): describe un cambio en lenguaje natural y revísalo como diff antes de aplicarlo.
 - **Diagrama más completo:** flechas de `dependsOn` y `timeout` en los pasos.
 - **Simulaciones editables:** ajustar la respuesta o el mensaje simulado de un escenario para probar casos de negocio sin tocar YAML.
@@ -256,15 +274,16 @@ src/
                 resolución de OpenAPI y AsyncAPI, análisis, runner, criterios,
                 simulador, casos de prueba, ayudas del editor, reporte, ambientes, sesión…
   i18n/         traducciones (en, es), t() y el hook useLocale
-  lib/          utilidades del navegador (descargas, portapapeles, IndexedDB)
+  lib/          utilidades del navegador y del escritorio (descargas, portapapeles, IndexedDB, puente de escritorio)
   ui/
     components/ piezas reutilizables (diagrama, editor del Arazzo, formulario de schema, selector de workflows…)
     screens/    una pantalla por paso
+electron/       app de escritorio: proceso principal (HTTP sin CORS, archivos), puente de preload y lanzador de desarrollo
 examples/       ejemplos de tarjetas de crédito y traspaso de millas, y la API mock
 docs/           capturas de pantalla
 ```
 
-`core` nunca importa de `ui`, `app` ni `lib`, así que el motor se puede reutilizar fuera del navegador. Las llamadas HTTP pasan por un `HttpExecutor` (`fetch` o el simulador basado en el contrato) y los pasos de mensajería por un `MessageExecutor` (hoy, el simulador). El diagrama (React Flow) y el editor (CodeMirror) se cargan solo cuando se usan, para que la carga inicial sea liviana.
+`core` nunca importa de `ui`, `app` ni `lib`, así que el motor se puede reutilizar fuera del navegador. Las llamadas HTTP pasan por un `HttpExecutor` (`fetch` en el navegador, el proceso principal de Electron en escritorio, o el simulador basado en el contrato) y los pasos de mensajería por un `MessageExecutor` (hoy, el simulador). El diagrama (React Flow) y el editor (CodeMirror) se cargan solo cuando se usan, para que la carga inicial sea liviana.
 
 ### Scripts
 
@@ -277,6 +296,8 @@ docs/           capturas de pantalla
 | `npm run typecheck` | Revisa tipos de la app, la configuración y las pruebas |
 | `npm run lint` | Lint con oxlint |
 | `npm run mock` / `npm run mock:bug` | Levanta las APIs de ejemplo (correctas / con errores de contrato) |
+| `npm run desktop:dev` | Abre la app de escritorio contra el servidor de desarrollo |
+| `npm run desktop:build` | Genera el instalador de escritorio del sistema actual en `release/` |
 
 ### Agregar un texto
 

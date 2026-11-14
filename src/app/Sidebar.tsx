@@ -81,7 +81,7 @@ export function Sidebar({ studio }: { studio: Studio }) {
           </button>
         ))}
       </nav>
-      <div className="sidebar-foot">{t('sidebar.privacy')}</div>
+      <div className="sidebar-foot">{t(studio.isDesktop ? 'sidebar.privacyDesktop' : 'sidebar.privacy')}</div>
       <div className="sidebar-lang" aria-label={t('sidebar.language')}>
         <Segmented options={LOCALES.map((l) => ({ id: l.id, label: l.label }))} value={locale} onChange={changeLocale} />
       </div>

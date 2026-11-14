@@ -15,6 +15,9 @@ interface Props {
   onAttach: (sourceName: string, file: File) => void
   onFetchRemote: (sourceName: string) => void
   onExample: (id: ExampleId) => void
+  /** Solo en la app de escritorio: abrir una carpeta con el Arazzo y sus contratos. */
+  onOpenFolder?: () => void
+  folder?: string
   onReset: () => void
   onNext: () => void
   savedSession?: SavedSession
@@ -63,7 +66,7 @@ export function LoadScreen(p: Props) {
       <PageHeader
         step={1}
         title={t('load.title')}
-        description={t('load.description')}
+        description={t(p.onOpenFolder ? 'load.descriptionDesktop' : 'load.description')}
         actions={p.files.length > 0 && <button onClick={p.onReset}>{t('load.reset')}</button>}
       />
 
@@ -92,7 +95,12 @@ export function LoadScreen(p: Props) {
           <div className="muted small">{t('load.dropHint')}</div>
         </div>
         <div className="row">
-          <button className="primary" onClick={() => input.current?.click()}>
+          {p.onOpenFolder && (
+            <button className="primary" onClick={p.onOpenFolder} title={t('load.openFolderHint')}>
+              {t('load.openFolder')}
+            </button>
+          )}
+          <button className={p.onOpenFolder ? undefined : 'primary'} onClick={() => input.current?.click()}>
             {t('load.choose')}
           </button>
           {!p.files.length && (
@@ -151,6 +159,7 @@ export function LoadScreen(p: Props) {
             <div className="muted small">
               {p.project.arazzoFileName} · {t('load.version', { version: String(p.project.arazzo.arazzo) })} · {t('nav.workflows', { n: p.project.arazzo.workflows?.length ?? 0 })}
             </div>
+            {p.folder && <div className="muted small">{t('load.folder', { path: p.folder })}</div>}
           </div>
           <span className={`badge ${missing.length || missingRefs ? 'b-err' : 'b-ok'}`}>
             {missing.length
