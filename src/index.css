@@ -5748,3 +5748,12 @@ body:has(.ws-shell) {
 .icon-btn.on {
   color: var(--accent);
 }
+.prefs-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 60%;
+}
+.prefs-hint {
+  font-weight: 400;
+}

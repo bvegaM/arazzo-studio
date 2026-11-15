@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { LOCALES, t, type Locale } from '../i18n'
 import { THEMES, useTheme, type Theme } from '../lib/theme'
 import { useDevLog } from '../lib/devlog'
+import { setUiMode, useUiMode } from '../lib/uiMode'
 import { EnvDot, Icon, Segmented } from '../ui/components/kit'
 
 const ICONS = {
@@ -35,6 +36,7 @@ interface Props {
 }
 
 function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pick<Props, 'locale' | 'onLocale' | 'privacy'> & { onClose: () => void; theme: Theme; onTheme: (t: Theme) => void }) {
+  const mode = useUiMode()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -52,6 +54,20 @@ function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pic
         <div className="prefs-row">
           <span>{t('sidebar.language')}</span>
           <Segmented options={LOCALES.map((l) => ({ id: l.id, label: l.label }))} value={locale} onChange={onLocale} />
+        </div>
+        <div className="prefs-row">
+          <span>
+            {t('prefs.mode')}
+            <span className="muted small prefs-hint">{t('prefs.modeHint')}</span>
+          </span>
+          <Segmented
+            options={[
+              { id: 'full', label: t('prefs.mode.full') },
+              { id: 'simple', label: t('prefs.mode.simple') },
+            ]}
+            value={mode}
+            onChange={setUiMode}
+          />
         </div>
         <div className="prefs-row">
           <span>{t('prefs.theme')}</span>
@@ -87,6 +103,7 @@ function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pic
 export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch, devOpen, onDevTools }: Props) {
   const [prefs, setPrefs] = useState(false)
   const errors = useDevLog().logs.filter((l) => l.level === 'error').length
+  const simple = useUiMode() === 'simple'
   const [theme, setTheme] = useTheme()
   const nextTheme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
   return (
@@ -116,10 +133,12 @@ export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch,
           <Icon d={ICONS.search} size={13} /> {t('status.search')} <kbd className="status-hide-sm">{MOD_KEY}K</kbd>
         </button>
       )}
-      <button className={`status-btn status-text ${devOpen ? 'on' : ''}`} onClick={onDevTools} title={t('status.devTools')} aria-pressed={devOpen}>
-        <Icon d={ICONS.devtools} size={13} /> <span className="status-hide-sm">{t('status.devTools')}</span>
-        {!devOpen && errors > 0 && <span className="dev-count alert">{errors}</span>}
-      </button>
+      {!simple && (
+        <button className={`status-btn status-text ${devOpen ? 'on' : ''}`} onClick={onDevTools} title={t('status.devTools')} aria-pressed={devOpen}>
+          <Icon d={ICONS.devtools} size={13} /> <span className="status-hide-sm">{t('status.devTools')}</span>
+          {!devOpen && errors > 0 && <span className="dev-count alert">{errors}</span>}
+        </button>
+      )}
       <span className="status-item muted status-version">v{__APP_VERSION__}</span>
       {prefs && <Preferences onClose={() => setPrefs(false)} locale={locale} onLocale={onLocale} theme={theme} onTheme={setTheme} privacy={privacy} />}
     </footer>

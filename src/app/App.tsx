@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { desktop } from '../lib/desktop'
+import { useUiMode } from '../lib/uiMode'
 import { DevPanel, type DevTab } from '../ui/workspace/DevPanel'
 import type { TerminalRequest } from '../ui/workspace/TerminalSessions'
 import { AppBar } from './AppBar'
@@ -15,6 +16,8 @@ export default function App() {
   const [devOpen, setDevOpen] = useState(false)
   const [devMounted, setDevMounted] = useState(false)
   const [homeRequest, setHomeRequest] = useState(0)
+  // Interfaz simple: sin Dev Tools ni terminal (el panel no se muestra aunque estuviera abierto).
+  const simple = useUiMode() === 'simple'
   const [terminalRequest, setTerminalRequest] = useState<TerminalRequest>()
   /** "Abrir en terminal": muestra la terminal de Dev Tools en esa carpeta. */
   const openTerminal = (cwd?: string) => {
@@ -30,13 +33,13 @@ export default function App() {
   return (
     <div className="app-frame">
       <AppBar workspace={workspace} onHome={() => setHomeRequest((n) => n + 1)} />
-      <Workspace studio={studio} workspace={workspace} dev={{ open: devOpen, toggle }} homeRequest={homeRequest} onOpenTerminal={desktop ? openTerminal : undefined} />
+      <Workspace studio={studio} workspace={workspace} dev={{ open: devOpen, toggle }} homeRequest={homeRequest} onOpenTerminal={desktop && !simple ? openTerminal : undefined} />
       {devMounted && (
         <DevPanel
           tab={devTab}
           onTab={setDevTab}
           onClose={() => setDevOpen(false)}
-          hidden={!devOpen}
+          hidden={!devOpen || simple}
           cwd={workspace.kind === 'desktop' ? workspace.location : undefined}
           terminalRequest={terminalRequest}
         />
