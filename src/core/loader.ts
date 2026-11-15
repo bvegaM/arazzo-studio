@@ -234,3 +234,26 @@ export function attachToCollection(projects: Project[], sourceName: string, file
 export async function fetchRemoteInCollection(projects: Project[], sourceName: string): Promise<Project[]> {
   return Promise.all(projects.map((p) => (p.sources.some((s) => s.name === sourceName && s.status !== 'loaded') ? fetchRemoteSource(p, sourceName) : p)))
 }
+
+/**
+ * Reemplaza un archivo de la colección (un contrato o un archivo que un contrato referencia con $ref)
+ * y vuelve a armar las fuentes que lo usan. Las demás fuentes, incluidas las adjuntadas a mano o
+ * descargadas, quedan como estaban.
+ */
+export function replaceFileInCollection(projects: Project[], file: ParsedFile): Project[] {
+  return projects.map((p) => {
+    const files = [...p.files.filter((f) => f.name !== file.name), file]
+    return {
+      ...p,
+      files,
+      sources: p.sources.map((s) => {
+        if (!s.fileName) return s
+        const main = files.find((f) => f.name === s.fileName)
+        if (!main) return s
+        if (main.error) return { ...s, status: 'error', doc: undefined, error: main.error }
+        if (!fitsSource(main.kind, s.type)) return { ...s, status: 'error', doc: undefined, error: t(s.type === 'asyncapi' ? 'load.notAsyncapi' : 'load.notOpenapi', { name: main.name }) }
+        return withContract(s, main, files)
+      }),
+    }
+  })
+}

@@ -4630,3 +4630,105 @@ body:has(.ws-shell) {
   padding: 0 6px;
   font-size: 12.5px;
 }
+
+/* Contratos: abrir desde la barra lateral y editarlos en una pestaña */
+.tree-contract {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: inherit;
+  color: var(--text);
+}
+.tree-contract:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.tree-list li.active .tree-contract {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ws-tab-icon {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--info);
+  margin-right: 2px;
+}
+.ws-contract {
+  padding: 12px 16px 16px;
+  overflow: auto;
+}
+.ws-contract > .editor {
+  flex: 1;
+  min-width: 0;
+}
+.contract-editor .editor-body {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  height: calc(100vh - 210px);
+  min-height: 420px;
+}
+.contract-side {
+  overflow-y: auto;
+}
+.contract-side .editor-problems-box {
+  max-height: none;
+  flex: none;
+}
+.contract-filter {
+  height: 28px;
+  font-size: 12.5px;
+}
+.contract-ops,
+.contract-usage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.contract-ops {
+  max-height: 34vh;
+  overflow-y: auto;
+  flex: none;
+}
+.contract-ops button,
+.contract-usage button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.contract-ops button:hover,
+.contract-usage button:hover {
+  background: var(--surface-2);
+}
+.contract-op-target {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.contract-usage > li.broken {
+  border-left: 3px solid var(--err);
+  padding-left: 2px;
+}
+.contract-usage ul {
+  list-style: none;
+  margin: 0 0 4px 18px;
+  padding: 0;
+}
+.contract-usage ul button {
+  align-items: flex-start;
+  white-space: normal;
+}
+.contract-impact-alert {
+  margin: 0;
+}

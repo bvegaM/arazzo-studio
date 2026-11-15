@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Estado de la app y acciones del flujo (cargar, configurar, ejecutar, exportar).
 import { useEffect, useRef, useState } from 'react'
-import { attachToCollection, buildCollection, fetchRemoteInCollection, parseFile, replaceArazzo, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
+import { attachToCollection, buildCollection, fetchRemoteInCollection, parseFile, replaceArazzo, replaceFileInCollection, type LoadedFile, type ParsedFile, type Project } from '../core/loader'
+import YAML from 'yaml'
 import { caseJourney, collectionCases, collectionCredentials, journeyKey, listJourneys, migrateLegacySession, scopeCase, splitJourneyKey, unscopeCase } from '../core/collection'
 import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
@@ -224,6 +225,43 @@ export function useStudio() {
     if (parsed.kind !== 'arazzo') return t('load.noArazzo')
     setFiles((prev) => prev.map((f) => (f.name === name ? parsed : f)))
     applyCollection(projects.map((p) => (p === project ? replaceArazzo(project, parsed) : p)))
+  }
+
+  /**
+   * Texto de un contrato para el editor. Solo los archivos de la colección se editan; los que vinieron
+   * de una URL o se adjuntaron se muestran en solo lectura (con "hacer copia local").
+   */
+  function contractText(file: string): { text: string; editable: boolean } | undefined {
+    const own = texts.find((f) => f.name === file)
+    if (own) return { text: own.text, editable: true }
+    const attached = attachments.find((a) => a.file.name === file)
+    if (attached) return { text: attached.file.text, editable: false }
+    const parsed = projects.flatMap((p) => p.files).find((f) => f.name === file)
+    return parsed?.doc ? { text: YAML.stringify(parsed.doc, { lineWidth: 0 }), editable: false } : undefined
+  }
+
+  /**
+   * Cambios en un contrato (o en un archivo que referencia con $ref): se guarda el texto y, si se puede
+   * leer, se vuelven a armar las fuentes que lo usan y se re-analizan los journeys. Si el YAML no se
+   * puede leer, el análisis queda como estaba y se devuelve el error.
+   */
+  function editContract(name: string, text: string): string | undefined {
+    setTexts((prev) => prev.map((f) => (f.name === name ? { ...f, text } : f)))
+    const parsed = parseFile({ name, text })
+    setFiles((prev) => prev.map((f) => (f.name === name ? parsed : f)))
+    if (parsed.error) return parsed.error
+    applyCollection(replaceFileInCollection(projects, parsed))
+  }
+
+  /** Convierte un contrato remoto o adjuntado en un archivo de la colección, para poder editarlo. */
+  function makeLocalCopy(file: string) {
+    const current = contractText(file)
+    if (!current || current.editable) return
+    const parsed = parseFile({ name: file, text: current.text })
+    setTexts((prev) => [...prev, { name: file, text: current.text }])
+    setOriginals((prev) => ({ ...prev, [file]: current.text }))
+    setFiles((prev) => [...prev.filter((f) => f.name !== file), parsed])
+    applyCollection(replaceFileInCollection(projects, parsed))
   }
 
   /**
@@ -570,6 +608,11 @@ export function useStudio() {
     arazzoText: (file: string) => texts.find((f) => f.name === file)?.text,
     arazzoOriginal: (file: string) => originals[file],
     editArazzo,
+    contractText,
+    editContract,
+    makeLocalCopy,
+    /** Archivos de la colección que no son Arazzo (contratos y archivos de schemas). */
+    contractFiles: files.filter((f) => f.kind !== 'arazzo').map((f) => f.name),
     saveArazzo,
     isDesktop: !!desktop,
     folder: folder?.root,

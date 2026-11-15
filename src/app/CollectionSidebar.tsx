@@ -29,6 +29,9 @@ interface Props {
   onOpenJourney: (workflowId: string) => void
   onOpenStep: (workflowId: string, stepId: string) => void
   onOpenEnv: () => void
+  /** Abre un contrato (por nombre de archivo) en el editor. */
+  onOpenContract: (file: string) => void
+  activeContract?: string
 }
 
 /** Estado del journey para el punto de color: la última ejecución o, si no hay, su validación. */
@@ -91,7 +94,7 @@ const FOLDER_ICON = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a
 const PLUS_ICON = 'M12 5v14M5 12h14'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
-export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv }: Props) {
+export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract }: Props) {
   const { projects, journeys, runs, environments, activeEnv, envActions } = studio
   const sources = studio.collectionSources
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -369,11 +372,21 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                 {sources.map((s) => {
                   const ok = s.status === 'loaded' && !s.missingRefs?.length
                   return (
-                    <li key={s.name} title={s.error ?? (s.missingRefs?.length ? t('load.missingRefs', { files: s.missingRefs.join(', ') }) : (s.fileName ?? s.url))}>
+                    <li
+                      key={s.name}
+                      className={s.fileName && s.fileName === activeContract ? 'active' : ''}
+                      title={s.error ?? (s.missingRefs?.length ? t('load.missingRefs', { files: s.missingRefs.join(', ') }) : (s.fileName ?? s.url))}
+                    >
                       <span className={ok ? 'ok' : 'err'}>{ok ? '✓' : '✕'}</span>
-                      <span className="grow clamp-1">
-                        {s.name} <span className="muted small">{s.type}</span>
-                      </span>
+                      {s.fileName ? (
+                        <button className="tree-contract grow clamp-1" onClick={() => onOpenContract(s.fileName!)} title={t('contract.open', { file: s.fileName })}>
+                          {s.name} <span className="muted small">{s.type}</span>
+                        </button>
+                      ) : (
+                        <span className="grow clamp-1">
+                          {s.name} <span className="muted small">{s.type}</span>
+                        </span>
+                      )}
                       {s.status !== 'loaded' && (
                         <>
                           <button

@@ -3,13 +3,13 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { yaml } from '@codemirror/lang-yaml'
-import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint'
+import { lintGutter, setDiagnostics } from '@codemirror/lint'
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { tags } from '@lezer/highlight'
+import { syntaxHighlighting } from '@codemirror/language'
 import type { ProjectAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
 import { issueRanges, suggest, yamlProblems, type TextProblem } from '../../core/authoring'
+import { editorTheme as theme, highlight, toDiagnostics } from './editorTheme'
 import type { SaveResult } from '../../lib/browser'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
@@ -34,37 +34,6 @@ interface Props {
   onClose?: () => void
   /** Mostrar el diagrama junto a los problemas (por defecto sí). */
   showDiagram?: boolean
-}
-
-// Colores de la app (variables CSS): el resaltado sigue el tema claro u oscuro.
-const theme = EditorView.theme({
-  '&': { height: '100%', backgroundColor: 'var(--surface)', color: 'var(--text)', fontSize: '13px' },
-  '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.55' },
-  '.cm-content': { caretColor: 'var(--text)' },
-  '.cm-cursor': { borderLeftColor: 'var(--text)' },
-  '.cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--faint)', borderRight: '1px solid var(--border)' },
-  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--accent) 7%, transparent)' },
-  '.cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--info) 22%, transparent)' },
-  '.cm-tooltip': { backgroundColor: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border-strong)' },
-  '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--accent-soft)', color: 'var(--text)' },
-  '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
-})
-
-const highlight = HighlightStyle.define([
-  { tag: [tags.propertyName, tags.definition(tags.propertyName)], color: 'var(--info)' },
-  { tag: [tags.string, tags.special(tags.string)], color: 'var(--ok)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'var(--warn)' },
-  { tag: [tags.comment, tags.lineComment], color: 'var(--faint)', fontStyle: 'italic' },
-  { tag: [tags.keyword, tags.typeName, tags.labelName], color: 'var(--sim)' },
-])
-
-const SEVERITY: Record<TextProblem['level'], Diagnostic['severity']> = { error: 'error', warning: 'warning', info: 'info' }
-
-function toDiagnostics(problems: TextProblem[], length: number): Diagnostic[] {
-  return problems
-    .filter((p) => p.from <= length)
-    .map((p) => ({ from: p.from, to: Math.min(p.to, length), severity: SEVERITY[p.level], message: p.message }))
 }
 
 export function ArazzoEditor(p: Props) {

@@ -19,6 +19,7 @@ import { ResultsPanel } from '../ui/workspace/ResultsPanel'
 import { StepView } from '../ui/workspace/StepView'
 import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
 import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
+import type { ContractUsage } from '../ui/components/ContractEditor'
 import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
 import type { Studio } from './useStudio'
@@ -26,6 +27,7 @@ import type { WorkspaceState } from './useWorkspace'
 
 // El editor (CodeMirror) pesa bastante: se carga solo al abrir la pestaña YAML.
 const ArazzoEditor = lazy(() => import('../ui/components/ArazzoEditor').then((m) => ({ default: m.ArazzoEditor })))
+const ContractEditor = lazy(() => import('../ui/components/ContractEditor').then((m) => ({ default: m.ContractEditor })))
 
 type View = 'overview' | 'inputs' | 'cases' | 'yaml' | 'step'
 
@@ -71,6 +73,9 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
   const [errorsHidden, setErrorsHidden] = useState(false)
   const [resultsWidth, setResultsWidth] = useState(savedWidth)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // Contratos abiertos como pestañas (por nombre de archivo) y el que se está viendo.
+  const [contractTabs, setContractTabs] = useState<string[]>([])
+  const [activeContract, setActiveContract] = useState<string>()
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
   const [welcomeClosed, setWelcomeClosed] = useState(false)
   if (projects.length && welcomeClosed) setWelcomeClosed(false)
@@ -105,6 +110,7 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     // El journey que estaba activo queda abierto como pestaña (al empezar no está en la lista).
     setOpenTabs((prev) => [...new Set([...prev, ...(activeId ? [activeId] : []), id])])
     setEnvActive(false)
+    setActiveContract(undefined)
     setAskConfirm(false)
     if (nextView) setViews((v) => ({ ...v, [id]: nextView }))
   }
@@ -120,6 +126,19 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
   const openEnv = () => {
     setEnvOpen(true)
     setEnvActive(true)
+    setActiveContract(undefined)
+  }
+  // Pestañas de contrato que siguen existiendo en la colección.
+  const shownContracts = contractTabs.filter((f) => studio.contractText(f) !== undefined)
+  const contractOpen = activeContract && shownContracts.includes(activeContract) ? activeContract : undefined
+  const openContract = (file: string) => {
+    setContractTabs((prev) => (prev.includes(file) ? prev : [...prev, file]))
+    setActiveContract(file)
+    setEnvActive(false)
+  }
+  const closeContract = (file: string) => {
+    setContractTabs((prev) => prev.filter((f) => f !== file))
+    if (file === activeContract) setActiveContract(undefined)
   }
 
   const run = (force = false) => {
@@ -183,6 +202,8 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
       onOpenJourney={(id) => openJourney(id, views[id] === 'step' ? 'overview' : undefined)}
       onOpenStep={openStep}
       onOpenEnv={openEnv}
+      onOpenContract={openContract}
+      activeContract={contractOpen}
     />
   )
 
@@ -216,6 +237,16 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
         openEnv()
       },
     })),
+    ...studio.collectionSources
+      .filter((src) => src.fileName)
+      .map((src) => ({
+        id: `k:${src.name}`,
+        group: t('palette.contracts'),
+        label: src.name,
+        detail: src.fileName,
+        badge: { text: src.type === 'asyncapi' ? 'ASYNC' : 'API', cls: 'm-flow' },
+        run: () => openContract(src.fileName!),
+      })),
     ...workspace.collections.map((c) => ({
       id: `c:${c.folder}`,
       group: t('palette.collections'),
@@ -270,6 +301,42 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     )
   }
 
+  /** Journeys que usan un contrato (directo, o por $ref desde su contrato) y sus problemas actuales. */
+  const contractUsage = (file: string): ContractUsage[] => {
+    const base = file.split(/[\\/]/).pop() ?? file
+    const usesFile = (j: (typeof journeys)[number]) =>
+      j.project.sources.some((s) => s.fileName === file || (!!s.fileName && !!studio.contractText(s.fileName)?.text.includes(base)))
+    return journeys.filter(usesFile).map((j) => ({
+      key: j.key,
+      name: humanizeId(j.workflowId),
+      file: j.file,
+      problems: j.wa.issues.map((i) => ({ level: i.level, message: i.message, stepId: i.stepId })),
+    }))
+  }
+
+  const contractView = (file: string) => {
+    const current = studio.contractText(file)
+    if (!current) return null
+    return (
+      <Suspense fallback={<Empty>{t('editor.loading')}</Empty>}>
+        <ContractEditor
+          key={`${file}:${current.editable}`}
+          fileName={file}
+          text={current.text}
+          original={studio.arazzoOriginal(file) ?? current.text}
+          editable={current.editable}
+          onChange={(text) => studio.editContract(file, text)}
+          onSave={(text) => (workspace.isOpen ? workspace.saveNow().then(() => 'saved' as const) : studio.saveArazzo(file, text))}
+          onMakeLocalCopy={() => studio.makeLocalCopy(file)}
+          usage={contractUsage(file)}
+          related={studio.contractFiles.filter((f) => f !== file && current.text.includes(f.split(/[\\/]/).pop() ?? f))}
+          onOpenFile={openContract}
+          onOpenJourney={(key, step) => (step ? openStep(key, step) : openJourney(key))}
+        />
+      </Suspense>
+    )
+  }
+
   const envView = (
     <div className="ws-center">
       <div className="ws-center-head">
@@ -300,7 +367,7 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
         <main className="ws-main">
           <div className="ws-tabs" role="tablist">
             {tabs.map((id) => (
-              <div key={id} className={`ws-tab ${id === activeId && !envActive ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive}>
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
                   {journeyName(id)}
                   {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
@@ -313,8 +380,14 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
               </div>
             ))}
             {envOpen && (
-              <div className={`ws-tab ${envActive ? 'active' : ''}`} role="tab" aria-selected={envActive}>
-                <button className="ws-tab-main ws-env-tab" onClick={() => setEnvActive(true)}>
+              <div className={`ws-tab ${envActive && !contractOpen ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen}>
+                <button
+                  className="ws-tab-main ws-env-tab"
+                  onClick={() => {
+                    setEnvActive(true)
+                    setActiveContract(undefined)
+                  }}
+                >
                   <EnvDot color={studio.activeEnv.color} /> {studio.activeEnv.name}
                 </button>
                 <button
@@ -329,6 +402,16 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
                 </button>
               </div>
             )}
+            {shownContracts.map((file) => (
+              <div key={file} className={`ws-tab ${file === contractOpen ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen}>
+                <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
+                  <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
+                </button>
+                <button className="ws-tab-close" onClick={() => closeContract(file)} aria-label={t('common.close')} title={t('common.close')}>
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
 
           {studio.errors.length > 0 && !errorsHidden && (
@@ -346,7 +429,9 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
             </div>
           )}
 
-          {envActive ? (
+          {contractOpen ? (
+            <div className="ws-body ws-contract">{contractView(contractOpen)}</div>
+          ) : envActive ? (
             <div className="ws-body">{envView}</div>
           ) : wa ? (
             <>
