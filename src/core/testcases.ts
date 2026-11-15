@@ -53,7 +53,11 @@ export interface TestCase {
   enabled: boolean
 }
 
-export type Verdict = 'passed' | 'failed' | 'inconclusive'
+/**
+ * warning: una comprobación extra generada (inputs faltantes o inválidos) que no salió como se
+ * esperaba. No rompe el flujo, pero conviene revisarla con quien construye la API.
+ */
+export type Verdict = 'passed' | 'failed' | 'warning' | 'inconclusive'
 
 export function verdictLabel(verdict: Verdict): string {
   return t(`verdict.${verdict}`)
@@ -509,14 +513,17 @@ export function evaluateCase(tc: TestCase, run: WorkflowRunResult): { verdict: V
   if (ok) {
     return { verdict: 'passed', explanation: t('ev.rejectedOk', { step: target.stepId, status }) }
   }
+  // Las validaciones de datos generadas desde el schema son advertencias: la API puede ser más
+  // permisiva que el contrato sin que el flujo deje de funcionar.
+  const missed: Verdict = tc.origin === 'schema' ? 'warning' : 'failed'
   if (status >= 200 && status < 300) {
     return {
-      verdict: 'failed',
+      verdict: missed,
       explanation: t('ev.acceptedWrongly', { step: target.stepId, status, expected: statusText(accepted) }),
     }
   }
   return {
-    verdict: 'failed',
+    verdict: missed,
     explanation: t('ev.wrongStatus', { step: target.stepId, status, expected: statusText(accepted) }),
   }
 }

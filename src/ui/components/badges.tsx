@@ -20,8 +20,8 @@ export function StatusBadge({ status }: { status: StepStatus }) {
   return <span className={`badge ${STATUS[status].cls}`}>{STATUS[status].icon} {t(`step.${status}`)}</span>
 }
 
-const VERDICT_CLS: Record<Verdict, string> = { passed: 'b-ok', failed: 'b-err', inconclusive: 'b-warn' }
-const VERDICT_ICON: Record<Verdict, string> = { passed: '✓', failed: '✕', inconclusive: '?' }
+const VERDICT_CLS: Record<Verdict, string> = { passed: 'b-ok', failed: 'b-err', warning: 'b-warn', inconclusive: 'b-warn' }
+const VERDICT_ICON: Record<Verdict, string> = { passed: '✓', failed: '✕', warning: '!', inconclusive: '?' }
 
 export function VerdictBadge({ verdict }: { verdict: Verdict }) {
   return (

@@ -5,6 +5,7 @@ import type { SavedSession } from '../../core/session'
 import type { ExampleId } from '../../app/example'
 import { t } from '../../i18n'
 import { Icon } from '../components/kit'
+import { PURPOSES, ROLES, recommendedStart, setProfile, useProfile, type Purpose, type Role } from '../../lib/profile'
 import type { ParentLocation, WorkspaceState } from '../../app/useWorkspace'
 import { slugify } from '../../core/workspaceFormat'
 
@@ -71,15 +72,61 @@ function FileInput({ inputRef, onFiles }: { inputRef: React.RefObject<HTMLInputE
   )
 }
 
-function Card({ icon, title, text, onClick }: { icon: string; title: string; text: string; onClick: () => void }) {
+function Card({ icon, title, text, onClick, recommended }: { icon: string; title: string; text: string; onClick: () => void; recommended?: boolean }) {
   return (
-    <button className="wd-card" onClick={onClick}>
+    <button className={`wd-card ${recommended ? 'recommended' : ''}`} onClick={onClick}>
+      {recommended && <span className="wd-reco">{t('onboarding.recommended')}</span>}
       <span className="wd-icon">
         <Icon d={icon} size={18} />
       </span>
       <strong>{title}</strong>
       <span className="muted small">{text}</span>
     </button>
+  )
+}
+
+/** Primera vez (como Postman): cuál es tu rol y para qué usarás la app. */
+function RoleStep({ onDone }: { onDone: () => void }) {
+  const profile = useProfile()
+  const [role, setRole] = useState<Role | undefined>(profile?.role)
+  const [purposes, setPurposes] = useState<Purpose[]>(profile?.purposes ?? [])
+  const toggle = (p: Purpose) => setPurposes((list) => (list.includes(p) ? list.filter((x) => x !== p) : [...list, p]))
+  return (
+    <div className="onboarding">
+      <div className="wd-eyebrow">{t('onboarding.eyebrow')}</div>
+      <h3>{t('onboarding.roleQuestion')}</h3>
+      <div className="ob-roles" role="radiogroup" aria-label={t('onboarding.roleQuestion')}>
+        {ROLES.map((r) => (
+          <button key={r} role="radio" aria-checked={role === r} className={`ob-option ${role === r ? 'active' : ''}`} data-role={r} onClick={() => setRole(r)}>
+            <strong>{t(`role.${r}`)}</strong>
+            <span className="muted small">{t(`role.${r}.hint`)}</span>
+          </button>
+        ))}
+      </div>
+      <h3>{t('onboarding.purposeQuestion')}</h3>
+      <p className="muted small">{t('onboarding.purposeHint')}</p>
+      <div className="ob-purposes">
+        {PURPOSES.map((p) => (
+          <button key={p} className={`ob-chip ${purposes.includes(p) ? 'active' : ''}`} aria-pressed={purposes.includes(p)} data-purpose={p} onClick={() => toggle(p)}>
+            {purposes.includes(p) ? '✓ ' : ''}
+            {t(`purpose.${p}`)}
+          </button>
+        ))}
+      </div>
+      <div className="ob-actions">
+        {role && <span className="muted small grow">{t(role === 'product' || role === 'business' ? 'onboarding.modeSimple' : 'onboarding.modeFull')}</span>}
+        <button
+          className="primary"
+          disabled={!role}
+          onClick={() => {
+            setProfile({ role: role!, purposes })
+            onDone()
+          }}
+        >
+          {t('onboarding.continue')}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -233,7 +280,10 @@ function OpenWorkspace({ workspace }: { workspace: WorkspaceState }) {
 export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: WorkspaceState }) {
   const input = useRef<HTMLInputElement>(null)
   const featuredRef = useRef<HTMLButtonElement>(null)
-  const [view, setView] = useState<'main' | 'create' | 'open'>('main')
+  const profile = useProfile()
+  // Sin perfil, lo primero es preguntar el rol (una sola vez en este equipo).
+  const [view, setView] = useState<'role' | 'main' | 'create' | 'open'>(profile ? 'main' : 'role')
+  const start = profile ? recommendedStart(profile) : undefined
   const ws = p.workspace
   // En escritorio "Abrir workspace" va directo al diálogo de carpetas.
   const openWorkspace = () => (ws.locations.includes('desktop') ? void ws.openWorkspace('desktop') : setView('open'))
@@ -262,7 +312,9 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
     </button>
   )
   let body: ReactNode
-  if (view === 'create') {
+  if (view === 'role') {
+    body = <RoleStep onDone={() => setView('main')} />
+  } else if (view === 'create') {
     body = (
       <>
         {back}
@@ -305,15 +357,24 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
               <strong>{t('studio.createTitle')}</strong>
               <span className="muted small">{t('studio.createText')}</span>
             </span>
+            {start === 'create' && <span className="wd-reco">{t('onboarding.recommended')}</span>}
           </button>
         )}
         <div className="wd-cards">
-          {ws.last && <Card icon={ICON.plus} title={t('studio.createTitle')} text={t('studio.createShort')} onClick={() => setView('create')} />}
+          {ws.last && <Card icon={ICON.plus} title={t('studio.createTitle')} text={t('studio.createShort')} onClick={() => setView('create')} recommended={start === 'create'} />}
           <Card icon={ICON.open} title={t('studio.openTitle')} text={t('studio.openText')} onClick={openWorkspace} />
-          <Card icon={ICON.tour} title={t('tour.card')} text={t('tour.cardText')} onClick={p.onTour} />
-          <Card icon={ICON.example} title={t('ws.welcome.tryExample')} text={t('ws.welcome.tryExampleText')} onClick={() => p.onExample('pokemon')} />
+          <Card icon={ICON.tour} title={t('tour.card')} text={t('tour.cardText')} onClick={p.onTour} recommended={start === 'tour'} />
+          <Card icon={ICON.example} title={t('ws.welcome.tryExample')} text={t('ws.welcome.tryExampleText')} onClick={() => p.onExample('pokemon')} recommended={start === 'example'} />
           {session && <Card icon={ICON.resume} title={t('ws.welcome.resume')} text={session.title ?? session.files[0].name} onClick={p.onRestore} />}
         </div>
+        {profile && (
+          <p className="muted small wd-profile">
+            {t('onboarding.youAre', { role: t(`role.${profile.role}`) })}{' '}
+            <button className="link small" onClick={() => setView('role')}>
+              {t('onboarding.change')}
+            </button>
+          </p>
+        )}
       </>
     )
   }
@@ -336,6 +397,14 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
             ))}
           </div>
         )}
+        {view === 'role' ? (
+          <div className="wd-footer">
+            <span className="spacer" />
+            <button className="link" onClick={() => setView('main')}>
+              {t('onboarding.skip')}
+            </button>
+          </div>
+        ) : (
         <div className="wd-footer">
           <span className="muted small">
             {over ? (
@@ -358,6 +427,7 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
             {t('ws.welcome.explore')}
           </button>
         </div>
+        )}
         <FileInput inputRef={input} onFiles={p.onFiles} />
       </div>
     </div>

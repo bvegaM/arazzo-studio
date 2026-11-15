@@ -10,6 +10,7 @@ import { MethodBadge } from '../ui/components/badges'
 import { Chevron, Icon } from '../ui/components/kit'
 import { RowMenu, type RowAction } from '../ui/components/RowMenu'
 import { desktop } from '../lib/desktop'
+import { useUiMode } from '../lib/uiMode'
 import type { Studio } from './useStudio'
 import type { WorkspaceState } from './useWorkspace'
 
@@ -44,6 +45,7 @@ function journeyTone(key: string, wa: WorkflowAnalysis, runs: CaseRun[]): { cls:
   if (mine.some((r) => r.state === 'running' || r.state === 'pending')) return { cls: 'sd-running', title: t('results.runningState') }
   const done = mine.filter((r) => r.state === 'done')
   if (done.some((r) => r.verdict === 'failed')) return { cls: 'sd-failed', title: t('results.filter.failed') }
+  if (done.some((r) => r.verdict === 'warning')) return { cls: 'sd-warning', title: t('results.filter.warning') }
   if (done.some((r) => r.verdict === 'inconclusive')) return { cls: 'sd-inconclusive', title: t('results.filter.inconclusive') }
   if (done.length) return { cls: 'sd-passed', title: t('results.filter.passed') }
   if (wa.issues.some((i) => i.level === 'error')) return { cls: 'sd-failed', title: t('nav.errors', { n: wa.issues.filter((i) => i.level === 'error').length }) }
@@ -107,6 +109,8 @@ const PLUS_ICON = 'M12 5v14M5 12h14'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
 export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract, onOpenTerminal, onOpenCollectionOverview }: Props) {
+  // Interfaz simple: los pasos con nombre legible y sin el método HTTP.
+  const simple = useUiMode() === 'simple'
   const { projects, journeys, runs, environments, activeEnv, envActions } = studio
   const sources = studio.collectionSources
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -238,11 +242,12 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                           <button
                             key={rs.step.stepId}
                             className={`tree-row tree-step ${stepActive ? 'active' : ''}`}
+                            data-step={rs.step.stepId}
                             onClick={() => onOpenStep(key, rs.step.stepId)}
                             title={rs.step.description ?? rs.label}
                           >
-                            {rs.op ? <MethodBadge method={rs.op.method} /> : <span className="method m-flow">{rs.kind === 'workflow' ? 'FLOW' : '?'}</span>}
-                            <span className={`grow clamp-1 ${hasError ? 'err' : ''}`}>{rs.step.stepId}</span>
+                            {simple ? null : rs.op ? <MethodBadge method={rs.op.method} /> : <span className="method m-flow">{rs.kind === 'workflow' ? 'FLOW' : '?'}</span>}
+                            <span className={`grow clamp-1 ${hasError ? 'err' : ''}`}>{simple ? humanizeId(rs.step.stepId) : rs.step.stepId}</span>
                           </button>
                         )
                       })}

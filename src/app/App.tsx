@@ -4,6 +4,8 @@ import { buildTourSteps } from './tour'
 import { t } from '../i18n'
 import { desktop } from '../lib/desktop'
 import { useUiMode } from '../lib/uiMode'
+import { EXAMPLES } from './example'
+import { TourHint } from '../ui/tour/TourHint'
 import { DevPanel, type DevTab } from '../ui/workspace/DevPanel'
 import type { TerminalRequest } from '../ui/workspace/TerminalSessions'
 import { AppBar } from './AppBar'
@@ -61,6 +63,8 @@ export default function App() {
     setDevTab('terminal')
     setTerminalRequest((prev) => ({ n: (prev?.n ?? 0) + 1, cwd }))
   }
+  // Con el ejemplo abierto (sin workspace), se ofrece recorrerlo con el tour.
+  const exampleOpen = !workspace.isOpen && EXAMPLES.pokemon.every((f) => studio.files.some((x) => x.name === f.name))
   const toggle = () => {
     setDevMounted(true)
     setDevOpen((o) => !o)
@@ -68,6 +72,7 @@ export default function App() {
   return (
     <div className="app-frame">
       <AppBar workspace={workspace} onHome={() => setHomeRequest((n) => n + 1)} />
+      {exampleOpen && !tour && <TourHint onStart={startTour} />}
       <Workspace studio={studio} workspace={workspace} dev={{ open: devOpen, toggle }} homeRequest={homeRequest} onOpenTerminal={desktop && !simple ? openTerminal : undefined} onTour={startTour} />
       {devMounted && (
         <DevPanel

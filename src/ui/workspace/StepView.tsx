@@ -5,6 +5,8 @@ import { isAsyncOperation } from '../../core/openapi'
 import { t } from '../../i18n'
 import { IssueBadge, Json, MethodBadge } from '../components/badges'
 import { Empty } from '../components/kit'
+import { plainCriterion, plainExpression } from '../../core/plain'
+import { useUiMode } from '../../lib/uiMode'
 
 interface Props {
   wa: WorkflowAnalysis
@@ -17,6 +19,10 @@ interface Props {
 }
 
 const show = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
+
+function criterionPlain(c: Criterion): string {
+  return plainCriterion({ condition: c.condition, context: c.context, type: typeof c.type === 'object' ? c.type.type : c.type })
+}
 
 function criterionText(c: Criterion): string {
   const type = typeof c.type === 'object' ? c.type.type : c.type
@@ -55,6 +61,8 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
   const issues = wa.issues.filter((i) => i.stepId === step.stepId)
   const onSuccess = step.onSuccess ?? wa.workflow.successActions ?? []
   const onFailure = step.onFailure ?? wa.workflow.failureActions ?? []
+  // Interfaz simple: sin metadatos técnicos y con las expresiones en palabras.
+  const simple = useUiMode() === 'simple'
 
   return (
     <div className="ws-view step-view">
@@ -71,6 +79,7 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
         </button>
       </div>
       {step.description && <p className="muted">{step.description}</p>}
+      {!simple && (
       <div className="sv-meta muted small">
         {op?.operationId && <span>operationId: <code>{op.operationId}</code></span>}
         {op && <span>{t('graph.source', { source: op.sourceName })}</span>}
@@ -78,6 +87,7 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
         {step.dependsOn?.length ? <span>dependsOn: <code>{step.dependsOn.join(', ')}</code></span> : null}
         {step.correlationId !== undefined && <span>correlationId: <code>{show(step.correlationId)}</code></span>}
       </div>
+      )}
 
       {issues.length > 0 && (
         <ul className="issues">
@@ -109,9 +119,7 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
                     <code>{p.name}</code>
                   </td>
                   <td className="muted">{p.in ?? (rs.kind === 'workflow' ? 'input' : '—')}</td>
-                  <td>
-                    <code>{show(p.value)}</code>
-                  </td>
+                  <td title={simple ? show(p.value) : undefined}>{simple ? plainExpression(p.value) : <code>{show(p.value)}</code>}</td>
                 </tr>
               ))}
             </tbody>
@@ -139,7 +147,12 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
           <ul className="sv-list">
             {step.successCriteria.map((c, i) => (
               <li key={i}>
-                <code>{criterionText(c)}</code>
+                <span className="crit-plain">{criterionPlain(c)}</span>
+                {!simple && (
+                  <div className="crit-tech">
+                    <code>{criterionText(c)}</code>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -148,12 +161,12 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
         )}
       </section>
 
-      <ActionList title="onSuccess" actions={onSuccess} />
-      <ActionList title="onFailure" actions={onFailure} />
+      <ActionList title={simple ? t('ws.step.onSuccessPlain') : 'onSuccess'} actions={onSuccess} />
+      <ActionList title={simple ? t('ws.step.onFailurePlain') : 'onFailure'} actions={onFailure} />
 
       {step.outputs && Object.keys(step.outputs).length > 0 && (
         <section className="sv-block">
-          <h4>Outputs</h4>
+          <h4>{simple ? t('results.outputsPlain') : 'Outputs'}</h4>
           <table>
             <tbody>
               {Object.entries(step.outputs).map(([k, v]) => (
@@ -161,9 +174,7 @@ export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
                   <td>
                     <code>{k}</code>
                   </td>
-                  <td>
-                    <code>{show(v)}</code>
-                  </td>
+                  <td title={simple ? show(v) : undefined}>{simple ? plainExpression(v) : <code>{show(v)}</code>}</td>
                 </tr>
               ))}
             </tbody>

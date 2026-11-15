@@ -61,6 +61,7 @@ export function CollectionOverview(p: Props) {
   const files = [...new Set(p.journeys.map((j) => j.file))]
   const passed = p.verdicts.filter((v) => v === 'passed').length
   const failed = p.verdicts.filter((v) => v === 'failed').length
+  const warnings = p.verdicts.filter((v) => v === 'warning').length
   const inconclusive = p.verdicts.filter((v) => v === 'inconclusive').length
   const revealLabel = t(desktop?.platform === 'darwin' ? 'studio.reveal' : 'studio.revealOther')
   const generate = () =>
@@ -135,6 +136,7 @@ export function CollectionOverview(p: Props) {
             <span className="co-verdicts">
               <span className="ok">✓ {passed}</span>
               {failed > 0 && <span className="err">✕ {failed}</span>}
+              {warnings > 0 && <span className="warn">! {warnings}</span>}
               {inconclusive > 0 && <span className="warn">? {inconclusive}</span>}
               <span className="muted small">{t('collection.lastRun')}</span>
             </span>

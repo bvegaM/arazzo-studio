@@ -26,14 +26,22 @@ await server.listen()
 const url = server.resolvedUrls.local[0]
 const browser = await chromium.launch({ executablePath: CHROME, headless: true })
 const pageErrors = []
-/** Una pestaña en un navegador limpio (sin sesiones ni workspaces de antes). */
-async function freshPage() {
-  const p = await (await browser.newContext({ locale: 'es-CL', viewport: { width: 1440, height: 900 } })).newPage()
+/**
+ * Una pestaña en un navegador limpio (sin sesiones ni workspaces de antes). Salvo que se pida la
+ * primera vez completa, ya respondió el rol (desarrollo, interfaz completa).
+ */
+async function freshPage({ firstTime = false } = {}) {
+  const context = await browser.newContext({ locale: 'es-CL', viewport: { width: 1440, height: 900 } })
+  if (!firstTime)
+    await context.addInitScript(() => {
+      if (!localStorage.getItem('profile')) localStorage.setItem('profile', JSON.stringify({ role: 'developer', purposes: ['journeys'] }))
+    })
+  const p = await context.newPage()
   p.on('pageerror', (e) => pageErrors.push(String(e)))
   await p.goto(url)
   return p
 }
-let page = await freshPage()
+let page = await freshPage({ firstTime: true })
 
 const results = []
 async function check(name, fn) {
@@ -56,12 +64,24 @@ const expect = (cond, msg) => {
 
 console.log(`Arazzo Studio · prueba de interfaz en ${url}`)
 
+await check('la primera vez pregunta el rol: un PM ve la interfaz simple y el ejemplo recomendado', async () => {
+  await page.locator('.onboarding').waitFor()
+  expect(await page.getByRole('button', { name: 'Continuar' }).isDisabled(), 'se puede continuar sin elegir rol')
+  await page.locator('[data-role="product"]').click()
+  await page.locator('[data-purpose="partner"]').click()
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await page.locator('.wd-card.recommended', { hasText: /ejemplo/i }).waitFor()
+  expect(!(await page.locator('.status-btn', { hasText: 'Dev Tools' }).count()), 'un PM no debería ver Dev Tools')
+})
+
 await check('la bienvenida carga la Pokédex y la ejecuta en simulación', async () => {
   await page.locator('.welcome-dialog').waitFor()
   await page.locator('.wd-card', { hasText: /ejemplo/i }).click()
   await page.locator('.tree-step').first().waitFor()
   const journeys = await page.locator('.tree-journey .tree-main').count()
   expect(journeys === 4, `se esperaban 4 journeys y hay ${journeys}`)
+  expect(await page.locator('.tour-hint button.primary').isVisible(), 'con el ejemplo abierto no se ofrece el tour')
+  expect(await page.locator('.status-bar [data-tour="tour"]').isVisible(), 'falta el botón Tour en la barra inferior')
   await page.locator('.ws-runbar .segmented').getByRole('button', { name: 'Simulación' }).click()
   await page.locator('.ws-run').click()
   await page.locator('.ws-results .step-result').first().waitFor({ timeout: 15000 })

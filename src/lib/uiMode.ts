@@ -26,6 +26,10 @@ export function setUiMode(mode: UiMode) {
   for (const l of listeners) l()
 }
 
+export function getUiMode(): UiMode {
+  return current
+}
+
 export function useUiMode(): UiMode {
   return useSyncExternalStore(
     (l) => {

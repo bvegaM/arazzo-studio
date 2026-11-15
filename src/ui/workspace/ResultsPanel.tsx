@@ -1,4 +1,6 @@
 import { humanizeId } from '../../core/format'
+import { plainCriterion, summarizeRuns } from '../../core/plain'
+import { useUiMode } from '../../lib/uiMode'
 import type { Prelude } from '../../app/useStudio'
 import { useState } from 'react'
 import { realRequest, reasonLabel, type StepResult } from '../../core/runner'
@@ -23,6 +25,8 @@ interface Props {
   onExport: (format: 'html' | 'json') => void
   /** Workflows de dependsOn ejecutados antes de los casos. */
   prelude?: Prelude
+  /** Deja de probar un caso (lo desmarca): "este comportamiento está bien así". */
+  onDisableCase?: (id: string) => void
 }
 
 type Filter = 'all' | Verdict
@@ -90,6 +94,7 @@ function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void
       <div className="run-bar" aria-hidden="true">
         <span className="rb-passed" style={{ width: share(by('passed')) }} />
         <span className="rb-failed" style={{ width: share(by('failed')) }} />
+        <span className="rb-inconclusive" style={{ width: share(by('warning')) }} />
         <span className="rb-inconclusive" style={{ width: share(by('inconclusive')) }} />
         {current && <span className="rb-running" style={{ width: share(1) }} />}
       </div>
@@ -97,9 +102,12 @@ function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void
   )
 }
 
-export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: number; defaultOpen?: boolean }) {
+export function StepCard({ s, index, defaultOpen, soft }: { s: StepResult; index: number; defaultOpen?: boolean; soft?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? (s.status === 'failed' || s.status === 'warning'))
+  // soft: el caso es una advertencia; el paso que "falló" se muestra en ámbar, como el veredicto.
+  const softFail = soft && s.status === 'failed'
   const [tab, setTab] = useState<StepTab>('resumen')
+  const simple = useUiMode() === 'simple'
   // Mensajería es un aviso (paso simulado) salvo que el paso haya fallado (no llegó el mensaje).
   const reasonTone = !s.reason
     ? ''
@@ -118,12 +126,12 @@ export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: numb
   }
 
   return (
-    <div className={`step-result st-${s.status} ${open ? 'open' : ''}`}>
+    <div className={`step-result st-${softFail ? 'warning' : s.status} ${open ? 'open' : ''}`}>
       <button className="step-head" onClick={() => setOpen(!open)} disabled={s.status === 'skipped'}>
         <span className="step-index">{index + 1}</span>
-        <StatusBadge status={s.status} />
-        <strong>{s.stepId}</strong>
-        {s.request ? (
+        {softFail ? <span className="badge b-warn">! {t('verdict.warning')}</span> : <StatusBadge status={s.status} />}
+        <strong title={s.stepId}>{simple ? humanizeId(s.stepId) : s.stepId}</strong>
+        {simple ? null : s.request ? (
           <span className="label">
             <MethodBadge method={s.request.method} /> {s.label.split(' ').slice(1).join(' ')}
           </span>
@@ -155,12 +163,12 @@ export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: numb
         <div className="step-notes">
           {s.reason &&
             (s.reason.category === 'criterio' && mismatches.length ? (
-              <div className={`note n-${reasonTone} note-diff`}>
+              <div className={`note n-${softFail ? 'warn' : reasonTone} note-diff`}>
                 <strong>{reasonLabel(s.reason.category)}</strong>
                 <MismatchList mismatches={mismatches} onShow={s.response || received ? showInResponse : undefined} />
               </div>
             ) : (
-              <div className={`note n-${reasonTone}`}>
+              <div className={`note n-${softFail ? 'warn' : reasonTone}`}>
                 <strong>{reasonLabel(s.reason.category)}:</strong> {s.reason.message}
               </div>
             ))}
@@ -178,7 +186,7 @@ export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: numb
               { id: 'peticion', label: t('report.request') },
               { id: 'respuesta', label: received || s.message ? t('results.message') : t('report.response') },
               { id: 'contrato', label: t('report.contract'), count: s.response || received ? s.contractIssues.length : undefined, tone: s.contractIssues.length ? 'warn' : 'ok' },
-              { id: 'outputs', label: 'Outputs', count: outputs },
+              { id: 'outputs', label: simple ? t('results.outputsPlain') : 'Outputs', count: outputs },
             ]}
           />
           <div className="tab-body">
@@ -195,12 +203,17 @@ export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: numb
                   <tbody>
                     {s.criteria.map((c, i) => (
                       <tr key={i}>
-                        <td>
-                          <code>{c.context ? `${c.context} ~ ${c.condition}` : c.condition}</code>
-                          {c.type !== 'simple' && <span className="muted small"> ({c.type})</span>}
+                        <td title={simple ? `${c.context ? `${c.context} ~ ` : ''}${c.condition}` : undefined}>
+                          <span className="crit-plain">{plainCriterion(c)}</span>
+                          {!simple && (
+                            <div className="crit-tech">
+                              <code>{c.context ? `${c.context} ~ ${c.condition}` : c.condition}</code>
+                              {c.type !== 'simple' && <span className="muted small"> ({c.type})</span>}
+                            </div>
+                          )}
                         </td>
                         <td>{c.passed ? <span className="badge b-ok">✓ {t('crit.badge.passed')}</span> : <span className="badge b-err">✕ {t('crit.badge.failed')}</span>}</td>
-                        <td>{c.detail}</td>
+                        <td>{simple && c.passed ? '—' : c.detail}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -343,7 +356,32 @@ function PreludeView({ prelude }: { prelude: Prelude }) {
   )
 }
 
-export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport, prelude }: Props) {
+/** Veredicto en lenguaje de negocio: ¿funciona el flujo? y qué comprobaciones revisar. */
+function RunSummaryBanner({ runs }: { runs: CaseRun[] }) {
+  const summary = summarizeRuns(runs)
+  if (!summary) return null
+  const icon = summary.tone === 'ok' ? '✓' : summary.tone === 'warn' ? '!' : '✕'
+  return (
+    <div className={`run-summary rs-${summary.tone}`} role="status">
+      <span className="rs-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="grow">
+        <strong>{summary.headline}</strong>
+        {summary.points.length > 0 && (
+          <ul>
+            {summary.points.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport, prelude, onDisableCase }: Props) {
+  const simple = useUiMode() === 'simple'
   // Pasos que no llegaron a la API (servidor caído, URL errónea o CORS).
   const unreachable = runs.flatMap((r) => r.steps.filter((s) => s.reason?.code === 'network' && s.request).map((s) => s.request!))
   const unreachableCases = runs.filter((r) => r.steps.some((s) => s.reason?.code === 'network')).length
@@ -396,6 +434,11 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
             ✕ {count('failed')}
           </span>
         )}
+        {count('warning') > 0 && (
+          <span className="rp-count warn" title={t('report.warnings')}>
+            ! {count('warning')}
+          </span>
+        )}
         {count('inconclusive') > 0 && (
           <span className="rp-count warn" title={t('report.inconclusive')}>
             ? {count('inconclusive')}
@@ -418,6 +461,7 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
         )}
       </div>
       {running && <RunProgress runs={runs} onCancel={onCancel} />}
+      {!running && <RunSummaryBanner runs={runs} />}
 
       <ConnectionHelp requests={unreachable} caseCount={unreachableCases} onSimulate={onRunSimulated} onEditEnvironment={onEditEnvironment} />
       {prelude && <PreludeView prelude={prelude} />}
@@ -428,7 +472,7 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
             <Pill active={filter === 'all'} onClick={() => setFilter('all')}>
               <span className="grow">{t('cases.all')}</span> <span className="count">{runs.length}</span>
             </Pill>
-            {(['failed', 'inconclusive', 'passed'] as const).map((v) => (
+            {(['failed', 'warning', 'inconclusive', 'passed'] as const).map((v) => (
               <Pill key={v} active={filter === v} onClick={() => setFilter(v)}>
                 <span className={`status-dot sd-${v}`} aria-hidden="true" />
                 <span className="grow">{t(`results.filter.${v}`)}</span> <span className="count">{count(v)}</span>
@@ -458,6 +502,12 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
               )}
             </div>
             <div className="kv">
+              {current.tc.origin !== 'arazzo' && current.tc.description && (
+                <>
+                  <span>{t('results.whatItChecks')}</span>
+                  <span>{current.tc.description}</span>
+                </>
+              )}
               <span>{t('report.expected')}</span>
               <span>{current.tc.expectation.text}</span>
               {current.explanation && (
@@ -489,7 +539,7 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
                   </details>
                 )}
               </span>
-              {current.result && Object.keys(current.result.outputs).length > 0 && (
+              {!simple && current.result && Object.keys(current.result.outputs).length > 0 && (
                 <>
                   <span>Outputs</span>
                   <code className="clamp" title={JSON.stringify(current.result.outputs)}>
@@ -498,11 +548,19 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
                 </>
               )}
             </div>
+            {onDisableCase && current.tc.origin !== 'arazzo' && current.tc.origin !== 'datos' && (current.verdict === 'warning' || current.verdict === 'failed') && (
+              <div className="case-accept">
+                <span className="muted small">{t('results.acceptHint')}</span>
+                <button className="small" onClick={() => onDisableCase(current.tc.id)}>
+                  {t('results.accept')}
+                </button>
+              </div>
+            )}
           </div>
           <div className="steps">
             {current.steps.length === 0 && <Empty>{current.state === 'pending' ? t('results.pendingRun') : current.state === 'running' ? t('cases.running') : t('report.noSteps')}</Empty>}
             {current.steps.map((s, i) => (
-              <StepCard key={`${current.tc.id}-${i}`} s={s} index={i} />
+              <StepCard key={`${current.tc.id}-${i}`} s={s} index={i} soft={current.verdict === 'warning'} />
             ))}
           </div>
         </div>

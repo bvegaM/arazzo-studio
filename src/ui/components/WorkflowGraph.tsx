@@ -8,12 +8,17 @@ import { isAsyncOperation } from '../../core/openapi'
 import type { Action } from '../../core/types'
 import { Pill } from './kit'
 import { t } from '../../i18n'
+import { humanizeId } from '../../core/format'
+import { plainCriterion } from '../../core/plain'
+import { useUiMode } from '../../lib/uiMode'
 
 type StepNodeData = { rs: ResolvedStep; index: number; issues: Issue[] }
 
 function StepNode({ data }: NodeProps<Node<StepNodeData>>) {
   const { rs, index, issues } = data
   const errors = issues.filter((i) => i.level === 'error')
+  // Interfaz simple: nombres legibles, la descripción del paso y los criterios en palabras.
+  const simple = useUiMode() === 'simple'
   return (
     <div className={`step-node ${errors.length ? 'has-error' : ''}`}>
       <Handle type="target" position={Position.Top} id="top" />
@@ -22,16 +27,19 @@ function StepNode({ data }: NodeProps<Node<StepNodeData>>) {
       <Handle type="target" position={Position.Right} id="in" style={{ top: '70%' }} />
       <Handle type="source" position={Position.Left} id="act-out" style={{ top: '50%' }} />
       <div className="title">
-        <span className="muted">{index + 1}.</span> {rs.step.stepId}
+        <span className="muted">{index + 1}.</span> {simple ? humanizeId(rs.step.stepId) : rs.step.stepId}
         {rs.mutating && <span className="badge b-warn" title={t('graph.mutatingTitle')}>{t('graph.mutating')}</span>}
       </div>
-      {rs.op ? (
+      {simple ? (
+        rs.step.description && <div className="path plain clamp-2">{rs.step.description}</div>
+      ) : rs.op ? (
         <div className="path">
           <MethodBadge method={rs.op.method} /> {rs.op.path}
         </div>
       ) : (
         <div className="path">{rs.label}</div>
       )}
+      {!simple && (
       <div className="meta">
         {rs.op
           ? `${rs.op.operationId ?? t('graph.noOperationId')} · ${t('graph.source', { source: rs.op.sourceName })}`
@@ -39,7 +47,12 @@ function StepNode({ data }: NodeProps<Node<StepNodeData>>) {
             ? 'Sub-workflow'
             : t('reason.operacion')}
       </div>
-      {rs.step.successCriteria?.length ? (
+      )}
+      {rs.step.successCriteria?.length && simple ? (
+        <div className="meta">
+          {t('graph.success')}: {rs.step.successCriteria.map((c) => plainCriterion({ condition: c.condition, context: c.context, type: typeof c.type === 'object' ? c.type.type : c.type })).join(' · ')}
+        </div>
+      ) : rs.step.successCriteria?.length ? (
         <div className="meta">
           {t('graph.success')}: <code>{rs.step.successCriteria.map((c) => c.condition).join(t('graph.and'))}</code>
         </div>

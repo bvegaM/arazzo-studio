@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Reporte HTML autocontenido: se abre en cualquier navegador y se puede imprimir a PDF.
 import { reasonLabel, type StepResult, type StepStatus } from './runner'
+import { summarizeRuns } from './plain'
 import { dataSummary, originLabel, verdictLabel, type CaseRun, type Verdict } from './testcases'
 import { humanizeId } from './format'
 import { getLocale, t } from '../i18n'
@@ -51,7 +52,7 @@ function esc(v: any): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-const VERDICT_CLASS: Record<Verdict, string> = { passed: 'ok', failed: 'err', inconclusive: 'warn' }
+const VERDICT_CLASS: Record<Verdict, string> = { passed: 'ok', failed: 'err', warning: 'warn', inconclusive: 'warn' }
 const STEP_CLASS: Record<string, string> = { success: 'ok', warning: 'warn', failed: 'err', skipped: 'skip' }
 
 function verdictBadge(v?: Verdict): string {
@@ -164,6 +165,12 @@ ${
     })
     .join('')
 
+  // Veredicto en lenguaje simple, para quien lee el reporte sin conocer los detalles técnicos.
+  const summary = summarizeRuns(runs)
+  const summaryHtml = summary
+    ? `<div class="verdict v-${summary.tone}"><strong>${esc(summary.headline)}</strong>${summary.points.length ? `<ul>${summary.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>\n`
+    : ''
+
   return `<!doctype html>
 <html lang="${locale}">
 <head>
@@ -187,6 +194,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:20px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}.card .n{font-size:26px;font-weight:700}.card .l{font-size:12px;color:var(--muted)}
 .n.ok{color:var(--ok)}.n.err{color:var(--err)}.n.warn{color:var(--warn)}
+.verdict{margin-top:20px;border-radius:12px;padding:14px 18px;border:1px solid var(--border);border-left-width:4px;background:var(--surface)}.verdict strong{font-size:15px}.verdict ul{margin:6px 0 0;padding-left:20px}.verdict.v-ok{border-left-color:var(--ok)}.verdict.v-warn{border-left-color:var(--warn)}.verdict.v-err{border-left-color:var(--err)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .badge{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .badge.ok{background:var(--okSoft);color:var(--ok)}.badge.err{background:var(--errSoft);color:var(--err)}.badge.warn{background:var(--warnSoft);color:var(--warn)}.badge.skip{background:var(--skipSoft);color:var(--skip)}.badge.accent{background:var(--accentSoft);color:var(--accent)}.badge.sim{background:var(--simSoft);color:var(--sim)}
@@ -212,9 +220,10 @@ footer{margin-top:30px;font-size:12px;color:var(--muted)}
 <h1>${esc(p.arazzoTitle)}</h1>
 <div class="meta"><span>${esc(date)}</span>${p.arazzoFile ? `<span>${esc(p.arazzoFile)}</span>` : ''}<span>${t('report.workflows', { n: workflows.length })}</span><span>${t('report.cases', { n: runs.length })}</span><span>${t('report.duration', { s: (totalMs / 1000).toFixed(1) })}</span></div>
 <div class="toolbar"><button onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">${t('report.expandAll')}</button><button onclick="document.querySelectorAll('details').forEach(d=>d.open=false)">${t('report.collapseAll')}</button><button onclick="window.print()">${t('report.print')}</button></div>
-<div class="cards">
+${summaryHtml}<div class="cards">
 <div class="card"><div class="n ok">${count('passed')}</div><div class="l">${t('report.passed')}</div></div>
 <div class="card"><div class="n ${count('failed') ? 'err' : ''}">${count('failed')}</div><div class="l">${t('report.failed')}</div></div>
+<div class="card"><div class="n ${count('warning') ? 'warn' : ''}">${count('warning')}</div><div class="l">${t('report.warnings')}</div></div>
 <div class="card"><div class="n ${count('inconclusive') ? 'warn' : ''}">${count('inconclusive')}</div><div class="l">${t('report.inconclusive')}</div></div>
 <div class="card"><div class="n">${runs.filter((r) => r.simulated).length}</div><div class="l">${t('report.simulated')}</div></div>
 </div>

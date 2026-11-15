@@ -5,6 +5,7 @@ import { LOCALES, t, type Locale } from '../i18n'
 import { THEMES, useTheme, type Theme } from '../lib/theme'
 import { useDevLog } from '../lib/devlog'
 import { setUiMode, useUiMode } from '../lib/uiMode'
+import { ROLES, setProfile, useProfile, type Role } from '../lib/profile'
 import { EnvDot, Icon, Segmented } from '../ui/components/kit'
 
 const ICONS = {
@@ -15,6 +16,7 @@ const ICONS = {
   dark: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
   lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+  tour: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
   devtools: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z',
 }
 
@@ -46,6 +48,7 @@ function Preferences({
   onTour,
 }: Pick<Props, 'locale' | 'onLocale' | 'privacy' | 'onTour'> & { onClose: () => void; theme: Theme; onTheme: (t: Theme) => void }) {
   const mode = useUiMode()
+  const profile = useProfile()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -63,6 +66,20 @@ function Preferences({
         <div className="prefs-row">
           <span>{t('sidebar.language')}</span>
           <Segmented options={LOCALES.map((l) => ({ id: l.id, label: l.label }))} value={locale} onChange={onLocale} />
+        </div>
+        <div className="prefs-row">
+          <span>
+            {t('prefs.role')}
+            <span className="muted small prefs-hint">{t('prefs.roleHint')}</span>
+          </span>
+          <select value={profile?.role ?? ''} onChange={(e) => setProfile({ role: e.target.value as Role, purposes: profile?.purposes ?? [] })} aria-label={t('prefs.role')}>
+            {!profile && <option value="">—</option>}
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {t(`role.${r}`)}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="prefs-row">
           <span>
@@ -151,6 +168,9 @@ export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch,
           <EnvDot color={env.color} /> {env.name}
         </button>
       )}
+      <button className="status-btn status-text" data-tour="tour" onClick={onTour} title={t('tour.cardText')}>
+        <Icon d={ICONS.tour} size={13} /> <span className="status-hide-sm">{t('status.tour')}</span>
+      </button>
       {onSearch && (
         <button className="status-btn status-text" data-tour="search" onClick={onSearch} title={`${t('status.search')} (${MOD_KEY}K)`}>
           <Icon d={ICONS.search} size={13} /> {t('status.search')} <kbd className="status-hide-sm">{MOD_KEY}K</kbd>

@@ -6,6 +6,7 @@ import { EXAMPLES } from './example'
 import type { Studio } from './useStudio'
 import type { WorkspaceState } from './useWorkspace'
 import type { TourStep } from '../ui/tour/Tour'
+import { getUiMode } from '../lib/uiMode'
 
 export interface TourContext {
   /** Lo más reciente de la app (el tour corre a lo largo de muchos renders). */
@@ -76,7 +77,9 @@ async function runActiveJourney(waitSelector: string) {
 
 export function buildTourSteps(ctx: TourContext): TourStep[] {
   const live = () => ctx.latest.current
-  return [
+  // En la interfaz simple no hay Dev Tools: ese paso no se muestra.
+  const simple = getUiMode() === 'simple'
+  const steps: TourStep[] = [
     {
       id: 'intro',
       title: t('tour.intro.title'),
@@ -154,7 +157,8 @@ export function buildTourSteps(ctx: TourContext): TourStep[] {
       body: t('tour.step.body'),
       before: async () => {
         await openJourney('pokemonCard')
-        await click('.tree-step', 'getPokemon')
+        // Por id y no por texto: en la interfaz simple el árbol muestra "Get pokemon".
+        await click('.tree-step[data-step="getPokemon"]')
         await waitFor('.step-view')
       },
     },
@@ -242,4 +246,5 @@ export function buildTourSteps(ctx: TourContext): TourStep[] {
       before: tidy,
     },
   ]
+  return simple ? steps.filter((s) => s.id !== 'devtools') : steps
 }

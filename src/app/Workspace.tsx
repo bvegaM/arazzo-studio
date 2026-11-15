@@ -42,6 +42,7 @@ import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
 import { ContextMenu, type ContextItem } from '../ui/components/ContextMenu'
 import { desktop } from '../lib/desktop'
+import { useUiMode } from '../lib/uiMode'
 
 const MOD = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 import { WorkspaceHome } from '../ui/workspace/WorkspaceHome'
@@ -103,6 +104,8 @@ export function Workspace({
   /** Empieza el tour guiado. */
   onTour: () => void
 }) {
+  // Interfaz simple: nombres legibles en lugar de identificadores técnicos.
+  const simple = useUiMode() === 'simple'
   const { journeys, projects } = studio
   // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
   const [openTabs, setOpenTabs] = useState<string[]>([])
@@ -900,7 +903,7 @@ export function Workspace({
                         { id: 'inputs', label: 'Inputs', ...(inputsMissing ? { count: inputsMissing, tone: 'warn' as const } : {}) },
                         { id: 'cases', label: t('ws.view.cases'), count: ready.length },
                         { id: 'yaml', label: 'YAML' },
-                        ...(rs ? [{ id: 'step' as const, label: <span className="ws-step-tab">{rs.op && <MethodBadge method={rs.op.method} />} {rs.step.stepId}</span> }] : []),
+                        ...(rs ? [{ id: 'step' as const, label: <span className="ws-step-tab">{rs.op && !simple && <MethodBadge method={rs.op.method} />} {simple ? humanizeId(rs.step.stepId) : rs.step.stepId}</span> }] : []),
                       ]}
                     />
                   </div>
@@ -964,6 +967,7 @@ export function Workspace({
                     onEditEnvironment={openEnv}
                     onExport={studio.exportReport}
                     prelude={activeId ? studio.preludeOf(activeId) : undefined}
+                    onDisableCase={(id) => studio.caseActions.toggle(id, false)}
                   />
                 </aside>
               </div>
