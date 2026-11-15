@@ -113,6 +113,26 @@ Open any OpenAPI contract to edit its YAML next to the official **Swagger UI**, 
 
 <img src="docs/screenshots/contract.png" alt="A contract with its YAML on the left and Swagger UI on the right" width="100%">
 
+### Journey authorization, per API and per journey
+
+Arazzo doesn't define how to authenticate, and modeling an OAuth 2.0 flow as Arazzo steps is cumbersome (and impossible with *authorization code*). In a journey's **Authorization** tab you pick the authorization for each API it calls: for **all journeys** using that API or **for that journey only**. The most specific one wins, and by default the contract's credentials are used, as before. The same types as in requests are available, including inheriting the collection's. It's applied on every step of every run against the real API: the OAuth 2.0 token is fetched once and reused across steps and cases, and if sign-in is needed a button asks for it before running. The "no credentials" case drops it, and simulation doesn't use it. The Arazzo isn't modified: the setup lives in the collection's `flow-auth.yaml`, without secrets typed as-is.
+
+### Standalone requests: HTTP, GraphQL, gRPC and WebSocket
+
+Like in Postman, each collection can hold its own requests next to its journeys. Create one from **New request** in the sidebar or in the collection's `⋯` menu:
+
+- **HTTP (REST):** method, URL, params, headers, authorization (Bearer, Basic or API key) and body (JSON, text, XML, `x-www-form-urlencoded` or `form-data`). The response shows the status, time, size, formatted body and headers.
+- **GraphQL:** query and variables, sent as JSON.
+- **gRPC (desktop app):** import the `.proto`, pick the method and write the message from a generated sample. Unary and streaming calls work, and the status code, metadata and trailers are shown.
+- **WebSocket:** connect, save several messages to resend, and review the history of what you sent (↑) and received (↓). The connection stays open when you switch tabs.
+- **From cURL:** paste a command copied from Chrome, Postman or an API's docs, in the dialog or straight into the URL.
+
+**Authorization**, with the same types as Bruno: AWS Sig v4, Basic, Bearer, Digest, NTLM, OAuth 1.0, OAuth 2.0 (authorization code with PKCE, client credentials and password; the token is fetched and refreshed automatically), WSSE, API Key and Akamai EdgeGrid. Each request can **inherit** the collection's authorization, set up in its overview. Whatever is typed as-is in a secret field is stored encrypted on the computer, not in the file. To share the setup with the team, use environment `{{variables}}`.
+
+They all use the active environment's `{{variables}}`, and their calls show up in Dev Tools with secrets masked. Each request is saved as a readable YAML file at `requests/<name>.request.yaml` inside the collection, and `.proto` files go in `protos/`, so they're versioned with everything else.
+
+<img src="docs/screenshots/requests.png" alt="An HTTP request with its params and the formatted JSON response" width="100%">
+
 ### Edit the Arazzo with live validation
 
 The **YAML** tab of a journey validates the Arazzo as you type. Every problem is underlined on the exact value it refers to, and autocompletion offers operation ids from the loaded contracts (HTTP and AsyncAPI), channels, `$steps.<step>.outputs.<name>`, `$inputs`, `dependsOn` and `goto` targets.
@@ -252,6 +272,10 @@ Arazzo **1.0.x** and **1.1.x** documents are supported, with OpenAPI **3.x** and
 - **CORS (browser version only).** The API under test has to allow the app's origin. Browsers cannot send cookies or the `Host` header, and only read the response headers the API exposes. The desktop app has none of these restrictions: cookies are sent there.
 - **Unsigned desktop installers.** macOS and Windows show a warning the first time the app is opened.
 - **Tested on macOS.** The Windows and Linux builds have not been tried on those systems yet; on Linux the terminal needs to build its native module when installing.
+- **gRPC only in the desktop app**, because browsers can't open gRPC connections. Server reflection isn't used yet, so the `.proto` is required. Client-streaming methods send a single message.
+- **NTLM only in the desktop app**, since its handshake needs a single connection. OAuth 2.0 tokens are kept in memory only while the collection is open. In the web version the *authorization code* returns to `<origin>/oauth2/callback`, which must be registered with the provider.
+- **No custom WebSocket headers.** Browsers don't allow them; use URL params instead.
+- **`form-data` with text fields only** (file attachments aren't supported yet).
 - **Swagger UI for OpenAPI only.** AsyncAPI contracts and schema files use Arazzo Studio's own preview.
 - **XPath 1.0.** Functions specific to XPath 2.0 or 3.0 are not available.
 - **`retry` with `stepId`** is not run automatically, and **`dependsOn` on another Arazzo document** is reported but not run.
@@ -296,7 +320,8 @@ src/
                 Swagger UI preview, schema form, menus…)
     workspace/  the views of a workspace (journey, cases, results, environments,
                 Dev Tools, terminal, home…)
-electron/       desktop app: main process (HTTP without CORS, files, secrets, terminal),
+    requests/   standalone requests (HTTP, GraphQL, gRPC, WebSocket) and the "New request" dialog
+electron/       desktop app: main process (HTTP without CORS, gRPC, files, secrets, terminal),
                 preload bridge, dev launcher
 examples/       the Pokédex example (PokéAPI)
 test/fixtures/  Arazzo files, contracts and the mock API used by the tests
