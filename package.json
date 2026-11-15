@@ -21,7 +21,8 @@
     "mock:bug": "node examples/mock-server.mjs --bug",
     "desktop:dev": "node electron/dev.mjs",
     "desktop:build": "npm run build && electron-builder",
-    "postinstall": "node scripts/fix-node-pty.mjs"
+    "postinstall": "node scripts/fix-node-pty.mjs",
+    "test:e2e": "node e2e/smoke.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -53,6 +54,7 @@
     "electron": "44.10.0",
     "electron-builder": "26.18.1",
     "oxlint": "^1.88.0",
+    "playwright-core": "1.64.1",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
