@@ -6,7 +6,7 @@
 
 **Prueba tus journeys de APIs sin escribir tests.**
 
-Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los contratos OpenAPI y AsyncAPI que lo respaldan. Arazzo Studio dibuja el journey, genera los casos de prueba, los ejecuta contra tu API o en simulación y explica cada resultado en lenguaje claro. Úsalo en el navegador o como app de escritorio, sin cuenta y sin que nada salga de tu equipo.
+Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los contratos OpenAPI y AsyncAPI que lo respaldan. Arazzo Studio dibuja el journey, genera los casos de prueba, los ejecuta contra tu API o en simulación y explica cada resultado en lenguaje claro. Organiza todo en un workspace de carpetas como Bruno, edita los contratos como en Swagger Editor y úsalo en el navegador o como app de escritorio, sin cuenta y sin que nada salga de tu equipo.
 
 [![Arazzo](https://img.shields.io/badge/Arazzo-1.0%20%7C%201.1-6BA543)](https://spec.openapis.org/arazzo/latest.html)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA543?logo=openapiinitiative&logoColor=white)](https://spec.openapis.org/oas/latest.html)
@@ -26,7 +26,7 @@ Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los c
 
 <br>
 
-<img src="docs/screenshots/contracts.png" alt="Un workflow Arazzo como diagrama interactivo, con las acciones que activa cada respuesta y los datos que pasan entre pasos" width="100%">
+<img src="docs/screenshots/journey.png" alt="Un workspace con dos colecciones, un journey como diagrama interactivo y sus pasos en la barra lateral" width="100%">
 
 </div>
 
@@ -58,85 +58,95 @@ La mayoría de las integraciones no son una sola llamada, sino un **journey**: i
 - 🎛️ **Prueba con tus propios datos.** Agrega casos con otros parámetros, reutilízalos en YAML y repítelos con generadores como `{{email}}` o `{{uuid}}`.
 - 🔍 **Entiende los fallos de un vistazo.** En lugar de un JSON crudo, lees *"`status` vale `INACTIVE` pero se esperaba `ACTIVE`"*, con el campo resaltado en la respuesta.
 - ✍️ **Corrige el workflow donde lo pruebas.** Un editor integrado valida el Arazzo mientras escribes y sugiere operaciones, pasos y outputs a partir de los contratos.
-- 🔒 **Todo local.** Sin backend ni cuenta. Los contratos, las credenciales y las respuestas no salen de tu equipo.
-- 🖥️ **Navegador o escritorio.** La app de escritorio trabaja con carpetas como un cliente de APIs tipo Bruno: abre la carpeta del proyecto, guarda el Arazzo sobre su archivo y envía las peticiones sin las restricciones de CORS.
+- 📁 **Trabaja como en Bruno.** Un workspace es una carpeta: cada colección es una subcarpeta con sus Arazzo, contratos, ambientes y casos como archivos de texto que puedes versionar en git. Cada cambio se guarda solo.
+- 📜 **Edita los contratos como en Swagger Editor.** El YAML junto a la Swagger UI oficial, con errores en vivo y un aviso cuando un cambio rompe un journey. Prueba cualquier operación por sí sola con tu ambiente.
+- 🔒 **Todo local.** Sin backend ni cuenta. Los secretos y las credenciales se guardan cifrados en tu equipo y nunca en los archivos del workspace.
+- 🖥️ **Navegador o escritorio.** La app de escritorio envía las peticiones sin las restricciones de CORS y suma una terminal integrada.
 
 ## Para quién es
 
 - **Equipos de producto de APIs y de partners** que venden o documentan journeys formados por varias APIs y necesitan mostrar que funcionan de punta a punta.
 - **Product managers y roles de negocio** que necesitan probar un journey con sus propios datos, sin CLI, sin herramientas de pago y sin código de pruebas.
-- **QA e ingeniería de integración**, que quieren casos negativos generados, veredictos claros y un reporte para compartir.
+- **QA e ingeniería de integración**, que quieren casos negativos generados, veredictos claros, un reporte para compartir y Dev Tools con cada petición.
 - **Quienes diseñan APIs** y escriben archivos Arazzo, con validación en vivo contra los contratos reales.
 
 Arazzo Studio está pensado para **explorar, depurar y mostrar** journeys a mano. No es un runner de CI: para pipelines encaja mejor un runner de línea de comandos como [Redocly Respect](https://redocly.com/docs/respect), y ambos pueden usar los mismos archivos Arazzo.
 
 ## Funciones
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/load.png" alt="Pantalla de carga con arrastrar y soltar, ejemplos incluidos y una guía de tres pasos">
-      <h3>1 · Cargar</h3>
-      Suelta uno o varios archivos Arazzo (una colección: cada workflow es un journey), los contratos OpenAPI y AsyncAPI que referencian y los archivos a los que apuntan con <code>$ref</code>. La app indica qué contratos o archivos faltan; los contratos se pueden adjuntar a mano o descargar desde su URL.
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/defaults.png" alt="Formulario generado desde el schema de inputs, con objetos anidados y listas">
-      <h3>2 · Completar los datos</h3>
-      Un formulario generado desde el schema de <code>inputs</code>, con objetos anidados y listas que se llenan campo por campo. Los valores se validan contra el contrato mientras escribes (patrón, longitud, rango, formato).
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/cases.png" alt="Casos de prueba generados agrupados por tipo, con un resumen de lo que se va a ejecutar">
-      <h3>3 · Elegir los casos</h3>
-      Casos generados agrupados por tipo, cada uno con sus parámetros. Ejecútalos contra la API real o en simulación, agrega casos con datos propios e importa o exporta escenarios en YAML.
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/results.png" alt="Resultados con el estado de cada paso, tiempos y un resumen por veredicto">
-      <h3>4 · Revisar los resultados</h3>
-      Progreso en vivo mientras corre y, después, la petición, la respuesta, los criterios, la validación de contrato y los outputs de cada paso. Descarga un reporte HTML autocontenido o una exportación en JSON.
-    </td>
-  </tr>
-</table>
+### Un workspace de carpetas, como Bruno
+
+Crea un workspace donde elijas (la app de escritorio propone `Documentos/Arazzo Studio`) y agrega colecciones: una por partner o por tema. Cada colección guarda sus Arazzo, contratos, ambientes y casos de prueba como archivos de texto, así que el workspace completo puede vivir en git y compartirse con el equipo. Cada cambio se guarda solo.
+
+La pestaña **Inicio** muestra las colecciones con sus carpetas, acciones rápidas y la documentación del workspace, un `README.md` que escribes y ves ahí mismo.
+
+<img src="docs/screenshots/home.png" alt="Inicio del workspace con las cifras, acciones rápidas, las colecciones con sus carpetas y la documentación del workspace" width="100%">
+
+```
+partner-journeys/
+  studio.yaml              nombre y colecciones del workspace
+  README.md                documentación del workspace
+  miles-transfer/          una colección
+    collection.yaml
+    miles-transfer.arazzo.yaml, members.yaml, …
+    environments/*.yaml    URLs base, variables y color (de los secretos, solo el nombre)
+    scenarios/<arazzo>     inputs base y casos propios de cada Arazzo
+```
+
+### Journeys, casos y resultados lado a lado
+
+Elige un journey a la izquierda: su diagrama, sus inputs y sus casos generados quedan al centro y los resultados a la derecha. Los casos cubren el camino feliz, inputs faltantes o inválidos, llamadas sin credenciales y un escenario por cada acción `onSuccess` / `onFailure`. Ejecútalos contra la API real o en simulación, agrega tus propios casos con datos y lee cada veredicto en lenguaje claro.
+
+<img src="docs/screenshots/results.png" alt="Los casos de prueba generados de un journey y el resultado de ejecutarlos, con el estado y el tiempo de cada paso" width="100%">
+
+### Ambientes con variables y secretos
+
+Local, integración, producción… cada ambiente tiene sus URLs base, credenciales, variables y secretos, y una etiqueta de color. Escribe `{{` en cualquier campo para elegir una variable o un generador. Los secretos se tapan en todas partes y se guardan cifrados en este equipo, nunca en los archivos del workspace.
+
+<img src="docs/screenshots/environment.png" alt="Un ambiente con URLs base, credenciales, variables y secretos" width="100%">
+
+### Contratos como en Swagger Editor
+
+Abre cualquier contrato OpenAPI para editar su YAML junto a la **Swagger UI** oficial, que se actualiza mientras escribes. Los errores aparecen arriba con su línea, y un aviso indica cuando un cambio rompe un journey que usa el contrato. **Try it out** pasa por Arazzo Studio: el servidor del ambiente aparece primero, las credenciales ya están autorizadas, los secretos se tapan en el cURL y cada llamada queda en Dev Tools. Cualquier operación también se puede probar sola desde un paso del journey. Crea contratos OpenAPI o AsyncAPI nuevos desde la barra lateral.
+
+<img src="docs/screenshots/contract.png" alt="Un contrato con su YAML a la izquierda y la Swagger UI a la derecha" width="100%">
 
 ### Editar el Arazzo con validación en vivo
 
-Abre **Editar Arazzo** desde la pantalla de contratos para cambiar el workflow junto a su diagrama. Cada problema queda subrayado en el valor exacto al que se refiere, el diagrama se actualiza mientras escribes y el autocompletado ofrece lo que cuesta recordar: los `operationId` de los contratos cargados (HTTP y AsyncAPI), los canales, `$steps.<paso>.outputs.<nombre>`, `$inputs` y los destinos de `dependsOn` y `goto`. Guarda el archivo en tu equipo o descárgalo; los contratos nunca se modifican.
+La pestaña **YAML** de un journey valida el Arazzo mientras escribes. Cada problema se subraya en el valor exacto al que se refiere, y el autocompletado ofrece los operationId de los contratos cargados (HTTP y AsyncAPI), canales, `$steps.<paso>.outputs.<nombre>`, `$inputs` y destinos de `dependsOn` y `goto`.
 
-<img src="docs/screenshots/editor.png" alt="El editor del Arazzo con un error subrayado, autocompletado de operaciones y el diagrama al lado" width="100%">
+<img src="docs/screenshots/editor.png" alt="El editor del Arazzo con validación en vivo junto a los resultados" width="100%">
 
-### Esperado contra recibido, lado a lado
+### Dev Tools: Console, Network, Performance y Terminal
 
-Cuando un criterio falla, Arazzo Studio muestra exactamente qué campo está mal y lo resalta en el body de la respuesta. También funciona con criterios regex sobre un body JSON.
+Como en Bruno, la barra inferior abre un panel con la **Console** (cada ejecución, caso y paso, y los eventos de la app), **Network** (cada petición y mensaje con headers, body y *Copiar como cURL*, con los secretos tapados), **Performance** (CPU, memoria y tiempo por paso) y, en la app de escritorio, una **Terminal** con varias sesiones que se abre en la carpeta del workspace o de una colección. La interfaz **Simple** (Preferencias) lo oculta todo para quien solo prueba journeys.
 
-<img src="docs/screenshots/diff.png" alt="Un criterio fallido con los valores esperado y recibido, y el campo resaltado en el body de la respuesta" width="100%">
+<img src="docs/screenshots/devtools.png" alt="Dev Tools con la pestaña Network: cada petición de una ejecución y el detalle de una de ellas" width="100%">
 
 ### Pasos de eventos (AsyncAPI)
 
-Los journeys suelen mezclar llamadas REST con eventos. Los pasos que envían (`send`) o reciben (`receive`) un mensaje AsyncAPI aparecen en el diagrama y en los resultados como cualquier otro paso: el mensaje enviado, el mensaje recibido (filtrado por `correlationId`), su validación de contrato y los outputs que salen de `$message`. Los escenarios generados cubren el mensaje que activa cada acción y el caso en que no llega ningún mensaje antes del `timeout`.
-
-<img src="docs/screenshots/messaging.png" alt="Un paso receive con el canal, el correlationId y el payload del mensaje recibido" width="100%">
+Los journeys suelen mezclar llamadas REST con eventos. Los pasos que hacen `send` o `receive` de un mensaje AsyncAPI aparecen en el diagrama y en los resultados como cualquier otro paso: el mensaje enviado, el mensaje recibido (asociado por `correlationId`), su revisión contra el contrato y los outputs tomados de `$message`. Los escenarios generados cubren el mensaje que activa cada acción y el caso en que no llega ningún mensaje antes del `timeout`.
 
 > [!NOTE]
-> Arazzo Studio todavía no se conecta a brokers como Kafka, AMQP o MQTT, así que los pasos de mensajería **siempre se simulan** con los ejemplos y schemas del AsyncAPI. La app lo avisa antes de ejecutar y marca esos pasos como simulados, también cuando el resto del journey corre contra la API real.
+> Arazzo Studio todavía no se conecta a brokers como Kafka, AMQP o MQTT, así que los pasos de mensajería **siempre se simulan** a partir de los ejemplos y schemas del AsyncAPI. La app lo avisa antes de ejecutar y marca esos pasos como simulados, también cuando el resto del journey corre contra la API real.
 
 ### Además
 
 | Función | Qué hace |
 |---|---|
-| 🌍 **Ambientes** | DEV, QA, UAT…, cada uno con sus URLs base y credenciales. Al cambiar de ambiente se vuelve a pedir confirmación antes de ejecutar pasos que modifican datos. |
-| 🗺️ **Diagrama interactivo** | Arrastra los pasos: sus acciones se mueven con ellos, la disposición se mantiene mientras editas y **Reordenar** vuelve a la automática. |
-| 📋 **Copiar como cURL** | Reproduce cualquier petición desde tu terminal. Los secretos quedan como `<secret>` salvo que elijas copiarlos. |
-| 🛟 **Ayuda de conexión** | Si la API no responde, un panel guía qué revisar (URL, https/http, CORS) con los headers CORS exactos que hacen falta. |
-| ✅ **Elegir workflows** | Selecciona qué workflows probar. Los pasos siguientes solo muestran los elegidos. |
-| 💾 **Sesión guardada** | Tu trabajo, incluidos los cambios al Arazzo, se guarda en este equipo y se ofrece al volver. Las credenciales nunca se guardan. |
-| 🎲 **Generadores** | Variables dinámicas al estilo de Postman generadas con [Faker](https://fakerjs.dev) (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomUserAgent}}`, `{{$guid}}`… 47 en total) más `{{cpf}}`, `{{rut}}` y `{{numero:8}}`, para repetir casos sin choques de datos. Escribe `{{` en cualquier campo para verlas. |
-| 🌙 **Modo oscuro** | Sigue el tema del sistema. |
+| 🔎 **Buscar en todo** | ⌘K / Ctrl+K salta a cualquier journey, paso, ambiente, contrato o colección. La búsqueda de la barra lateral filtra el árbol mientras escribes. |
+| 🗺️ **Diagrama interactivo** | Mueve los pasos; sus acciones los acompañan, y **Restablecer diseño** vuelve al automático. |
+| 📋 **Copiar como cURL** | Reproduce cualquier petición desde tu terminal. Los secretos quedan como `<secret>`. |
+| 🛟 **Ayuda de conexión** | Si la API no responde, un panel guiado explica qué revisar (URL, https/http, CORS) y te da los headers CORS exactos que hay que agregar. |
+| 🎲 **Generadores** | Variables dinámicas al estilo de Postman con [Faker](https://fakerjs.dev) (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$guid}}`… 47 en total) y además `{{cpf}}`, `{{rut}}` y `{{number:8}}`. |
+| 📄 **Reportes** | Un reporte HTML autocontenido o una exportación JSON de cada ejecución. |
+| 🌙 **Temas** | Claro, oscuro o el del sistema, desde la barra inferior o Preferencias. |
+| 💾 **Sin workspace** | Abre archivos o una carpeta para una prueba rápida; tu sesión se guarda en este equipo sin credenciales. |
 
 <details>
 <summary><strong>Vista en modo oscuro</strong></summary>
 <br>
-<img src="docs/screenshots/contracts-dark.png" alt="La pantalla de contratos en modo oscuro" width="100%">
+<img src="docs/screenshots/journey-dark.png" alt="Un journey en modo oscuro" width="100%">
 </details>
 
 ## Primeros pasos
@@ -152,7 +162,7 @@ El build es un sitio estático (`npm run build` → `dist/`), así que se puede 
 
 ### App de escritorio
 
-La misma app, empaquetada con Electron. Agrega **Abrir carpeta** (todos los YAML y JSON de una carpeta y sus subcarpetas), guarda el Arazzo editado **sobre su archivo** y envía las peticiones desde la propia app, así que **CORS no aplica**.
+La misma app, empaquetada con Electron. Los workspaces viven en carpetas reales del disco (con **Mostrar en Finder**), los secretos se cifran con el llavero del sistema operativo, las peticiones salen de la propia app, así que **CORS no aplica**, y Dev Tools suma una **Terminal**.
 
 ```bash
 npm run desktop:dev      # la app de escritorio contra el servidor de desarrollo
@@ -164,7 +174,7 @@ npm run desktop:build    # genera el instalador para tu sistema en release/
 
 ### Probar los ejemplos incluidos
 
-Los dos ejemplos están a un clic en la pantalla de carga. Para ejecutarlos contra una API real en vez de en simulación, levanta el mock incluido:
+Los ejemplos están a un clic en la bienvenida. La Pokédex corre contra la [PokéAPI](https://pokeapi.co) pública desde el primer momento; para los demás, levanta el mock incluido y ejecútalos contra una API real en vez de en simulación:
 
 ```bash
 npm run mock         # APIs de ejemplo en http://localhost:4010
@@ -173,7 +183,8 @@ npm run mock:bug     # las mismas APIs, con errores de contrato a propósito
 
 | Ejemplo | Qué muestra | Cómo ejecutarlo |
 |---|---|---|
-| **Colección** | Los dos ejemplos de abajo en una colección: dos archivos Arazzo, tres journeys y ambientes compartidos. | Como cada ejemplo. |
+| **Pokédex** | Dos journeys contra la PokéAPI pública: cada paso usa los outputs del anterior, criterios JSONPath y una acción de fin ante un 404. | Nada que preparar: sin credenciales y con CORS permitido. |
+| **Colección** | Los ejemplos de tarjetas y de millas en una colección: dos archivos Arazzo, tres journeys y ambientes compartidos. | Como cada ejemplo. |
 | **Tarjetas de crédito** | Un onboarding de cuatro pasos sobre un contrato OpenAPI: casos generados, escenarios por respuesta y errores de contrato. | Cualquier token como credencial y `4321` como `last4Digits`. |
 | **Traspaso de millas** | Un journey Arazzo 1.1: un OpenAPI repartido en archivos con `$ref` externos, pasos AsyncAPI `send` / `receive`, `correlationId`, `timeout` y `dependsOn`. | Cualquier token como credencial. Los pasos de mensajería se simulan. |
 
@@ -206,10 +217,10 @@ flowchart LR
 ## Privacidad y seguridad
 
 - Todo corre **en tu equipo**, en el navegador o en la app de escritorio. No hay backend ni cuenta.
-- La app de escritorio solo escribe en archivos que abriste o elegiste en un diálogo, y su interfaz no tiene acceso directo a Node ni al sistema de archivos.
-- Las credenciales viven **solo en la pestaña abierta**: nunca se guardan, se exportan ni van en los reportes.
-- Tokens, contraseñas y API keys se **enmascaran** en resultados, reportes, exportaciones y comandos cURL (salvo que elijas copiarlos).
-- La sesión guardada (IndexedDB) omite las credenciales y cualquier input con nombre sensible (`token`, `password`, `secret`…).
+- **Los secretos y las credenciales nunca se escriben en los archivos del workspace**: los archivos de ambientes solo guardan el nombre de los secretos. Sus valores se guardan **cifrados en este equipo**, con el llavero del sistema operativo en la app de escritorio (`safeStorage` de Electron) y con WebCrypto en el navegador.
+- Tokens, contraseñas y API keys se **tapan** en los resultados, reportes, exportaciones, Dev Tools, el cURL de Swagger UI y *Copiar como cURL*.
+- La app de escritorio solo lee y escribe dentro de las carpetas que elegiste, y su interfaz no tiene acceso directo a Node ni al sistema de archivos. La terminal integrada abre tu propia shell, solo en una carpeta de workspace o en tu carpeta personal.
+- Sin workspace, la sesión guardada (IndexedDB) deja fuera las credenciales y cualquier input cuyo nombre parezca sensible (`token`, `password`, `secret`…).
 
 ## Soporte de las especificaciones
 
@@ -241,6 +252,8 @@ Se soportan documentos Arazzo **1.0.x** y **1.1.x**, con contratos OpenAPI **3.x
 - **Los pasos de mensajería se simulan.** Arazzo Studio todavía no se conecta a brokers.
 - **CORS (solo en la versión web).** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga. La app de escritorio no tiene estas restricciones.
 - **Instaladores sin firmar.** macOS y Windows muestran una advertencia la primera vez que se abre la app.
+- **Probada en macOS.** Las versiones para Windows y Linux todavía no se probaron en esos sistemas; en Linux la terminal necesita compilar su módulo nativo al instalar.
+- **Swagger UI solo para OpenAPI.** Los contratos AsyncAPI y los archivos de schemas usan la vista propia de Arazzo Studio.
 - **XPath** en criterios y selectores no está soportado.
 - **`retry` con `stepId`** y el **`dependsOn` de un workflow** no se ejecutan automáticamente.
 - **No es un runner de CI.** Las ejecuciones las inicia una persona desde el navegador.
@@ -256,13 +269,14 @@ Próximos pasos previstos, sin un orden fijo:
 - **Edición asistida por IA** (opcional, con tu propia API key): describe un cambio en lenguaje natural y revísalo como diff antes de aplicarlo.
 - **Diagrama más completo:** flechas de `dependsOn` y `timeout` en los pasos.
 - **Simulaciones editables:** ajustar la respuesta o el mensaje simulado de un escenario para probar casos de negocio sin tocar YAML.
-- **Cargar una carpeta completa,** para que los contratos de varios archivos entren de una vez.
+- **Generar un primer Arazzo desde los contratos** (o con IA), para que los equipos sin archivos Arazzo empiecen en minutos.
+- **Agregar una operación probada como paso** del Arazzo.
 
 Las ideas y comentarios son bienvenidos en los [issues](https://github.com/bvegaM/arazzo-studio/issues).
 
 ## Idiomas
 
-La interfaz está en **inglés** y **español**. El idioma inicial se toma del navegador y se puede cambiar en la barra lateral. También se traducen los mensajes del motor y el reporte HTML. Los archivos de escenarios mantienen las mismas claves en ambos idiomas, para que sigan siendo compatibles.
+La interfaz está en **inglés** y **español**. El idioma inicial se toma del navegador y se puede cambiar en **Preferencias** (barra inferior). También se traducen los mensajes del motor y el reporte HTML. Los archivos de escenarios mantienen las mismas claves en ambos idiomas, para que sigan siendo compatibles.
 
 ## Para quien contribuye
 
@@ -270,18 +284,24 @@ La interfaz está en **inglés** y **español**. El idioma inicial se toma del n
 
 ```
 src/
-  app/          composición de la app: navegación entre pantallas, estado (useStudio) y barra lateral
-  core/         motor independiente de la UI (sin React ni DOM): carga y resolución de $ref,
-                resolución de OpenAPI y AsyncAPI, análisis, runner, criterios,
-                simulador, casos de prueba, ayudas del editor, reporte, ambientes, sesión…
+  app/          composición de la app: layout del workspace, estado (useStudio, useWorkspace),
+                barra lateral, barra superior, barra inferior, inicio
+  core/         motor independiente de la interfaz (sin React ni DOM): carga y $ref,
+                resolución OpenAPI y AsyncAPI, análisis, runner, criterios,
+                simulador, casos de prueba, revisión de contratos, formato del workspace, reporte…
   i18n/         traducciones (en, es), t() y el hook useLocale
-  lib/          utilidades del navegador y del escritorio (descargas, portapapeles, IndexedDB, puente de escritorio)
+  lib/          utilidades del navegador y del escritorio (almacenamiento, archivos del
+                workspace, secretos, puente de escritorio, registro de Dev Tools, tema)
   ui/
-    components/ piezas reutilizables (diagrama, editor del Arazzo, formulario de schema, selector de workflows…)
-    screens/    una pantalla por paso
-electron/       app de escritorio: proceso principal (HTTP sin CORS, archivos), puente de preload y lanzador de desarrollo
-examples/       ejemplos de tarjetas de crédito y traspaso de millas, y la API mock
-docs/           capturas de pantalla
+    components/ piezas reutilizables (diagrama, editores del Arazzo y de contratos,
+                vista de Swagger UI, formulario de schemas, menús…)
+    workspace/  las vistas de un workspace (journey, casos, resultados, ambientes,
+                Dev Tools, terminal, inicio…)
+electron/       app de escritorio: proceso principal (HTTP sin CORS, archivos, secretos, terminal),
+                puente preload, lanzador de desarrollo
+examples/       ejemplos de tarjetas, millas y Pokédex, y la API mock
+e2e/            prueba de interfaz de punta a punta
+docs/           capturas
 ```
 
 `core` nunca importa de `ui`, `app` ni `lib`, así que el motor se puede reutilizar fuera del navegador. Las llamadas HTTP pasan por un `HttpExecutor` (`fetch` en el navegador, el proceso principal de Electron en escritorio, o el simulador basado en el contrato) y los pasos de mensajería por un `MessageExecutor` (hoy, el simulador). El diagrama (React Flow) y el editor (CodeMirror) se cargan solo cuando se usan, para que la carga inicial sea liviana.
@@ -293,7 +313,8 @@ docs/           capturas de pantalla
 | `npm run dev` | Levanta el servidor de desarrollo |
 | `npm run build` | Revisa tipos y genera el build de producción |
 | `npm run preview` | Sirve el build de producción |
-| `npm test` | Corre las pruebas (motor, criterios, análisis, ayudas del editor, ejecución contra el mock) |
+| `npm test` | Corre las pruebas unitarias (motor, criterios, análisis, ayudas del editor, contratos, formato del workspace) |
+| `npm run test:e2e` | Abre la app en el Chrome instalado y recorre los flujos principales (`CHROME_PATH` para cambiarlo) |
 | `npm run typecheck` | Revisa tipos de la app, la configuración y las pruebas |
 | `npm run lint` | Lint con oxlint |
 | `npm run mock` / `npm run mock:bug` | Levanta las APIs de ejemplo (correctas / con errores de contrato) |
