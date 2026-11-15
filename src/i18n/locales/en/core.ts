@@ -406,4 +406,6 @@ export const core: Record<keyof typeof es, string> = {
   'newContract.health': 'Service health',
   'newContract.ok': 'The service is up',
   'newContract.eventsTitle': 'New events',
+  'tc.missing.pathDescription': 'Omits "{name}". It goes in the path of step "{step}": without it the URL becomes {url} and points to another resource.',
+  'run.unresolvedPath': 'Could not resolve {refs}: a path value was missing, so {url} was called and the API responded {status}{msg}.',
 }

@@ -405,4 +405,6 @@ export const core = {
   'newContract.health': 'Estado del servicio',
   'newContract.ok': 'El servicio responde',
   'newContract.eventsTitle': 'Nuevos eventos',
+  'tc.missing.pathDescription': 'Omite "{name}". Va en la ruta del paso "{step}": sin él la URL queda {url} y apunta a otro recurso.',
+  'run.unresolvedPath': 'No se pudo resolver {refs}: faltaba un dato de la ruta, así que se llamó a {url} y la API respondió {status}{msg}.',
 }

@@ -423,7 +423,10 @@ async function executeOperationStep(
     } else if (relevantUnresolved.length) {
       result.reason = {
         category: 'dato-previo',
-        message: t('run.unresolved', { refs: relevantUnresolved.join(', '), status: response.status, msg: msg ? ` ("${msg}")` : '' }),
+        // Si faltó un dato de la ruta, la URL cambió de recurso: se muestra a cuál se llamó de verdad.
+        message: Object.values(pathParams).some((v) => v === '')
+          ? t('run.unresolvedPath', { refs: relevantUnresolved.join(', '), url: request.url, status: response.status, msg: msg ? ` ("${msg}")` : '' })
+          : t('run.unresolved', { refs: relevantUnresolved.join(', '), status: response.status, msg: msg ? ` ("${msg}")` : '' }),
       }
     } else if (response.status >= 400) {
       result.reason = {

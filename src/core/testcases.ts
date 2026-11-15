@@ -64,6 +64,19 @@ function firstConsumer(wa: WorkflowAnalysis, input: string) {
   return wa.steps.find((s) => !isAsyncOperation(s.op) && collectReferences({ ...s.step, parameters: s.parameters }).inputs.includes(input))
 }
 
+/**
+ * Si el input llega a un parámetro de ruta del paso, la ruta que queda sin él ("/type/");
+ * undefined si no va en la ruta.
+ */
+function urlWithoutPathInput(rs: WorkflowAnalysis['steps'][number], input: string): string | undefined {
+  const path = rs.op?.path
+  if (!path) return undefined
+  const ref = new RegExp(`\\$inputs\\.${input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`)
+  const params = rs.parameters.filter((p) => (p.in ?? (path.includes(`{${p.name}}`) ? 'path' : 'query')) === 'path' && ref.test(String(p.value)))
+  if (!params.length) return undefined
+  return params.reduce((url, p) => url.replace(`{${p.name}}`, ''), path)
+}
+
 function expectedClientErrors(wa: WorkflowAnalysis, stepId: string, preferred: number[]): number[] {
   const rs = wa.steps.find((s) => s.step.stepId === stepId)
   if (!rs?.op) return []
@@ -107,13 +120,18 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
   for (const name of wa.requiredInputs) {
     const consumer = firstConsumer(wa, name)
     if (!consumer) continue
-    const statuses = expectedClientErrors(wa, consumer.step.stepId, [400, 422])
+    // Si el input va en la ruta, faltarlo no deja la petición "incompleta": la URL apunta a otro
+    // recurso (p. ej. /type/ en vez de /type/fire). Ahí lo esperable es 400 o 404.
+    const pathUrl = urlWithoutPathInput(consumer, name)
+    const statuses = expectedClientErrors(wa, consumer.step.stepId, pathUrl ? [400, 404] : [400, 422])
     cases.push({
       id: id(`missing-${name}`),
       workflowId: wf.workflowId,
       title: t('tc.missing.title', { name }),
       origin: 'schema',
-      description: t('tc.missing.description', { name, step: consumer.step.stepId }),
+      description: pathUrl
+        ? t('tc.missing.pathDescription', { name, step: consumer.step.stepId, url: pathUrl })
+        : t('tc.missing.description', { name, step: consumer.step.stepId }),
       omitInput: name,
       expectation: {
         type: 'failure',
