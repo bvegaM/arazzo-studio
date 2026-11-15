@@ -78,7 +78,7 @@ Arazzo Studio está pensado para **explorar, depurar y mostrar** journeys a mano
 
 Crea un workspace donde elijas (la app de escritorio propone `Documentos/Arazzo Studio`) y agrega colecciones: una por partner o por tema. Cada colección guarda sus Arazzo, contratos, ambientes y casos de prueba como archivos de texto, así que el workspace completo puede vivir en git y compartirse con el equipo. Cada cambio se guarda solo.
 
-La pestaña **Inicio** muestra las colecciones con sus carpetas, acciones rápidas y la documentación del workspace, un `README.md` que escribes y ves ahí mismo.
+La pestaña **Inicio** muestra las colecciones con sus carpetas, acciones rápidas y la documentación del workspace, un `README.md` que escribes y ves ahí mismo. Cada colección tiene también su **resumen**: ubicación, versión, ambientes, journeys con la última ejecución, contratos, cómo compartirla y su documentación, que **Generar documentación** arma a partir de los Arazzo (journeys, inputs, pasos, contratos y ambientes).
 
 <img src="docs/screenshots/home.png" alt="Inicio del workspace con las cifras, acciones rápidas, las colecciones con sus carpetas y la documentación del workspace" width="100%">
 

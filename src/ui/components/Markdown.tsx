@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
-  const re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*)/g
+  const re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*|\b_[^_\s][^_]*_\b)/g
   let last = 0
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push(text.slice(last, m.index))
@@ -22,7 +22,7 @@ function inline(text: string): ReactNode[] {
           label
         ),
       )
-    } else out.push(<em key={m.index}>{tok.slice(1, -1)}</em>)
+    } else out.push(<em key={m.index}>{tok.slice(1, -1)}</em>) // *cursiva* o _cursiva_
     last = m.index! + tok.length
   }
   if (last < text.length) out.push(text.slice(last))
@@ -37,6 +37,11 @@ export function Markdown({ text, className = 'docs-md' }: { text?: string; class
   while (i < lines.length) {
     const line = lines[i]
     if (!line.trim()) {
+      i++
+      continue
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      blocks.push(<hr key={blocks.length} />)
       i++
       continue
     }
@@ -65,7 +70,7 @@ export function Markdown({ text, className = 'docs-md' }: { text?: string; class
       continue
     }
     const para: string[] = []
-    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*([-*]|\d+\.)\s)/.test(lines[i])) para.push(lines[i++])
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*([-*]|\d+\.)\s|\s*-{3,}\s*$)/.test(lines[i])) para.push(lines[i++])
     blocks.push(<p key={blocks.length}>{inline(para.join(' '))}</p>)
   }
   return <div className={className}>{blocks}</div>

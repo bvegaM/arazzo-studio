@@ -34,6 +34,8 @@ interface Props {
   activeContract?: string
   /** Escritorio: abre la terminal de Dev Tools en una carpeta. */
   onOpenTerminal?: (cwd?: string) => void
+  /** Abre el resumen de una colección (la abre si no es la activa). */
+  onOpenCollectionOverview: (folder: string) => void
 }
 
 /** Estado del journey para el punto de color: la última ejecución o, si no hay, su validación. */
@@ -92,6 +94,7 @@ function RenameForm({ value, onSubmit, onCancel }: { value: string; onSubmit: (v
 }
 
 const COLLECTIONS_ICON = 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8'
+const SETTINGS_ICON = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4'
  const SEARCH_ICON = 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35'
 const SORT_ICON = 'M3 6h9M3 12h6M3 18h3M17 4v16m0 0l-3-3m3 3l3-3'
 const COLLAPSE_ICON = 'M4 4h16v16H4zM8 12h8'
@@ -103,7 +106,7 @@ const FOLDER_ICON = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a
 const PLUS_ICON = 'M12 5v14M5 12h14'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
-export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract, onOpenTerminal }: Props) {
+export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract, onOpenTerminal, onOpenCollectionOverview }: Props) {
   const { projects, journeys, runs, environments, activeEnv, envActions } = studio
   const sources = studio.collectionSources
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -147,6 +150,7 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
     { label: t('studio.deleteFile'), danger: true, onSelect: () => setConfirm({ kind: 'deleteFile', id: file }) },
   ]
   const collectionActions = (folder: string): RowAction[] => [
+    { label: t('collection.overview'), icon: SETTINGS_ICON, onSelect: () => onOpenCollectionOverview(folder) },
     { label: t('studio.rename'), onSelect: () => setEditing({ kind: 'collection', id: folder }) },
     ...(workspace.reveal ? [{ label: revealLabel, onSelect: () => workspace.reveal!(folder) }] : []),
     ...(onOpenTerminal && workspace.folderPath(folder) ? [{ label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, onSelect: () => terminalAt(folder) }] : []),

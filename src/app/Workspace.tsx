@@ -41,6 +41,7 @@ import { MethodBadge as TabMethod } from '../ui/components/badges'
 import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
 import { WorkspaceHome } from '../ui/workspace/WorkspaceHome'
+import { CollectionOverview } from '../ui/workspace/CollectionOverview'
 import type { Studio } from './useStudio'
 import type { WorkspaceState } from './useWorkspace'
 
@@ -121,6 +122,19 @@ export function Workspace({
     setHomeActive(true)
   }
   const showHome = workspace.isOpen && homeActive
+  // Resumen de la colección abierta (como el Overview de una colección en Bruno).
+  const [colTab, setColTab] = useState(false)
+  const [colActive, setColActive] = useState(false)
+  const colShown = colTab && colActive && !showHome && !!workspace.activeCollection
+  const openCollectionOverview = async (folder?: string) => {
+    if (folder && folder !== workspace.activeCollection?.folder) await workspace.openCollection(folder)
+    setColTab(true)
+    setColActive(true)
+    setHomeActive(false)
+    setActiveContract(undefined)
+    setActiveTry(undefined)
+    setEnvActive(false)
+  }
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
   const [welcomeClosed, setWelcomeClosed] = useState(false)
   if (projects.length && welcomeClosed) setWelcomeClosed(false)
@@ -158,6 +172,7 @@ export function Workspace({
     setActiveContract(undefined)
     setActiveTry(undefined)
     setHomeActive(false)
+    setColActive(false)
     setAskConfirm(false)
     if (nextView) setViews((v) => ({ ...v, [id]: nextView }))
   }
@@ -176,6 +191,7 @@ export function Workspace({
     setActiveContract(undefined)
     setActiveTry(undefined)
     setHomeActive(false)
+    setColActive(false)
   }
   /** La operación de una clave, buscada en los contratos cargados ahora (sigue a las ediciones). */
   const findOperation = (key: string): OperationRef | undefined => {
@@ -192,6 +208,7 @@ export function Workspace({
     setTryTabs((prev) => (prev.includes(key) ? prev : [...prev, key]))
     setActiveTry(key)
     setHomeActive(false)
+    setColActive(false)
     setActiveContract(undefined)
     setEnvActive(false)
   }
@@ -206,6 +223,7 @@ export function Workspace({
     setContractTabs((prev) => (prev.includes(file) ? prev : [...prev, file]))
     setActiveContract(file)
     setHomeActive(false)
+    setColActive(false)
     setActiveTry(undefined)
     setEnvActive(false)
   }
@@ -280,6 +298,7 @@ export function Workspace({
       onOpenContract={openContract}
       activeContract={contractOpen}
       onOpenTerminal={onOpenTerminal}
+      onOpenCollectionOverview={(folder) => void openCollectionOverview(folder)}
     />
   )
 
@@ -355,6 +374,20 @@ export function Workspace({
       </button>
     </div>
   ) : null
+  const collectionView = (
+    <CollectionOverview
+      workspace={workspace}
+      journeys={journeys}
+      sources={studio.collectionSources}
+      environments={studio.environments}
+      casesCount={studio.cases.length}
+      verdicts={studio.runs.filter((r) => r.state === 'done' && r.verdict).map((r) => r.verdict!)}
+      onOpenEnv={openEnv}
+      onOpenJourney={(key) => openJourney(key)}
+      onOpenContract={openContract}
+      onOpenTerminal={onOpenTerminal}
+    />
+  )
   const homeView = (
     <WorkspaceHome
       workspace={workspace}
@@ -362,11 +395,9 @@ export function Workspace({
       onFiles={(files) => {
         void studio.addFiles(files)
         setHomeActive(false)
+    setColActive(false)
       }}
-      onOpenCollection={(folder) => {
-        if (folder !== workspace.activeCollection?.folder) void workspace.openCollection(folder)
-        setHomeActive(false)
-      }}
+      onOpenCollection={(folder) => void openCollectionOverview(folder)}
     />
   )
 
@@ -548,8 +579,27 @@ export function Workspace({
         <main className="ws-main">
           <div className="ws-tabs" role="tablist">
             {homeTab}
+            {colTab && workspace.activeCollection && (
+              <div className={`ws-tab ${colShown ? 'active' : ''}`} role="tab" aria-selected={colShown}>
+                <button className="ws-tab-main ws-home-tab-btn" onClick={() => void openCollectionOverview()} title={t('collection.overview')}>
+                  <Icon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" size={13} />{' '}
+                  {workspace.activeCollection.name}
+                </button>
+                <button
+                  className="ws-tab-close"
+                  onClick={() => {
+                    setColTab(false)
+                    setColActive(false)
+                  }}
+                  aria-label={t('common.close')}
+                  title={t('common.close')}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {tabs.map((id) => (
-              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome}>
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
                   {journeyName(id)}
                   {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
@@ -562,7 +612,7 @@ export function Workspace({
               </div>
             ))}
             {envOpen && (
-              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome}>
+              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome && !colShown}>
                 <button
                   className="ws-tab-main ws-env-tab"
                   onClick={() => {
@@ -570,6 +620,7 @@ export function Workspace({
                     setActiveContract(undefined)
                     setActiveTry(undefined)
                     setHomeActive(false)
+    setColActive(false)
                   }}
                 >
                   <EnvDot color={studio.activeEnv.color} /> {studio.activeEnv.name}
@@ -587,7 +638,7 @@ export function Workspace({
               </div>
             )}
             {shownContracts.map((file) => (
-              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome}>
+              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome && !colShown}>
                 <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
                   <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
                 </button>
@@ -599,12 +650,13 @@ export function Workspace({
             {shownTries.map((key) => {
               const [, method, ...rest] = key.split('|')
               return (
-                <div key={key} className={`ws-tab ${key === tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome}>
+                <div key={key} className={`ws-tab ${key === tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome && !colShown}>
                   <button
                     className="ws-tab-main ws-try-tab"
                     onClick={() => {
                       setActiveTry(key)
                       setHomeActive(false)
+    setColActive(false)
                     }} title={key.replace(/\|/g, ' ')}>
                     <TabMethod method={method} /> {rest.join('|')}
                   </button>
@@ -633,6 +685,8 @@ export function Workspace({
 
           {showHome ? (
             <div className="ws-body ws-home">{homeView}</div>
+          ) : colShown ? (
+            <div className="ws-body ws-home">{collectionView}</div>
           ) : tryOpen ? (
             <div className="ws-body ws-try">{tryView(tryOpen)}</div>
           ) : contractOpen ? (

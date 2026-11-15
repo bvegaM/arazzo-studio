@@ -32,6 +32,9 @@ import {
   removeCollection as removeCollectionFiles,
   renameArazzo as renameArazzoFiles,
   renameCollection as renameCollectionFile,
+  readCollectionDocs,
+  updateCollection,
+  writeCollectionDocs,
   readCollection,
   snapshotCollection,
   writeChanges,
@@ -93,6 +96,8 @@ export function useWorkspace(studio: Studio) {
   const [last, setLast] = useState<WorkspaceRef>()
   // Documentación del workspace (README.md en su carpeta), para el inicio.
   const [docs, setDocs] = useState<string>()
+  // Documentación de la colección abierta (README.md en su carpeta).
+  const [collectionDocs, setCollectionDocs] = useState<string>()
   const written = useRef<CollectionSnapshot>(EMPTY)
   // Al abrir una colección, lo leído de disco es el punto de partida: no se vuelve a escribir.
   const baseline = useRef(false)
@@ -149,6 +154,7 @@ export function useWorkspace(studio: Studio) {
     baseline.current = true
     written.current = EMPTY
     studio.openCollectionData({ ...data, activeEnv: readLocal(activeEnvKey(o.manifest.id, folder)), selectFile })
+    setCollectionDocs(await readCollectionDocs(o.fs, folder))
     log('info', t('devlog.collectionOpened', { folder, files: data.files.length, envs: data.environments.length }))
     setActive(folder)
     setStatus('idle')
@@ -313,6 +319,20 @@ export function useWorkspace(studio: Studio) {
     studio.reset()
   }
 
+  /** Cambia la versión de una colección (vacía, la quita). */
+  async function setCollectionVersion(folder: string, version: string) {
+    if (!open) return
+    await updateCollection(open.fs, folder, { collectionVersion: version.trim() })
+    setCollections((prev) => prev.map((c) => (c.folder === folder ? { ...c, collectionVersion: version.trim() || undefined } : c)))
+  }
+
+  /** Guarda la documentación de la colección abierta. */
+  async function saveCollectionDocs(text: string) {
+    if (!open || !active) return
+    await writeCollectionDocs(open.fs, active, text)
+    setCollectionDocs(text.trim() ? text : undefined)
+  }
+
   /** Ordena las colecciones por nombre (A-Z) y guarda ese orden en studio.yaml. */
   async function sortCollections() {
     if (!open) return
@@ -407,6 +427,9 @@ export function useWorkspace(studio: Studio) {
     docs,
     saveDocs,
     sortCollections,
+    collectionDocs,
+    saveCollectionDocs,
+    setCollectionVersion,
     /** Carpeta en disco de una colección (escritorio), para abrir una terminal ahí. */
     folderPath: (folder: string) => (open?.fs.kind === 'desktop' ? (folder === '.' ? open.ref.label : `${open.ref.label}/${folder}`) : undefined),
     deleteWorkspace,

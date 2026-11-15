@@ -29,6 +29,8 @@ export interface WorkspaceManifest {
 
 export interface CollectionManifest {
   name: string
+  /** Versión de la colección que pone el equipo (p. ej. 1.2.0); no es la del formato. */
+  collectionVersion?: string
 }
 
 const header = (lines: string[]) => lines.map((l) => `# ${l}\n`).join('')
@@ -53,13 +55,16 @@ export function parseWorkspace(text: string): WorkspaceManifest {
 export function serializeCollection(c: CollectionManifest): string {
   return (
     header(['Colección de Arazzo Studio: los Arazzo y contratos de esta carpeta, sus ambientes y sus casos.']) +
-    YAML.stringify({ version: FORMAT_VERSION, name: c.name }, { lineWidth: 0 })
+    YAML.stringify({ version: FORMAT_VERSION, name: c.name, ...(c.collectionVersion ? { collectionVersion: c.collectionVersion } : {}) }, { lineWidth: 0 })
   )
 }
 
 export function parseCollection(text: string, fallbackName: string): CollectionManifest {
   const doc = YAML.parse(text) ?? {}
-  return { name: typeof doc?.name === 'string' && doc.name ? doc.name : fallbackName }
+  return {
+    name: typeof doc?.name === 'string' && doc.name ? doc.name : fallbackName,
+    ...(doc?.collectionVersion !== undefined && doc.collectionVersion !== null ? { collectionVersion: String(doc.collectionVersion) } : {}),
+  }
 }
 
 /** Nombre de archivo seguro a partir de un nombre libre: "Prod (LatAm)" → "prod-latam". */

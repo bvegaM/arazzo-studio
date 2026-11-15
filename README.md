@@ -78,7 +78,7 @@ Arazzo Studio is built for **exploring, debugging and demonstrating** journeys b
 
 Create a workspace where you choose (the desktop app suggests `Documents/Arazzo Studio`) and add collections: one per partner or topic. Each collection keeps its Arazzo files, contracts, environments and test cases as plain files, so the whole workspace can live in git and be shared with the team. Every change is saved automatically.
 
-The **Home** tab shows the collections with their folders, quick actions and the workspace documentation, a `README.md` you write and preview right there.
+The **Home** tab shows the collections with their folders, quick actions and the workspace documentation, a `README.md` you write and preview right there. Each collection has its own **overview** too: location, version, environments, journeys with the last run, contracts, how to share it, and its documentation, which **Generate docs** drafts from the Arazzo files (journeys, inputs, steps, contracts and environments).
 
 <img src="docs/screenshots/home.png" alt="Workspace home with collection counts, quick actions, the collections and their folders, and the workspace documentation" width="100%">
 

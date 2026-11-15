@@ -5,7 +5,7 @@ import { t } from '../../i18n'
 import { desktop } from '../../lib/desktop'
 import type { WorkspaceState } from '../../app/useWorkspace'
 import { Icon } from '../components/kit'
-import { Markdown } from '../components/Markdown'
+import { DocsPanel } from './DocsPanel'
 import { RowMenu, type RowAction } from '../components/RowMenu'
 
 const ICONS = {
@@ -38,66 +38,6 @@ function Stat({ n, label }: { n: number | string; label: string }) {
       <strong>{n}</strong>
       <span>{label}</span>
     </div>
-  )
-}
-
-function Docs({ workspace }: { workspace: WorkspaceState }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const start = () => {
-    setDraft(workspace.docs ?? t('home.docsTemplate', { name: workspace.name ?? '' }))
-    setEditing(true)
-  }
-  return (
-    <aside className="home-docs">
-      <div className="home-docs-head">
-        <Icon d={ICONS.doc} size={15} />
-        <strong className="grow">{t('home.docs')}</strong>
-        {workspace.docs && !editing && (
-          <button className="small" onClick={start}>
-            <Icon d={ICONS.edit} size={13} /> {t('home.editDocs')}
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <div className="home-docs-edit">
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus spellCheck={false} aria-label={t('home.docs')} />
-          <div className="row">
-            <span className="muted small grow">{t('home.docsHint')}</span>
-            <button onClick={() => setEditing(false)}>{t('common.cancel')}</button>
-            <button
-              className="primary"
-              onClick={async () => {
-                await workspace.saveDocs(draft)
-                setEditing(false)
-              }}
-            >
-              {t('home.saveDocs')}
-            </button>
-          </div>
-        </div>
-      ) : workspace.docs ? (
-        <div className="home-docs-body">
-          <Markdown text={workspace.docs} />
-        </div>
-      ) : (
-        <div className="home-docs-empty">
-          <span className="wd-icon big">
-            <Icon d={ICONS.doc} size={24} />
-          </span>
-          <p>{t('home.docsEmpty')}</p>
-          <ul>
-            <li>{t('home.docsIdea1')}</li>
-            <li>{t('home.docsIdea2')}</li>
-            <li>{t('home.docsIdea3')}</li>
-            <li>{t('home.docsIdea4')}</li>
-          </ul>
-          <button className="accent" onClick={start}>
-            <Icon d={ICONS.plus} size={14} /> {t('home.addDocs')}
-          </button>
-        </div>
-      )}
-    </aside>
   )
 }
 
@@ -232,7 +172,12 @@ export function WorkspaceHome({ workspace, stats, onFiles, onOpenCollection }: P
         )}
         {workspace.activeCollection && stats.arazzo === 0 && <div className="callout info small">{t('home.emptyCollection', { name: workspace.activeCollection.name })}</div>}
       </div>
-      <Docs workspace={workspace} />
+      <DocsPanel
+        docs={workspace.docs}
+        onSave={workspace.saveDocs}
+        template={() => t('home.docsTemplate', { name: workspace.name ?? '' })}
+        hint={t('home.docsHint')}
+      />
     </div>
   )
 }

@@ -26,6 +26,7 @@ export interface CollectionInfo {
   /** Carpeta relativa al workspace ("." = la raíz del workspace). */
   folder: string
   name: string
+  collectionVersion?: string
 }
 
 export interface CollectionData {
@@ -88,11 +89,25 @@ export async function createCollection(
   return { manifest: next, folder }
 }
 
+/** Cambia datos de collection.yaml (nombre visible, versión); la carpeta no se mueve. */
+export async function updateCollection(fs: WorkspaceFs, folder: string, patch: Partial<{ name: string; collectionVersion: string }>): Promise<void> {
+  const text = await fs.read(inFolder(folder, COLLECTION_FILE))
+  const current = text === undefined ? { name: patch.name ?? folder } : parseCollection(text, patch.name ?? folder)
+  const next = { ...current, ...patch }
+  if (!next.collectionVersion) delete next.collectionVersion
+  await fs.write(inFolder(folder, COLLECTION_FILE), serializeCollection(next))
+}
+
 /** Cambia el nombre visible de una colección (la carpeta no se mueve). */
 export async function renameCollection(fs: WorkspaceFs, folder: string, name: string): Promise<void> {
-  const text = await fs.read(inFolder(folder, COLLECTION_FILE))
-  const current = text === undefined ? {} : parseCollection(text, name)
-  await fs.write(inFolder(folder, COLLECTION_FILE), serializeCollection({ ...current, name }))
+  await updateCollection(fs, folder, { name })
+}
+
+/** Documentación de una colección (README.md en su carpeta). */
+export const readCollectionDocs = (fs: WorkspaceFs, folder: string) => fs.read(inFolder(folder, 'README.md'))
+export async function writeCollectionDocs(fs: WorkspaceFs, folder: string, text: string): Promise<void> {
+  if (text.trim()) await fs.write(inFolder(folder, 'README.md'), text.endsWith('\n') ? text : `${text}\n`)
+  else await fs.remove(inFolder(folder, 'README.md'))
 }
 
 /** Saca una colección del workspace. Con `deleteFiles` borra también su carpeta y sus secretos. */
@@ -151,7 +166,9 @@ export const collectionPath = inFolder
 export async function collectionInfo(fs: WorkspaceFs, folder: string): Promise<CollectionInfo> {
   const text = await fs.read(inFolder(folder, COLLECTION_FILE))
   const fallback = folder === '.' ? 'Colección' : baseName(folder)
-  return { folder, name: text === undefined ? fallback : parseCollection(text, fallback).name }
+  if (text === undefined) return { folder, name: fallback }
+  const parsed = parseCollection(text, fallback)
+  return { folder, name: parsed.name, ...(parsed.collectionVersion ? { collectionVersion: parsed.collectionVersion } : {}) }
 }
 
 /** Secretos de un ambiente (variables secretas y credenciales), guardados cifrados en este equipo. */

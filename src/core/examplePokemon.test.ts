@@ -8,6 +8,8 @@ import { buildCollection, parseFile } from './loader'
 import { runWorkflow } from './runner'
 import { createSimulatedExecutor } from './simulator'
 import { generateTestCases } from './testcases'
+import { collectionDocsMarkdown } from './collectionDocs'
+import { listJourneys } from './collection'
 import type { HttpExecutor } from './http'
 import { setLocale } from '../i18n'
 
@@ -45,5 +47,15 @@ describe('ejemplo de la PokéAPI', () => {
     const listing: HttpExecutor = async () => ({ status: 200, statusText: 'OK', headers: { 'content-type': 'application/json' }, bodyText: '{"count":21,"results":[]}', durationMs: 1 })
     const run = await runWorkflow(project, analysis, 'typeExplorer', { inputs: {}, credentials: {}, servers: {}, executor: listing })
     expect(run.steps[0].reason?.message).toContain('https://pokeapi.co/api/v2/type/')
+  })
+
+  it('genera la documentación de la colección', () => {
+    const journeys = listJourneys([project], { [project.arazzoFileName]: analysis })
+    const md = collectionDocsMarkdown({ name: 'Pokédex', version: '1.0.0', journeys, sources: project.sources, environments: [{ name: 'local', servers: { pokeapi: 'https://pokeapi.co/api/v2' } }] })
+    expect(md).toContain('# Pokédex')
+    expect(md).toContain('### Pokemon card')
+    expect(md).toContain('1. **getPokemon** — GET `/pokemon/{idOrName}`')
+    expect(md).toContain('`pokemon`*')
+    expect(md).toContain('pokeapi → `https://pokeapi.co/api/v2`')
   })
 })
