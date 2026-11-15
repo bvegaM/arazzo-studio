@@ -18,6 +18,11 @@ import { OverviewView } from '../ui/workspace/OverviewView'
 import { ResultsPanel } from '../ui/workspace/ResultsPanel'
 import { StepView } from '../ui/workspace/StepView'
 import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
+import { RequestView } from '../ui/requests/RequestView'
+import { FlowAuthView } from '../ui/workspace/FlowAuthView'
+import { journeyApis } from '../core/flowAuth'
+import { NewRequestDialog } from '../ui/requests/NewRequestDialog'
+import { requestBadge, type RequestKind } from '../core/requests'
 import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
 import type { ContractUsage } from '../ui/components/ContractEditor'
 import { TryOperation, type TryState } from '../ui/workspace/TryOperation'
@@ -54,7 +59,7 @@ import type { WorkspaceState } from './useWorkspace'
 const ArazzoEditor = lazy(() => import('../ui/components/ArazzoEditor').then((m) => ({ default: m.ArazzoEditor })))
 const ContractEditor = lazy(() => import('../ui/components/ContractEditor').then((m) => ({ default: m.ContractEditor })))
 
-type View = 'overview' | 'inputs' | 'cases' | 'yaml' | 'step'
+type View = 'overview' | 'inputs' | 'cases' | 'auth' | 'yaml' | 'step'
 
 const RESULTS_WIDTH_KEY = 'ws.resultsWidth'
 const PLAY_ICON = 'M7 5l12 7-12 7V5z'
@@ -124,6 +129,10 @@ export function Workspace({
   const [tryTabs, setTryTabs] = useState<string[]>([])
   const [activeTry, setActiveTry] = useState<string>()
   const [tryStates, setTryStates] = useState<Record<string, TryState>>({})
+  // Requests sueltos abiertos como pestañas (por ruta) y el que se está viendo.
+  const [reqTabs, setReqTabs] = useState<string[]>([])
+  const [activeReq, setActiveReq] = useState<string>()
+  const [newRequest, setNewRequest] = useState<{ curl?: boolean }>()
   // Inicio del workspace: se muestra al abrirlo y al pulsar el logo.
   const [homeActive, setHomeActive] = useState(true)
   const [homeFor, setHomeFor] = useState({ ws: workspace.name, request: homeRequest })
@@ -143,6 +152,7 @@ export function Workspace({
     setHomeActive(false)
     setActiveContract(undefined)
     setActiveTry(undefined)
+    setActiveReq(undefined)
     setEnvActive(false)
   }
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
@@ -171,7 +181,14 @@ export function Workspace({
   const realCases = ready.filter((c) => !isSimulated(c, studio.mode))
   const mutating = realCases.length ? (wa?.steps.filter((s) => s.mutating && s.op) ?? []) : []
   const messaging = realCases.length ? (wa?.steps.filter((s) => isAsyncOperation(s.op)) ?? []) : []
-  const credsMissing = realCases.length > 0 && (analysis?.credentials ?? []).some((c) => !studio.credentials[c.key])
+  // Las APIs con autorización propia (por API o por journey) no usan las credenciales del contrato.
+  const credsMissing =
+    realCases.length > 0 && (analysis?.credentials ?? []).some((c) => !studio.credentials[c.key] && !(activeId && studio.requests.resolveFlow(activeId, c.sourceName).auth))
+  const apis = wa ? journeyApis(wa) : []
+  const ownAuthCount = activeId ? apis.filter((a) => studio.requests.resolveFlow(activeId, a.source).auth).length : 0
+  // OAuth 2.0 con inicio de sesión y sin token vigente: se pide antes de ejecutar contra la API real.
+  const loginNeeded = activeId && realCases.length ? studio.requests.flowLoginNeeded(activeId, apis.map((a) => a.source)) : []
+  const [loginError, setLoginError] = useState<string>()
   const values = (activeId && studio.inputs[activeId]) || {}
   const inputsMissing = wa ? missingInputs(wa.inputsSchema, values).length + invalidPaths(wa.inputsSchema, values).length : 0
   const journeyRuns = studio.runs.filter((r) => caseJourney(r.tc) === activeId)
@@ -184,6 +201,7 @@ export function Workspace({
     setEnvActive(false)
     setActiveContract(undefined)
     setActiveTry(undefined)
+    setActiveReq(undefined)
     setHomeActive(false)
     setColActive(false)
     setAskConfirm(false)
@@ -198,6 +216,7 @@ export function Workspace({
     setEnvActive(true)
     setActiveContract(undefined)
     setActiveTry(undefined)
+    setActiveReq(undefined)
     setHomeActive(false)
     setColActive(false)
   }
@@ -215,6 +234,7 @@ export function Workspace({
     setTryStates((prev) => (prev[key] ? prev : { ...prev, [key]: { form: initialForm(op), simulate: false } }))
     setTryTabs((prev) => (prev.includes(key) ? prev : [...prev, key]))
     setActiveTry(key)
+    setActiveReq(undefined)
     setHomeActive(false)
     setColActive(false)
     setActiveContract(undefined)
@@ -230,10 +250,49 @@ export function Workspace({
   const openContract = (file: string) => {
     setContractTabs((prev) => (prev.includes(file) ? prev : [...prev, file]))
     setActiveContract(file)
+    setActiveReq(undefined)
     setHomeActive(false)
     setColActive(false)
     setActiveTry(undefined)
     setEnvActive(false)
+  }
+  // Requests sueltos que siguen existiendo en la colección.
+  const shownReqs = reqTabs.filter((p) => studio.requests.list.some((r) => r.path === p))
+  const reqOpen = activeReq && shownReqs.includes(activeReq) ? activeReq : undefined
+  const openRequest = (path: string) => {
+    setReqTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
+    setActiveReq(path)
+    setHomeActive(false)
+    setColActive(false)
+    setActiveContract(undefined)
+    setActiveTry(undefined)
+    setEnvActive(false)
+  }
+  const closeRequest = (path: string) => {
+    setReqTabs((prev) => prev.filter((p) => p !== path))
+    if (path === activeReq) setActiveReq(undefined)
+  }
+  /** Renombra un request (y su archivo); sus pestañas siguen a la ruta nueva. */
+  const renameRequest = (path: string, name: string) => {
+    const next = studio.requests.rename(path, name)
+    if (next === path) return
+    setReqTabs((prev) => prev.map((p) => (p === path ? next : p)))
+    setActiveReq((a) => (a === path ? next : a))
+  }
+  // Un request nuevo vive en la colección abierta (en un workspace, hace falta una).
+  const canCreateRequest = !workspace.isOpen || !!workspace.activeCollection
+  const createRequest = (kind: RequestKind) => {
+    setNewRequest(undefined)
+    openRequest(studio.requests.create(kind).path)
+  }
+  const createRequestFromCurl = (command: string): string | undefined => {
+    try {
+      const r = studio.requests.createFromCurl(command)
+      setNewRequest(undefined)
+      openRequest(r.path)
+    } catch {
+      return t('request.curl.invalid')
+    }
   }
   const closeContract = (file: string) => {
     setContractTabs((prev) => prev.filter((f) => f !== file))
@@ -243,7 +302,7 @@ export function Workspace({
   const run = (force = false) => {
     if (!activeId || studio.running || !ready.length) return
     // Con un contrato, una operación o el ambiente a la vista, ⌘Enter no ejecuta el journey de fondo.
-    if (activeContract || activeTry || envActive) return
+    if (activeContract || activeTry || envActive || reqOpen) return
     if (mutating.length && !studio.confirmed && !force) {
       setAskConfirm(true)
       return
@@ -295,6 +354,7 @@ export function Workspace({
     onOpenEnv: openEnv,
   }
 
+  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
   const sidebar = (
     <CollectionSidebar
       studio={studio}
@@ -307,6 +367,11 @@ export function Workspace({
       activeContract={contractOpen}
       onOpenTerminal={onOpenTerminal}
       onOpenCollectionOverview={(folder) => void openCollectionOverview(folder)}
+      onOpenRequest={openRequest}
+      onRenameRequest={renameRequest}
+      onNewRequest={(opts) => setNewRequest(opts ?? {})}
+      activeRequest={reqOpen}
+      onNewArazzo={() => createArazzoAndOpen()}
     />
   )
 
@@ -350,6 +415,10 @@ export function Workspace({
         badge: { text: src.type === 'asyncapi' ? 'ASYNC' : 'API', cls: 'm-flow' },
         run: () => openContract(src.fileName!),
       })),
+    ...studio.requests.list.map((r) => {
+      const badge = requestBadge(r)
+      return { id: `r:${r.path}`, group: t('palette.requests'), label: r.name, detail: r.url, badge: { text: badge.text, cls: badge.cls }, run: () => openRequest(r.path) }
+    }),
     ...workspace.collections.map((c) => ({
       id: `c:${c.folder}`,
       group: t('palette.collections'),
@@ -376,9 +445,8 @@ export function Workspace({
     </>
   )
 
-  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
   // --- Pestañas: lista en el orden en que se ven, cerrar varias a la vez y menú contextual ---
-  type TabRef = { kind: 'home' | 'collection' | 'journey' | 'env' | 'contract' | 'try'; id: string }
+  type TabRef = { kind: 'home' | 'collection' | 'journey' | 'env' | 'contract' | 'try' | 'request'; id: string }
   const tabList: TabRef[] = [
     ...(workspace.isOpen ? [{ kind: 'home' as const, id: 'home' }] : []),
     ...(colTab && workspace.activeCollection ? [{ kind: 'collection' as const, id: 'collection' }] : []),
@@ -386,6 +454,7 @@ export function Workspace({
     ...(envOpen ? [{ kind: 'env' as const, id: 'env' }] : []),
     ...shownContracts.map((id) => ({ kind: 'contract' as const, id })),
     ...shownTries.map((id) => ({ kind: 'try' as const, id })),
+    ...shownReqs.map((id) => ({ kind: 'request' as const, id })),
   ]
   const sameTab = (a: TabRef, b: TabRef) => a.kind === b.kind && a.id === b.id
   /** La pestaña que se está viendo (la que cierra ⌘W). */
@@ -393,7 +462,9 @@ export function Workspace({
     ? undefined
     : colShown
       ? { kind: 'collection', id: 'collection' }
-      : tryOpen
+      : reqOpen
+        ? { kind: 'request', id: reqOpen }
+        : tryOpen
         ? { kind: 'try', id: tryOpen }
         : contractOpen
           ? { kind: 'contract', id: contractOpen }
@@ -423,6 +494,11 @@ export function Workspace({
     if (contractsOut.size) {
       setContractTabs((prev) => prev.filter((f) => !contractsOut.has(f)))
       if (activeContract && contractsOut.has(activeContract)) setActiveContract(undefined)
+    }
+    const reqsOut = ids('request')
+    if (reqsOut.size) {
+      setReqTabs((prev) => prev.filter((k) => !reqsOut.has(k)))
+      if (activeReq && reqsOut.has(activeReq)) setActiveReq(undefined)
     }
     const triesOut = ids('try')
     if (triesOut.size) {
@@ -494,6 +570,8 @@ export function Workspace({
       onOpenJourney={(key) => openJourney(key)}
       onOpenContract={openContract}
       onOpenTerminal={onOpenTerminal}
+      requests={studio.requests}
+      isDesktop={studio.isDesktop}
     />
   )
   const homeView = (
@@ -707,7 +785,7 @@ export function Workspace({
               </div>
             )}
             {tabs.map((id) => (
-              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'journey', id })}>
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !reqOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !reqOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'journey', id })}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
                   {journeyName(id)}
                   {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
@@ -720,13 +798,14 @@ export function Workspace({
               </div>
             ))}
             {envOpen && (
-              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'env', id: 'env' })}>
+              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !reqOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !reqOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'env', id: 'env' })}>
                 <button
                   className="ws-tab-main ws-env-tab"
                   onClick={() => {
                     setEnvActive(true)
                     setActiveContract(undefined)
                     setActiveTry(undefined)
+                    setActiveReq(undefined)
                     setHomeActive(false)
     setColActive(false)
                   }}
@@ -746,7 +825,7 @@ export function Workspace({
               </div>
             )}
             {shownContracts.map((file) => (
-              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'contract', id: file })}>
+              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !reqOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !reqOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'contract', id: file })}>
                 <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
                   <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
                 </button>
@@ -758,17 +837,33 @@ export function Workspace({
             {shownTries.map((key) => {
               const [, method, ...rest] = key.split('|')
               return (
-                <div key={key} className={`ws-tab ${key === tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'try', id: key })}>
+                <div key={key} className={`ws-tab ${key === tryOpen && !reqOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !reqOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'try', id: key })}>
                   <button
                     className="ws-tab-main ws-try-tab"
                     onClick={() => {
                       setActiveTry(key)
+                      setActiveReq(undefined)
                       setHomeActive(false)
     setColActive(false)
                     }} title={key.replace(/\|/g, ' ')}>
                     <TabMethod method={method} /> {rest.join('|')}
                   </button>
                   <button className="ws-tab-close" onClick={() => closeTry(key)} aria-label={t('common.close')} title={t('common.close')}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+            {shownReqs.map((path) => {
+              const r = studio.requests.list.find((x) => x.path === path)!
+              const badge = requestBadge(r)
+              const on = path === reqOpen && !showHome && !colShown
+              return (
+                <div key={path} className={`ws-tab ${on ? 'active' : ''}`} role="tab" aria-selected={on} onContextMenu={tabMenu({ kind: 'request', id: path })}>
+                  <button className="ws-tab-main ws-request-tab" onClick={() => openRequest(path)} title={r.url || r.name}>
+                    <span className={`method ${badge.cls}`}>{badge.text}</span> {r.name}
+                  </button>
+                  <button className="ws-tab-close" onClick={() => closeRequest(path)} aria-label={t('common.close')} title={t('common.close')}>
                     ×
                   </button>
                 </div>
@@ -795,6 +890,27 @@ export function Workspace({
             <div className="ws-body ws-home">{homeView}</div>
           ) : colShown ? (
             <div className="ws-body ws-home">{collectionView}</div>
+          ) : reqOpen ? (
+            <div className="ws-body ws-request">
+              <RequestView
+                key={reqOpen}
+                request={studio.requests.list.find((r) => r.path === reqOpen)!}
+                api={studio.requests}
+                result={studio.requests.results[reqOpen]}
+                sending={!!studio.requests.sending[reqOpen]}
+                isDesktop={studio.isDesktop}
+                env={{ name: studio.activeEnv.name, color: studio.activeEnv.color }}
+                onOpenEnv={openEnv}
+                onRename={(name) => renameRequest(reqOpen, name)}
+                onOpenCollectionAuth={
+                  workspace.activeCollection
+                    ? () => {
+                        void openCollectionOverview().then(() => requestAnimationFrame(() => document.getElementById('collection-auth')?.scrollIntoView({ behavior: 'smooth', block: 'start' })))
+                      }
+                    : undefined
+                }
+              />
+            </div>
           ) : tryOpen ? (
             <div className="ws-body ws-try">{tryView(tryOpen)}</div>
           ) : contractOpen ? (
@@ -883,6 +999,26 @@ export function Workspace({
                   </button>
                 </div>
               )}
+              {!askConfirm && loginNeeded.length > 0 && (
+                <div className="ws-strip info" role="status">
+                  <span className="grow">
+                    {t('flowAuth.loginNeeded', { apis: loginNeeded.map((l) => l.source).join(', ') })}
+                    {loginError && <span className="err"> {loginError}</span>}
+                  </span>
+                  <button
+                    className="small primary"
+                    onClick={async () => {
+                      setLoginError(undefined)
+                      for (const l of loginNeeded) {
+                        const error = await studio.requests.obtainFlowToken(activeId!, l.source)
+                        if (error) return setLoginError(error)
+                      }
+                    }}
+                  >
+                    {t('flowAuth.login')}
+                  </button>
+                </div>
+              )}
               {!askConfirm && credsMissing && (
                 <div className="ws-strip info">
                   <span className="grow">{t('ws.run.credsMissing', { env: studio.activeEnv.name })}</span>
@@ -902,6 +1038,7 @@ export function Workspace({
                         { id: 'overview', label: t('ws.view.overview'), ...(wa.issues.some((i) => i.level === 'error') ? { count: wa.issues.filter((i) => i.level === 'error').length, tone: 'err' as const } : {}) },
                         { id: 'inputs', label: 'Inputs', ...(inputsMissing ? { count: inputsMissing, tone: 'warn' as const } : {}) },
                         { id: 'cases', label: t('ws.view.cases'), count: ready.length },
+                        { id: 'auth', label: t('flowAuth.tab'), ...(ownAuthCount ? { count: ownAuthCount } : {}) },
                         { id: 'yaml', label: 'YAML' },
                         ...(rs ? [{ id: 'step' as const, label: <span className="ws-step-tab">{rs.op && !simple && <MethodBadge method={rs.op.method} />} {simple ? humanizeId(rs.step.stepId) : rs.step.stepId}</span> }] : []),
                       ]}
@@ -909,6 +1046,21 @@ export function Workspace({
                   </div>
                   <div className={`ws-center-body ${shownView === 'yaml' ? 'fill' : ''}`}>
                     {shownView === 'overview' && analysis && <OverviewView analysis={analysis} wa={wa} />}
+                    {shownView === 'auth' && activeId && (
+                      <FlowAuthView
+                        journey={activeId}
+                        wa={wa}
+                        api={studio.requests}
+                        isDesktop={studio.isDesktop}
+                        envName={studio.activeEnv.name}
+                        onOpenEnv={openEnv}
+                        onOpenCollectionAuth={
+                          workspace.activeCollection
+                            ? () => void openCollectionOverview().then(() => requestAnimationFrame(() => document.getElementById('collection-auth')?.scrollIntoView({ behavior: 'smooth', block: 'start' })))
+                            : undefined
+                        }
+                      />
+                    )}
                     {shownView === 'inputs' && <InputsView wa={wa} values={values} setInput={(_, name, v) => studio.setInput(activeId!, name, v)} />}
                     {shownView === 'cases' && (
                       <CasesView
@@ -989,6 +1141,19 @@ export function Workspace({
       </div>
       {statusBar}
       {tabContextMenu}
+      {newRequest && canCreateRequest && (
+        <NewRequestDialog
+          startWithCurl={newRequest.curl}
+          isDesktop={studio.isDesktop}
+          onClose={() => setNewRequest(undefined)}
+          onCreate={createRequest}
+          onCurl={createRequestFromCurl}
+          onCreateArazzo={() => {
+            setNewRequest(undefined)
+            createArazzoAndOpen()
+          }}
+        />
+      )}
     </TemplateVarsProvider>
   )
 }

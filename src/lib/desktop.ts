@@ -22,10 +22,61 @@ export interface AppMetrics {
   processes: { type: string; pid: number; cpu: number; memory: number }[]
 }
 
+export interface GrpcMethod {
+  name: string
+  requestStream: boolean
+  responseStream: boolean
+  requestType?: string
+  responseType?: string
+  /** Mensaje de ejemplo con todos los campos del request. */
+  sample: unknown
+}
+
+export interface GrpcService {
+  /** Nombre completo (paquete.Servicio). */
+  name: string
+  methods: GrpcMethod[]
+}
+
+export interface GrpcCall {
+  id: string
+  files: Record<string, string>
+  entry: string
+  url: string
+  tls?: boolean
+  service: string
+  rpc: string
+  /** Mensaje en JSON. */
+  message: string
+  metadata: Record<string, string>
+  timeoutMs?: number
+}
+
+export type GrpcResult =
+  | {
+      ok: true
+      code: number
+      codeName: string
+      details: string
+      messages: unknown[]
+      headers: Record<string, string>
+      trailers: Record<string, string>
+      durationMs: number
+    }
+  | { ok: false; error: string; durationMs: number }
+
 export interface DesktopBridge {
   platform: string
   request: (req: HttpRequest & { id: string }) => Promise<BridgeResponse>
   abort: (id: string) => void
+  /** gRPC desde el proceso principal: servicios de un .proto y llamadas a sus métodos. */
+  grpcDescribe: (req: { files: Record<string, string>; entry: string }) => Promise<{ ok: true; services: GrpcService[] } | { ok: false; error: string }>
+  grpcInvoke: (req: GrpcCall) => Promise<GrpcResult>
+  grpcCancel: (id: string) => void
+  /** NTLM: el intercambio completo en una conexión, desde el proceso principal. */
+  ntlmRequest: (req: HttpRequest & { username: string; password: string; domain?: string; workstation?: string }) => Promise<BridgeResponse>
+  /** OAuth 2.0: abre la página de autorización y devuelve la URL de callback (con el código). */
+  oauth2Authorize: (url: string, callbackUrl: string) => Promise<{ ok: true; url: string } | { ok: false; error: string }>
   openFolder: () => Promise<{ root: string; truncated: boolean; files: DesktopFile[] } | undefined>
   writeFile: (path: string, text: string) => Promise<string>
   saveAs: (suggestedName: string, text: string) => Promise<string | undefined>

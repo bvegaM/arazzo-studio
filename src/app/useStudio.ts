@@ -36,6 +36,9 @@ import { EXAMPLES, type ExampleId } from './example'
 import { log } from '../lib/devlog'
 import { humanizeId } from '../core/format'
 import { logCaseEnd, logCaseStart, logStep } from './runLog'
+import { useRequests } from './useRequests'
+import type { RequestAuth } from '../core/requests'
+import type { FlowAuth } from '../core/flowAuth'
 
 type Inputs = Record<string, Record<string, any>>
 
@@ -97,6 +100,14 @@ export function useStudio() {
       ? (projects[0].arazzo.info?.title ?? projects[0].arazzoFileName)
       : (folder?.root.split(/[\\/]/).pop() ?? t('ws.tree.collectionN', { n: projects.length }))
   const { servers, credentials } = activeEnv
+  // Requests sueltos de la colección: usan las variables del ambiente activo y ocultan sus secretos.
+  const requests = useRequests({
+    executor: realExecutor,
+    env: () => {
+      const variables = variableValues(activeEnv)
+      return { variables, secrets: secretValues({ variables: activeEnv.variables, credentials: resolveTemplates(credentials, variables) }) }
+    },
+  })
 
   function updateActiveEnv(patch: (e: Environment) => Partial<Environment>) {
     setEnvs((prev) => ({ ...prev, list: prev.list.map((e) => (e.id === prev.active ? { ...e, ...patch(e) } : e)) }))
@@ -183,6 +194,15 @@ export function useStudio() {
     const taken = new Set(texts.map((f) => f.name))
     let name = 'nuevo.arazzo.yaml'
     for (let i = 2; taken.has(name); i++) name = `nuevo-${i}.arazzo.yaml`
+    // Si la colección ya tiene un contrato OpenAPI, el esqueleto lo usa (con su primera operación),
+    // así el Arazzo nuevo nace sin errores.
+    const contract = files.find((f) => f.kind === 'openapi' && f.doc?.paths)
+    const firstOp = contract
+      ? Object.values<any>(contract.doc.paths)
+          .flatMap((item) => Object.values<any>(item ?? {}))
+          .find((op) => op && typeof op === 'object' && typeof op.operationId === 'string')?.operationId
+      : undefined
+    const sourceUrl = contract ? `./${contract.name}` : './openapi.yaml'
     const text = [
       'arazzo: 1.1.0',
       'info:',
@@ -190,7 +210,7 @@ export function useStudio() {
       '  version: 1.0.0',
       'sourceDescriptions:',
       '  - name: miApi',
-      '    url: ./openapi.yaml',
+      `    url: ${sourceUrl}`,
       '    type: openapi',
       'workflows:',
       '  - workflowId: miJourney',
@@ -201,7 +221,7 @@ export function useStudio() {
       '    steps:',
       '      - stepId: primerPaso',
       `        description: ${t('newArazzo.step')}`,
-      '        operationId: $sourceDescriptions.miApi.operacion',
+      `        operationId: $sourceDescriptions.miApi.${firstOp ?? 'operacion'}`,
       '        successCriteria:',
       '          - condition: $statusCode == 200',
       '',
@@ -339,7 +359,13 @@ export function useStudio() {
     activeEnv?: string
     /** Archivo cuyo primer journey queda seleccionado. */
     selectFile?: string
+    requests?: Record<string, string>
+    protos?: Record<string, string>
+    requestSecrets?: Record<string, Record<string, string>>
+    collectionAuth?: RequestAuth
+    flowAuth?: FlowAuth
   }) {
+    requests.load(data.requests, data.protos, { secrets: data.requestSecrets, collectionAuth: data.collectionAuth, flowAuth: data.flowAuth })
     setSavedSession(undefined)
     const parsed = data.files.map(parseFile)
     setFiles(parsed)
@@ -490,6 +516,7 @@ export function useStudio() {
   }
 
   function reset() {
+    requests.load()
     setFolder(undefined)
     setFiles([])
     setTexts([])
@@ -532,6 +559,10 @@ export function useStudio() {
     const journeyName = humanizeId(journey.workflowId)
     log('info', t('devlog.runStart', { journey: journeyName, n: selectedCases.length, env: activeEnv.name }), { source: 'run' })
 
+    // Autorización propia por API y por journey: la aplica este executor en cada paso real.
+    const flowExec = requests.flowExecutor(realExecutor, journey.file, variables)
+    const ownAuth = requests.ownFlowAuth(journey.file)
+
     // dependsOn: los workflows de los que depende corren una vez, antes de los casos.
     const deps = workflowDependencies(project, journey.workflowId)
     let depOutputs: Record<string, Record<string, any>> = {}
@@ -547,7 +578,8 @@ export function useStudio() {
         secrets,
         signal: controller.signal,
         canSendCookies: !!desktop,
-        executor: realExecutor,
+        executor: flowExec,
+        ownAuth: simulateDeps ? undefined : ownAuth,
         executorFor: simulateDeps ? (id) => createSimulatedExecutor(project, project.arazzo.workflows.find((w) => w.workflowId === id)?.steps ?? []) : undefined,
         maxRetryWaitMs: simulateDeps ? 0 : undefined,
         inputsFor: (id) => resolveTemplates(inputs[journeyKey(journey.file, id)] ?? {}, variables),
@@ -581,7 +613,8 @@ export function useStudio() {
         servers: runServers,
         secrets,
         dropAuth: tc.dropAuth,
-        executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : realExecutor,
+        executor: simulate ? createSimulatedExecutor(project, wf?.steps ?? [], tc.scenario) : flowExec,
+        ownAuth: simulate ? undefined : ownAuth,
         messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
@@ -779,6 +812,7 @@ export function useStudio() {
     exportReport,
     exportScenariosFile,
     importScenariosFile,
+    requests,
   }
 }
 

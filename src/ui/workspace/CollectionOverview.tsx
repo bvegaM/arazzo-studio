@@ -11,6 +11,9 @@ import { desktop } from '../../lib/desktop'
 import type { WorkspaceState } from '../../app/useWorkspace'
 import { EnvDot, Icon } from '../components/kit'
 import { DocsPanel } from './DocsPanel'
+import type { RequestsApi } from '../../app/useRequests'
+import { COLLECTION_TOKEN } from '../../app/useRequests'
+import { AuthPanel } from '../requests/AuthPanel'
 
 const ICONS = {
   collection: 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8',
@@ -21,6 +24,7 @@ const ICONS = {
   contract: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zm0 0v5h5',
   share: 'M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
   book: 'M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z',
+  lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
 }
 
 interface Props {
@@ -35,6 +39,9 @@ interface Props {
   onOpenJourney: (key: string) => void
   onOpenContract: (file: string) => void
   onOpenTerminal?: (cwd?: string) => void
+  /** Autorización de la colección (la que heredan sus requests). */
+  requests: RequestsApi
+  isDesktop: boolean
 }
 
 function Card({ icon, tone, title, children }: { icon: string; tone: string; title: string; children: React.ReactNode }) {
@@ -116,6 +123,26 @@ export function CollectionOverview(p: Props) {
             </span>
           )}
         </Card>
+
+        <div className="co-card co-auth" id="collection-auth">
+          <span className="co-icon tone-violet">
+            <Icon d={ICONS.lock} size={18} />
+          </span>
+          <div className="co-card-body">
+            <strong>{t('collection.auth')}</strong>
+            <span className="muted small">{t('collection.authHint')}</span>
+            <AuthPanel
+              auth={p.requests.collectionAuth}
+              onChange={p.requests.setCollectionAuth}
+              isDesktop={p.isDesktop}
+              oauth2={{
+                token: p.requests.tokens[COLLECTION_TOKEN],
+                onObtain: () => p.requests.obtainToken(),
+                onClear: () => p.requests.clearToken(COLLECTION_TOKEN),
+              }}
+            />
+          </div>
+        </div>
 
         <Card icon={ICONS.env} tone="green" title={t('home.environments')}>
           <span className="co-envs">

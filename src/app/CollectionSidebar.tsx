@@ -1,5 +1,5 @@
 // Barra lateral del espacio de trabajo: la colección (Arazzo → journeys → pasos), sus contratos y los ambientes.
-import { useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { WorkflowAnalysis } from '../core/analyze'
 import { caseJourney } from '../core/collection'
 import { humanizeId } from '../core/format'
@@ -7,7 +7,8 @@ import { isRemote } from '../core/loader'
 import type { CaseRun } from '../core/testcases'
 import { t } from '../i18n'
 import { MethodBadge } from '../ui/components/badges'
-import { Chevron, Icon } from '../ui/components/kit'
+import { requestBadge } from '../core/requests'
+import { Chevron, Icon, PENCIL_ICON } from '../ui/components/kit'
 import { RowMenu, type RowAction } from '../ui/components/RowMenu'
 import { desktop } from '../lib/desktop'
 import { useUiMode } from '../lib/uiMode'
@@ -37,6 +38,12 @@ interface Props {
   onOpenTerminal?: (cwd?: string) => void
   /** Abre el resumen de una colección (la abre si no es la activa). */
   onOpenCollectionOverview: (folder: string) => void
+  /** Requests sueltos (HTTP, GraphQL, gRPC, WebSocket). */
+  onOpenRequest: (path: string) => void
+  onRenameRequest: (path: string, name: string) => void
+  onNewRequest: (opts?: { curl?: boolean }) => void
+  activeRequest?: string
+  onNewArazzo: () => void
 }
 
 /** Estado del journey para el punto de color: la última ejecución o, si no hay, su validación. */
@@ -106,9 +113,28 @@ const EVENTS_ICON = 'M4 12h4l3-8 4 16 3-8h2'
 const IMPORT_ICON = 'M12 3v12m0 0l-5-5m5 5l5-5M5 21h14'
 const FOLDER_ICON = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'
 const PLUS_ICON = 'M12 5v14M5 12h14'
+const REQUEST_ICON = 'M4 7h16M4 12h16M4 17h10'
+const ARAZZO_ICON = 'M4 6h7v5H4zM13 13h7v5h-7zM7.5 11v4.5H13'
+const COPY_ICON = 'M9 9h11v11H9zM5 15H4V4h11v1'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
-export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract, onOpenTerminal, onOpenCollectionOverview }: Props) {
+export function CollectionSidebar({
+  studio,
+  workspace,
+  selection,
+  onOpenJourney,
+  onOpenStep,
+  onOpenEnv,
+  onOpenContract,
+  activeContract,
+  onOpenTerminal,
+  onOpenCollectionOverview,
+  onOpenRequest,
+  onRenameRequest,
+  onNewRequest,
+  activeRequest,
+  onNewArazzo,
+}: Props) {
   // Interfaz simple: los pasos con nombre legible y sin el método HTTP.
   const simple = useUiMode() === 'simple'
   const { projects, journeys, runs, environments, activeEnv, envActions } = studio
@@ -138,8 +164,8 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
   const bound = new Set(sources.map((s) => s.fileName).filter(Boolean))
   const unbound = studio.files.filter((f) => f.kind !== 'arazzo' && !bound.has(f.name))
   // Renombrar en línea y confirmar antes de quitar o borrar (colección o archivo).
-  const [editing, setEditing] = useState<{ kind: 'collection' | 'file'; id: string }>()
-  const [confirm, setConfirm] = useState<{ kind: 'removeCollection' | 'deleteCollection' | 'deleteFile'; id: string }>()
+  const [editing, setEditing] = useState<{ kind: 'collection' | 'file' | 'request'; id: string }>()
+  const [confirm, setConfirm] = useState<{ kind: 'removeCollection' | 'deleteCollection' | 'deleteFile' | 'deleteRequest'; id: string }>()
   const [actionError, setActionError] = useState<string>()
   const revealLabel = t(desktop?.platform === 'darwin' ? 'studio.reveal' : 'studio.revealOther')
   const act = (task: Promise<unknown>) =>
@@ -153,13 +179,66 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
     ...(workspace.reveal && activeFolder ? [{ label: revealLabel, onSelect: () => workspace.reveal!(activeFolder, file) }] : []),
     { label: t('studio.deleteFile'), danger: true, onSelect: () => setConfirm({ kind: 'deleteFile', id: file }) },
   ]
+  // Crear algo en una colección que no es la activa: primero se abre y, ya abierta (con su estado
+  // nuevo), se hace la acción en el efecto de abajo.
+  type CollectionAction = 'request' | 'curl' | 'arazzo' | 'openapi' | 'asyncapi' | 'files'
+  const pendingAction = useRef<{ folder: string; action: CollectionAction }>(undefined)
+  const runAction = (action: CollectionAction) => {
+    if (action === 'request') onNewRequest()
+    else if (action === 'curl') onNewRequest({ curl: true })
+    else if (action === 'arazzo') onNewArazzo()
+    else if (action === 'openapi' || action === 'asyncapi') onOpenContract(studio.createContract(action))
+    else files.current?.click()
+  }
+  const inCollection = (folder: string, action: CollectionAction) => {
+    if (folder === workspace.activeCollection?.folder) runAction(action)
+    else {
+      pendingAction.current = { folder, action }
+      void workspace.openCollection(folder)
+    }
+  }
+  const runActionRef = useRef(runAction)
+  useLayoutEffect(() => {
+    runActionRef.current = runAction
+  })
+  const activeFolderNow = workspace.activeCollection?.folder
+  useEffect(() => {
+    const pending = pendingAction.current
+    if (!pending || pending.folder !== activeFolderNow) return
+    pendingAction.current = undefined
+    runActionRef.current(pending.action)
+  }, [activeFolderNow])
+  // En el navegador no hay terminal ni Finder: se muestran deshabilitados, con el motivo.
+  const desktopOnly = t('sidebar.desktopOnly')
   const collectionActions = (folder: string): RowAction[] => [
     { label: t('collection.overview'), icon: SETTINGS_ICON, onSelect: () => onOpenCollectionOverview(folder) },
-    { label: t('studio.rename'), onSelect: () => setEditing({ kind: 'collection', id: folder }) },
-    ...(workspace.reveal ? [{ label: revealLabel, onSelect: () => workspace.reveal!(folder) }] : []),
-    ...(onOpenTerminal && workspace.folderPath(folder) ? [{ label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, onSelect: () => terminalAt(folder) }] : []),
-    { label: t('studio.removeCollection'), onSelect: () => setConfirm({ kind: 'removeCollection', id: folder }) },
+    { label: t('sidebar.newRequest'), icon: REQUEST_ICON, separatorBefore: true, onSelect: () => inCollection(folder, 'request') },
+    { label: t('sidebar.fromCurl'), icon: TERMINAL_ICON, onSelect: () => inCollection(folder, 'curl') },
+    { label: t('sidebar.newArazzo'), icon: ARAZZO_ICON, onSelect: () => inCollection(folder, 'arazzo') },
+    { label: t('sidebar.newOpenapi'), icon: OPENAPI_ICON, onSelect: () => inCollection(folder, 'openapi') },
+    { label: t('sidebar.newAsyncapi'), icon: EVENTS_ICON, onSelect: () => inCollection(folder, 'asyncapi') },
+    { label: t('studio.addToCollection'), icon: IMPORT_ICON, onSelect: () => inCollection(folder, 'files') },
+    { label: t('studio.rename'), icon: PENCIL_ICON, separatorBefore: true, onSelect: () => setEditing({ kind: 'collection', id: folder }) },
+    workspace.reveal
+      ? { label: revealLabel, icon: FOLDER_ICON, onSelect: () => workspace.reveal!(folder) }
+      : { label: revealLabel, icon: FOLDER_ICON, disabled: true, hint: desktopOnly, onSelect: () => {} },
+    onOpenTerminal && workspace.folderPath(folder)
+      ? { label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, onSelect: () => terminalAt(folder) }
+      : { label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, disabled: true, hint: studio.isDesktop ? t('sidebar.terminalSimple') : desktopOnly, onSelect: () => {} },
+    { label: t('studio.removeCollection'), separatorBefore: true, onSelect: () => setConfirm({ kind: 'removeCollection', id: folder }) },
     ...(folder !== '.' ? [{ label: t('studio.deleteCollection'), danger: true, onSelect: () => setConfirm({ kind: 'deleteCollection', id: folder }) }] : []),
+  ]
+  const requestActions = (path: string): RowAction[] => [
+    { label: t('studio.rename'), icon: PENCIL_ICON, onSelect: () => setEditing({ kind: 'request', id: path }) },
+    {
+      label: t('request.duplicate'),
+      icon: COPY_ICON,
+      onSelect: () => {
+        const copy = studio.requests.duplicate(path)
+        if (copy) onOpenRequest(copy.path)
+      },
+    },
+    { label: t('studio.delete'), danger: true, separatorBefore: true, onSelect: () => setConfirm({ kind: 'deleteRequest', id: path }) },
   ]
   const confirmStrip = (kind: NonNullable<typeof confirm>['kind'], id: string, text: string, yes: string, run: () => Promise<unknown>) =>
     confirm?.kind === kind && confirm.id === id ? (
@@ -259,6 +338,55 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
       })}
     </>
   )
+
+  // Requests sueltos de la colección (como en Postman), debajo de los Arazzo.
+  const requestList = studio.requests.list.filter((r) => !q || hit(r.name, r.url)).sort((a, b) => a.name.localeCompare(b.name))
+  const requestTree =
+    studio.requests.list.length > 0 && (!q || requestList.length > 0) ? (
+      <div className="tree-group">
+        <div className="tree-row-wrap">
+          <button className="tree-row tree-file" onClick={() => toggle('requests')} aria-expanded={!isCollapsed('requests')}>
+            <Chevron open={!isCollapsed('requests')} />
+            <span className="tree-icon">⇄</span>
+            <span className="grow clamp-1">{t('sidebar.requests')}</span>
+            <span className="muted small">{studio.requests.list.length}</span>
+          </button>
+          <RowMenu
+            actions={[
+              { label: t('sidebar.newRequest'), icon: REQUEST_ICON, onSelect: () => onNewRequest() },
+              { label: t('sidebar.fromCurl'), icon: TERMINAL_ICON, onSelect: () => onNewRequest({ curl: true }) },
+            ]}
+          />
+        </div>
+        {!isCollapsed('requests') &&
+          requestList.map((r) => {
+            const badge = requestBadge(r)
+            return (
+              <div key={r.path}>
+                {editing?.kind === 'request' && editing.id === r.path ? (
+                  <RenameForm
+                    value={r.name}
+                    onCancel={() => setEditing(undefined)}
+                    onSubmit={(v) => {
+                      setEditing(undefined)
+                      if (v.trim()) onRenameRequest(r.path, v)
+                    }}
+                  />
+                ) : (
+                  <div className="tree-row-wrap">
+                    <button className={`tree-row tree-request ${activeRequest === r.path ? 'active' : ''}`} data-request={r.path} onClick={() => onOpenRequest(r.path)} title={r.url || r.name}>
+                      <span className={`method ${badge.cls}`}>{badge.text}</span>
+                      <span className="grow clamp-1">{r.name}</span>
+                    </button>
+                    <RowMenu actions={requestActions(r.path)} />
+                  </div>
+                )}
+                {confirmStrip('deleteRequest', r.path, t('request.deleteConfirm', { name: r.name }), t('studio.delete'), async () => studio.requests.remove(r.path))}
+              </div>
+            )
+          })}
+      </div>
+    ) : null
 
   return (
     <aside className="ws-sidebar">
@@ -422,6 +550,10 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                     {isActive && !isCollapsed(`col:${c.folder}`) && (
                       <div className="tree-nested">
                         {fileTree}
+                        {requestTree}
+                        <button className="tree-row tree-add" onClick={() => onNewRequest()}>
+                          <Icon d={PLUS_ICON} size={13} /> {t('sidebar.newRequest')}
+                        </button>
                         <button className="tree-row tree-add" onClick={() => files.current?.click()}>
                           <Icon d={PLUS_ICON} size={13} /> {t('studio.addToCollection')}
                         </button>
@@ -437,6 +569,10 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                   {studio.folder && <span className="muted small clamp-1">{studio.folder}</span>}
                 </div>
                 {fileTree}
+                {requestTree}
+                <button className="tree-row tree-add" onClick={() => onNewRequest()}>
+                  <Icon d={PLUS_ICON} size={13} /> {t('sidebar.newRequest')}
+                </button>
               </>
             )}
           </nav>

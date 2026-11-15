@@ -12,8 +12,16 @@ document.documentElement.lang = getLocale()
 applyTheme(savedTheme())
 captureErrors()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// Vuelta de una autorización OAuth 2.0 abierta en otra ventana (versión web): se le pasa la URL
+// (con el código) a la app que la abrió y esta ventana se cierra.
+const oauthReturn = window.location.pathname.endsWith('/oauth2/callback') && window.opener
+if (oauthReturn) {
+  window.opener.postMessage({ type: 'arazzo-oauth2', url: window.location.href }, window.location.origin)
+  window.close()
+} else {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}

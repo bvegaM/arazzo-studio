@@ -38,7 +38,7 @@ start()
 // si cambian, se reinicia Electron (el workspace abierto se vuelve a abrir solo).
 let timer
 watch(path.dirname(fileURLToPath(import.meta.url)), (_event, file) => {
-  if (file !== 'main.mjs' && file !== 'preload.cjs') return
+  if (file !== 'main.mjs' && file !== 'preload.cjs' && file !== 'grpc.cjs' && file !== 'ntlm.cjs') return
   clearTimeout(timer)
   timer = setTimeout(() => {
     console.log(`\n[desktop:dev] ${file} cambió: reiniciando Electron…`)

@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Workspace en disco (como Bruno): colecciones en carpetas y guardado automático de cada cambio.
+import { splitAuthSecrets } from '../core/requests'
 import { useEffect, useRef, useState } from 'react'
 import { newEnvironment } from '../core/environments'
-import { slugify, uniqueFolder, type WorkspaceManifest } from '../core/workspaceFormat'
+import { flowAuthKey, slugify, uniqueFolder, type WorkspaceManifest } from '../core/workspaceFormat'
+import { FLOW_AUTH_FILE, hasFlowSecrets, renameFlowFile, serializeFlowAuth, splitFlowAuthSecrets } from '../core/flowAuth'
 import { desktop } from '../lib/desktop'
 import {
   browserFs,
@@ -107,7 +109,18 @@ export function useWorkspace(studio: Studio) {
   }, [])
 
   const snapshot = (o: Open, folder: string) =>
-    snapshotCollection(o.manifest.id, folder, { texts: studio.texts, environments: studio.environments, scenarios: studio.scenarioFiles() })
+    snapshotCollection(o.manifest.id, folder, {
+      texts: studio.texts,
+      environments: studio.environments,
+      scenarios: studio.scenarioFiles(),
+      requests: studio.requests.files(),
+      protos: studio.requests.protos,
+      requestSecrets: studio.requests.secrets(),
+      collectionAuthSecrets: splitAuthSecrets(studio.requests.collectionAuth).secrets,
+      collectionAuthPublic: splitAuthSecrets(studio.requests.collectionAuth).auth,
+      flowAuthFile: studio.requests.flowAuthFile(),
+      flowAuthSecrets: studio.requests.flowAuthSecrets(),
+    })
 
   async function save(o: Open, snap: CollectionSnapshot) {
     setStatus('saving')
@@ -135,7 +148,7 @@ export function useWorkspace(studio: Studio) {
     const timer = setTimeout(() => void save(open, snap), 500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, active, studio.texts, studio.environments, studio.cases, studio.inputs, studio.projects])
+  }, [open, active, studio.texts, studio.environments, studio.cases, studio.inputs, studio.projects, studio.requests.list, studio.requests.protos, studio.requests.collectionAuth, studio.requests.flowAuth])
 
   // Recuerda el ambiente elegido en cada colección (en este equipo).
   useEffect(() => {
@@ -172,7 +185,7 @@ export function useWorkspace(studio: Studio) {
     setCollections(infos)
     if (infos[0]) await openCollection(infos[0].folder, o)
     else {
-      studio.openCollectionData({ files: [], environments: [], scenarios: {} })
+      studio.openCollectionData({ files: [], environments: [], scenarios: {}, requests: {}, protos: {}, flowAuth: { apis: {}, journeys: {} } })
       setActive(undefined)
     }
   }
@@ -373,7 +386,7 @@ export function useWorkspace(studio: Studio) {
     if (rest[0]) await openCollection(rest[0].folder, next, false)
     else {
       setActive(undefined)
-      studio.openCollectionData({ files: [], environments: [], scenarios: {} })
+      studio.openCollectionData({ files: [], environments: [], scenarios: {}, requests: {}, protos: {}, flowAuth: { apis: {}, journeys: {} } })
     }
   }
 
@@ -393,6 +406,12 @@ export function useWorkspace(studio: Studio) {
     await saveNow()
     const text = studio.texts.find((f) => f.name === file)?.text ?? ''
     await renameArazzoFiles(open.fs, active, { from: file, to, text, scenarios: studio.scenarioFiles()[file] })
+    // La autorización por journey se guarda por archivo#workflowId: sigue al archivo renombrado.
+    const renamedAuth = renameFlowFile(studio.requests.flowAuth, file, to)
+    const authText = serializeFlowAuth(renamedAuth)
+    if (authText) await open.fs.write(collectionPath(active, FLOW_AUTH_FILE), authText)
+    const authSecrets = splitFlowAuthSecrets(renamedAuth).secrets
+    if (hasFlowSecrets(authSecrets)) await secretStore.set(flowAuthKey(open.manifest.id, active), JSON.stringify(authSecrets))
     await reloadActive(to)
   }
 

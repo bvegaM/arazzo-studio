@@ -117,6 +117,26 @@ await check('crea un workspace en el navegador con una colección', async () => 
   expect(journeys.length === 4, `se esperaban 4 journeys y hay ${journeys.length}`)
 })
 
+await check('crea un request desde cURL, lo envía y lo renombra con su archivo', async () => {
+  await page.locator('.tree-add', { hasText: 'Nuevo request' }).click()
+  await page.locator('.nr-dialog').waitFor()
+  expect((await page.locator('.nr-card').count()) === 4, 'faltan tipos de request (HTTP, GraphQL, gRPC, WebSocket)')
+  await page.locator('.nr-curl-btn[data-kind="curl"]').click()
+  // Sin red: el cURL apunta al propio servidor de la app.
+  await page.locator('.nr-curl textarea').fill(`curl '${url}package.json?debug=1' -H 'accept: application/json'`)
+  await page.getByRole('button', { name: 'Importar' }).click()
+  await page.locator('.rq').waitFor()
+  expect((await page.locator('.rq-method').inputValue()) === 'GET', 'el método no es GET')
+  expect((await page.locator('.rq-url').inputValue()) === `${url}package.json`, 'la query no pasó a la tabla de params')
+  await page.locator('.rq-send').click()
+  await page.locator('.rq-status', { hasText: '200' }).waitFor({ timeout: 10000 })
+  expect((await page.locator('.rq-res-content').innerText()).includes('arazzo-studio'), 'la respuesta no muestra el body')
+  await page.locator('.rq-name').fill('Paquete')
+  await page.locator('.rq-name').press('Enter')
+  await page.locator('.rq-path', { hasText: 'requests/paquete.request.yaml' }).waitFor()
+  await page.locator('.tree-request', { hasText: 'Paquete' }).waitFor()
+})
+
 await check('el contrato se abre con Swagger UI', async () => {
   await page.locator('.tree-contract', { hasText: 'pokeapi' }).first().click()
   await page.locator('.swagger-ui .opblock').first().waitFor({ timeout: 20000 })

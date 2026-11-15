@@ -1,5 +1,6 @@
 // Menú "⋯" de una fila de la barra lateral: acciones como renombrar, mostrar en Finder o eliminar.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { t } from '../../i18n'
 import { Icon } from './kit'
 
@@ -9,6 +10,11 @@ export interface RowAction {
   danger?: boolean
   /** Trazo SVG del ícono (opcional), como en los menús de Bruno. */
   icon?: string
+  /** Visible pero no disponible; `hint` explica por qué (p. ej. "solo en la app de escritorio"). */
+  disabled?: boolean
+  hint?: string
+  /** Línea divisoria antes de esta opción. */
+  separatorBefore?: boolean
 }
 
 export function RowMenu({
@@ -26,10 +32,30 @@ export function RowMenu({
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+
+  // La lista va en un portal (fuera de la barra lateral) y se ubica junto al botón, siempre dentro
+  // de la ventana: si no cabe abajo se abre hacia arriba.
+  useLayoutEffect(() => {
+    const el = list.current
+    const btn = root.current?.querySelector('.row-menu-btn')?.getBoundingClientRect()
+    if (!open || !el || !btn) return
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const left = Math.max(8, Math.min(btn.right - w, window.innerWidth - w - 8))
+    const below = btn.bottom + 4
+    const top = below + h > window.innerHeight - 8 ? Math.max(8, btn.top - 4 - h) : below
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
+    el.style.visibility = 'visible'
+  }, [open])
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => !root.current?.contains(e.target as Node) && setOpen(false)
+    const onDown = (e: MouseEvent) => !root.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node) && setOpen(false)
+    const close = () => setOpen(false)
+    window.addEventListener('resize', close)
+    window.addEventListener('blur', close)
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.stopPropagation()
@@ -39,6 +65,8 @@ export function RowMenu({
     document.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('blur', close)
       document.removeEventListener('keydown', onKey, true)
     }
   }, [open])
@@ -65,14 +93,18 @@ export function RowMenu({
           </svg>
         )}
       </button>
-      {open && (
-        <div className="row-menu-list" role="menu">
-          {actions.map((a) => (
+      {open &&
+        createPortal(
+        <div className="row-menu-list portal" role="menu" ref={list} style={{ visibility: 'hidden' }}>
+          {actions.map((a) => [
+            a.separatorBefore ? <hr key={`${a.label}-sep`} /> : null,
             <button
               key={a.label}
               type="button"
               role="menuitem"
               className={a.danger ? 'danger' : ''}
+              disabled={a.disabled}
+              title={a.hint}
               onClick={(e) => {
                 e.stopPropagation()
                 setOpen(false)
@@ -80,11 +112,13 @@ export function RowMenu({
               }}
             >
               {a.icon && <Icon d={a.icon} size={14} />}
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
+              <span className="grow">{a.label}</span>
+              {a.hint && a.disabled && <span className="row-menu-hint">{a.hint}</span>}
+            </button>,
+          ])}
+        </div>,
+          document.body,
+        )}
     </div>
   )
 }

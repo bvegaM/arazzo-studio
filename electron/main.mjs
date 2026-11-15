@@ -112,6 +112,60 @@ ipcMain.handle('http:request', async (_event, req) => {
 
 ipcMain.on('http:abort', (_event, id) => pending.get(id)?.abort())
 
+// --- gRPC (ver grpc.cjs): se carga recién al usarlo ---
+let grpcModule
+const grpcApi = () => (grpcModule ??= createRequire(import.meta.url)('./grpc.cjs'))
+ipcMain.handle('grpc:describe', async (_event, req) => {
+  try {
+    return { ok: true, services: grpcApi().describe(req) }
+  } catch (e) {
+    return { ok: false, error: e?.message ?? String(e) }
+  }
+})
+ipcMain.handle('grpc:invoke', (_event, req) => grpcApi().invoke(req))
+ipcMain.on('grpc:cancel', (_event, id) => grpcModule?.cancel(id))
+
+// --- NTLM (ver ntlm.cjs): el intercambio necesita una sola conexión, así que va por Node ---
+let ntlmModule
+ipcMain.handle('http:ntlm', (_event, req) => (ntlmModule ??= createRequire(import.meta.url)('./ntlm.cjs')).request(req))
+
+// --- OAuth 2.0 (authorization code): una ventana con la página del proveedor. Cuando redirige a
+// la URL de callback se toma esa URL (con el código) y se cierra, sin cargarla. ---
+ipcMain.handle('oauth2:authorize', (event, { url, callbackUrl }) => {
+  if (!/^https?:\/\//i.test(String(url)) || !String(callbackUrl ?? '')) return { ok: false, error: 'url' }
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      width: 520,
+      height: 720,
+      parent: BrowserWindow.fromWebContents(event.sender) ?? undefined,
+      title: 'OAuth 2.0',
+      autoHideMenuBar: true,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'oauth2' },
+    })
+    let done = false
+    const finish = (result) => {
+      if (done) return
+      done = true
+      resolve(result)
+      if (!win.isDestroyed()) win.close()
+    }
+    const check = (e, target) => {
+      if (!String(target).startsWith(callbackUrl)) return
+      e?.preventDefault?.()
+      finish({ ok: true, url: target })
+    }
+    win.webContents.on('will-redirect', (e, target) => check(e, target))
+    win.webContents.on('will-navigate', (e, target) => check(e, target))
+    win.webContents.on('did-redirect-navigation', (e, target) => check(e, target))
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    win.on('closed', () => finish({ ok: false, error: 'closed' }))
+    win.loadURL(url).catch((e) => {
+      // Si el proveedor redirige al callback de inmediato, la carga se aborta: no es un error.
+      if (!done) finish({ ok: false, error: e?.message ?? String(e) })
+    })
+  })
+})
+
 ipcMain.handle('fs:openFolder', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   const picked = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })

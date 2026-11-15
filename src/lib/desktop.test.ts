@@ -15,6 +15,11 @@ function fakeBridge(reply: Awaited<ReturnType<DesktopBridge['request']>>) {
       return reply
     },
     abort: (id) => calls.aborted.push(id),
+    grpcDescribe: async () => ({ ok: true, services: [] }),
+    grpcInvoke: async () => ({ ok: false, error: 'n/a', durationMs: 0 }),
+    grpcCancel: () => {},
+    ntlmRequest: async () => ({ ok: false, aborted: false, error: 'n/a', durationMs: 0 }),
+    oauth2Authorize: async () => ({ ok: false, error: 'n/a' }),
     openFolder: async () => undefined,
     writeFile: async (path) => path,
     saveAs: async () => undefined,
