@@ -97,7 +97,7 @@ function VariablesTable({ variables, secret, onChange }: { variables: EnvVariabl
                     </div>
                   </td>
                   <td className="vars-actions">
-                    <button className="icon-btn" onClick={() => onChange(variables.filter((_, n) => n !== index))} title={t('vars.delete')} aria-label={t('vars.delete')}>
+                    <button className="icon-btn danger" onClick={() => onChange(variables.filter((_, n) => n !== index))} title={t('vars.delete')} aria-label={t('vars.delete')}>
                       <Icon d={TRASH_ICON} size={14} />
                     </button>
                   </td>

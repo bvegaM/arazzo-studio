@@ -36,7 +36,7 @@ function TypeTag({ schema }: { schema: any }) {
 
 function RemoveButton({ onClick }: { onClick: () => void }) {
   return (
-    <button className="icon-btn" onClick={onClick} title={t('params.removeItem')} aria-label={t('params.removeItem')}>
+    <button className="icon-btn danger" onClick={onClick} title={t('params.removeItem')} aria-label={t('params.removeItem')}>
       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
         <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       </svg>

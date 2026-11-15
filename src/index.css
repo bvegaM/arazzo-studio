@@ -1484,8 +1484,13 @@ td code {
   color: var(--faint);
 }
 .icon-btn:hover:not(:disabled) {
-  color: var(--err);
+  color: var(--text);
   border-color: transparent;
+  background: var(--surface-2);
+}
+/* Los que borran algo se ponen rojos al pasar el mouse. */
+.icon-btn.danger:hover:not(:disabled) {
+  color: var(--err);
   background: var(--err-soft);
 }
 .add-btn {
