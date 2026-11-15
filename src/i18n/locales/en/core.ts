@@ -483,4 +483,5 @@ export const core: Record<keyof typeof es, string> = {
   'plain.sum.failed': '{n} check(s) failed: {cases}.',
   'plain.sum.warnings': '{n} warning(s): the API accepts data the contract says it should reject ({cases}). It doesn’t break the flow; worth reviewing with whoever builds the API.',
   'plain.sum.unknown': '{n} check(s) couldn’t be completed.',
+  'run.ownAuth': '•••• (Arazzo Studio authorization)',
 }

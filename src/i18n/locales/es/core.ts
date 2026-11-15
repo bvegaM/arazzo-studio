@@ -483,4 +483,5 @@ export const core = {
   'plain.sum.failed': '{n} comprobación(es) no pasaron: {cases}.',
   'plain.sum.warnings': '{n} advertencia(s): la API acepta datos que según el contrato debería rechazar ({cases}). No rompe el flujo; conviene revisarlo con quien construye la API.',
   'plain.sum.unknown': '{n} comprobación(es) no se pudieron completar.',
+  'run.ownAuth': '•••• (autorización de Arazzo Studio)',
 }

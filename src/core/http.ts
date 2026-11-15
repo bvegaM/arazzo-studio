@@ -26,6 +26,10 @@ export interface RequestMeta {
   sourceName: string
   method: string
   path: string
+  /** Workflow del paso (para la autorización por journey). */
+  workflowId?: string
+  /** El caso prueba "sin credenciales": no se aplica ninguna autorización. */
+  dropAuth?: boolean
 }
 
 export type HttpExecutor = (req: HttpRequest, signal?: AbortSignal, meta?: RequestMeta) => Promise<HttpResponse>

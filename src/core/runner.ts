@@ -97,6 +97,11 @@ export interface RunOptions {
   canSendCookies?: boolean
   /** Outputs de los workflows de los que depende (dependsOn), como $workflows.<id>.outputs. */
   workflowOutputs?: Record<string, Record<string, any>>
+  /**
+   * APIs con autorización propia de Arazzo Studio (por API o por journey): sus pasos no usan las
+   * credenciales del contrato; la aplica el executor (que recibe workflowId y dropAuth en meta).
+   */
+  ownAuth?: (sourceName: string, workflowId: string) => boolean
 }
 
 const MAX_EXECUTIONS = 200
@@ -234,6 +239,7 @@ async function executeOperationStep(
   opts: RunOptions,
   requiredInputs: string[],
   consumedOutputs: string[],
+  workflowId: string,
 ): Promise<StepResult> {
   const op = rs.op!
   const step = rs.step
@@ -276,7 +282,10 @@ async function executeOperationStep(
     }
   }
 
-  const secretQuery = opts.dropAuth ? [] : applyAuth(rs.security, opts.credentials, headers, displayHeaders, query, cookies)
+  const ownAuth = !!opts.ownAuth?.(op.sourceName, workflowId)
+  const secretQuery = opts.dropAuth || ownAuth ? [] : applyAuth(rs.security, opts.credentials, headers, displayHeaders, query, cookies)
+  // La autorización propia la pone el executor: se avisa en lo que se muestra.
+  if (ownAuth && !opts.dropAuth && !Object.keys(headers).some((h) => h.toLowerCase() === 'authorization')) displayHeaders['Authorization'] = t('run.ownAuth')
   // Cookies: un solo header. Sus valores se muestran tapados (suelen ser sesiones o API keys).
   const skippedCookies = opts.canSendCookies ? [] : cookies.map(([name]) => name)
   if (cookies.length && opts.canSendCookies) {
@@ -366,6 +375,8 @@ async function executeOperationStep(
       sourceName: op.sourceName,
       method: op.method,
       path: op.path,
+      workflowId,
+      dropAuth: opts.dropAuth,
     })
   } catch (e) {
     const cancelled = opts.signal?.aborted
@@ -374,7 +385,8 @@ async function executeOperationStep(
       : {
           category: 'red',
           code: e instanceof NetworkError ? (cancelled ? 'cancelled' : 'network') : undefined,
-          message: e instanceof NetworkError ? e.message : t('run.unexpected', { error: (e as Error).message }),
+          // Los problemas de autorización (p. ej. "inicia sesión") se muestran tal cual.
+          message: e instanceof NetworkError || (e as Error).name === 'AuthError' ? (e as Error).message : t('run.unexpected', { error: (e as Error).message }),
         }
     return result
   } finally {
@@ -721,7 +733,7 @@ export async function runWorkflow(
       const consumed = wa.dataEdges.filter((e) => e.fromStep === step.stepId).map((e) => e.output)
       result = isAsyncOperation(rs.op)
         ? await executeMessageStep(rs, ctx, opts, wa.requiredInputs, consumed)
-        : await executeOperationStep(rs, project, ctx, opts, wa.requiredInputs, consumed)
+        : await executeOperationStep(rs, project, ctx, opts, wa.requiredInputs, consumed, workflowId)
     }
 
     result.attempts = (retries[step.stepId] ?? 0) + 1
