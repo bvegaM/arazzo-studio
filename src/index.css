@@ -5968,3 +5968,44 @@ body:has(.ws-shell) {
   gap: 8px;
   margin-top: 4px;
 }
+.tree-collection-row > .tree-twisty {
+  flex: none;
+  padding: 4px 2px 4px 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+}
+.tree-collection-row > .tree-collection {
+  padding-left: 2px;
+}
+
+/* Menú contextual (clic derecho en las pestañas) */
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  right: auto;
+  width: max-content;
+  min-width: 220px;
+  max-width: 320px;
+}
+.context-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.context-menu > button:disabled {
+  color: var(--faint);
+  background: none;
+  cursor: default;
+  opacity: 1;
+}
+.context-menu kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.context-menu hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}

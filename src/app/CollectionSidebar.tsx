@@ -384,14 +384,24 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                         }}
                       />
                     ) : (
-                      <div className="tree-row-wrap">
+                      <div className="tree-row-wrap tree-collection-row">
+                        {/* La flecha despliega o pliega; el nombre abre el resumen de la colección (como en Bruno). */}
                         <button
-                          className={`tree-row tree-collection ${isActive ? 'current' : ''}`}
+                          className="tree-twisty"
                           onClick={() => (isActive ? toggle(`col:${c.folder}`) : void workspace.openCollection(c.folder))}
+                          aria-label={t('ws.tree.toggleSteps')}
                           aria-expanded={isActive && !isCollapsed(`col:${c.folder}`)}
-                          title={t('studio.inFolder', { folder: c.folder === '.' ? (workspace.location ?? '.') : c.folder })}
                         >
                           <Chevron open={isActive && !isCollapsed(`col:${c.folder}`)} />
+                        </button>
+                        <button
+                          className={`tree-row tree-collection ${isActive ? 'current' : ''}`}
+                          onClick={() => {
+                            setCollapsed((prev) => ({ ...prev, [`col:${c.folder}`]: false }))
+                            onOpenCollectionOverview(c.folder)
+                          }}
+                          title={t('collection.openOverview', { folder: c.folder === '.' ? (workspace.location ?? '.') : c.folder })}
+                        >
                           <Icon d={FOLDER_ICON} size={14} />
                           <span className="grow clamp-1">{c.name}</span>
                         </button>

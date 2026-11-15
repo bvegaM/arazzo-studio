@@ -55,6 +55,8 @@ export interface DesktopBridge {
   appMetrics: () => Promise<AppMetrics>
   appIsFullscreen: () => Promise<boolean>
   /** Avisa al entrar o salir de pantalla completa; devuelve la función para dejar de escuchar. */
+  /** Atajos de pestañas que el proceso principal intercepta (⌘W, ⇧⌘W, ⌘N). */
+  onShortcut: (cb: (name: 'closeTab' | 'closeAll' | 'newArazzo') => void) => () => void
   onFullscreen: (cb: (fullscreen: boolean) => void) => () => void
   /** Terminal integrada: abre la shell del sistema (en `cwd` si es un workspace autorizado). */
   termCreate: (opts: { cols: number; rows: number; cwd?: string }) => Promise<{ id: string; cwd: string; shell: string }>

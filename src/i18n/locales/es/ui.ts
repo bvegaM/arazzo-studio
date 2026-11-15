@@ -848,4 +848,11 @@ export const ui = {
   'tour.end.body': 'Ya viste todo lo principal. ¿Qué hacemos con el workspace **«Pokédex (tour)»**?\n\nSi te lo quedas, lo encuentras en «Abrir un workspace». También puedes volver a hacer el tour desde **Preferencias**.',
   'tour.end.keep': 'Quedármelo',
   'tour.end.delete': 'Eliminarlo',
+  'collection.openOverview': 'Ver el resumen de la colección · carpeta {folder}',
+  'tabs.newArazzo': 'Nuevo Arazzo',
+  'tabs.close': 'Cerrar',
+  'tabs.closeOthers': 'Cerrar las demás',
+  'tabs.closeLeft': 'Cerrar a la izquierda',
+  'tabs.closeRight': 'Cerrar a la derecha',
+  'tabs.closeAll': 'Cerrar todas',
 }

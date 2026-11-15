@@ -849,4 +849,11 @@ export const ui: Record<keyof typeof es, string> = {
   'tour.end.body': 'You have seen the main features. What should we do with the **“Pokédex (tour)”** workspace?\n\nIf you keep it, you’ll find it under “Open a workspace”. You can replay the tour from **Preferences**.',
   'tour.end.keep': 'Keep it',
   'tour.end.delete': 'Delete it',
+  'collection.openOverview': 'Open the collection overview · folder {folder}',
+  'tabs.newArazzo': 'New Arazzo',
+  'tabs.close': 'Close',
+  'tabs.closeOthers': 'Close Others',
+  'tabs.closeLeft': 'Close to the Left',
+  'tabs.closeRight': 'Close to the Right',
+  'tabs.closeAll': 'Close All',
 }

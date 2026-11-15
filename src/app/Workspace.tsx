@@ -1,5 +1,5 @@
 // Espacio de trabajo: colección a la izquierda, journey abierto al centro y su resultado a la derecha.
-import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { WorkflowAnalysis } from '../core/analyze'
 import { caseJourney, splitJourneyKey } from '../core/collection'
 import { loadFaker } from '../core/dynamicVars'
@@ -40,6 +40,10 @@ import { getServerUrl, listOperations, operationSecurity, type OperationRef } fr
 import { MethodBadge as TabMethod } from '../ui/components/badges'
 import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
+import { ContextMenu, type ContextItem } from '../ui/components/ContextMenu'
+import { desktop } from '../lib/desktop'
+
+const MOD = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 import { WorkspaceHome } from '../ui/workspace/WorkspaceHome'
 import { CollectionOverview } from '../ui/workspace/CollectionOverview'
 import type { Studio } from './useStudio'
@@ -145,7 +149,9 @@ export function Workspace({
   // Las pestañas y la selección usan la clave del journey (archivo#workflowId).
   const exists = (key: string) => journeys.some((j) => j.key === key)
   const activeId = exists(studio.selected) ? studio.selected : journeys[0]?.key
-  const tabs = [...new Set([...openTabs.filter(exists), ...(activeId ? [activeId] : [])])]
+  // Con "Cerrar todas" el journey activo también deja de tener pestaña, hasta que se abra uno.
+  const [journeyTabsClosed, setJourneyTabsClosed] = useState(false)
+  const tabs = [...new Set([...openTabs.filter(exists), ...(activeId && !journeyTabsClosed ? [activeId] : [])])]
   const journey = journeys.find((j) => j.key === activeId)
   const wa: WorkflowAnalysis | undefined = journey?.wa
   const analysis = journey?.analysis
@@ -170,7 +176,8 @@ export function Workspace({
   const openJourney = (id: string, nextView?: View) => {
     studio.setSelected(id)
     // El journey que estaba activo queda abierto como pestaña (al empezar no está en la lista).
-    setOpenTabs((prev) => [...new Set([...prev, ...(activeId ? [activeId] : []), id])])
+    setOpenTabs((prev) => [...new Set([...prev, ...(activeId && !journeyTabsClosed ? [activeId] : []), id])])
+    setJourneyTabsClosed(false)
     setEnvActive(false)
     setActiveContract(undefined)
     setActiveTry(undefined)
@@ -182,11 +189,6 @@ export function Workspace({
   const openStep = (id: string, step: string) => {
     setSteps((s) => ({ ...s, [id]: step }))
     openJourney(id, 'step')
-  }
-  const closeTab = (id: string) => {
-    const rest = tabs.filter((x) => x !== id)
-    setOpenTabs(rest)
-    if (id === activeId && rest.length) studio.setSelected(rest[rest.length - 1])
   }
   const openEnv = () => {
     setEnvOpen(true)
@@ -371,8 +373,107 @@ export function Workspace({
     </>
   )
 
+  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
+  // --- Pestañas: lista en el orden en que se ven, cerrar varias a la vez y menú contextual ---
+  type TabRef = { kind: 'home' | 'collection' | 'journey' | 'env' | 'contract' | 'try'; id: string }
+  const tabList: TabRef[] = [
+    ...(workspace.isOpen ? [{ kind: 'home' as const, id: 'home' }] : []),
+    ...(colTab && workspace.activeCollection ? [{ kind: 'collection' as const, id: 'collection' }] : []),
+    ...tabs.map((id) => ({ kind: 'journey' as const, id })),
+    ...(envOpen ? [{ kind: 'env' as const, id: 'env' }] : []),
+    ...shownContracts.map((id) => ({ kind: 'contract' as const, id })),
+    ...shownTries.map((id) => ({ kind: 'try' as const, id })),
+  ]
+  const sameTab = (a: TabRef, b: TabRef) => a.kind === b.kind && a.id === b.id
+  /** La pestaña que se está viendo (la que cierra ⌘W). */
+  const currentTab: TabRef | undefined = showHome
+    ? undefined
+    : colShown
+      ? { kind: 'collection', id: 'collection' }
+      : tryOpen
+        ? { kind: 'try', id: tryOpen }
+        : contractOpen
+          ? { kind: 'contract', id: contractOpen }
+          : envActive
+            ? { kind: 'env', id: 'env' }
+            : activeId
+              ? { kind: 'journey', id: activeId }
+              : undefined
+  const closeTabs = (refs: TabRef[]) => {
+    const ids = (kind: TabRef['kind']) => new Set(refs.filter((r) => r.kind === kind).map((r) => r.id))
+    if (refs.some((r) => r.kind === 'collection')) {
+      setColTab(false)
+      setColActive(false)
+    }
+    const journeysOut = ids('journey')
+    if (journeysOut.size) {
+      const rest = tabs.filter((x) => !journeysOut.has(x))
+      setOpenTabs(rest)
+      if (activeId && journeysOut.has(activeId) && rest.length) studio.setSelected(rest[rest.length - 1])
+      if (!rest.length && workspace.isOpen) setJourneyTabsClosed(true)
+    }
+    if (refs.some((r) => r.kind === 'env')) {
+      setEnvOpen(false)
+      setEnvActive(false)
+    }
+    const contractsOut = ids('contract')
+    if (contractsOut.size) {
+      setContractTabs((prev) => prev.filter((f) => !contractsOut.has(f)))
+      if (activeContract && contractsOut.has(activeContract)) setActiveContract(undefined)
+    }
+    const triesOut = ids('try')
+    if (triesOut.size) {
+      setTryTabs((prev) => prev.filter((k) => !triesOut.has(k)))
+      if (activeTry && triesOut.has(activeTry)) setActiveTry(undefined)
+    }
+    // Si se cerró lo que se estaba viendo (o todo), se vuelve al inicio.
+    if (workspace.isOpen && (!currentTab || refs.some((r) => sameTab(r, currentTab)))) setHomeActive(true)
+  }
+  const closable = (r: TabRef) => r.kind !== 'home'
+  const [menu, setMenu] = useState<{ x: number; y: number; tab: TabRef }>()
+  const tabMenu = (tab: TabRef) => (e: React.MouseEvent) => {
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY, tab })
+  }
+  const menuItems = (tab: TabRef): ContextItem[] => {
+    const i = tabList.findIndex((r) => sameTab(r, tab))
+    const left = tabList.slice(0, i).filter(closable)
+    const right = tabList.slice(i + 1).filter(closable)
+    const others = tabList.filter((r) => !sameTab(r, tab) && closable(r))
+    const all = tabList.filter(closable)
+    const canCreate = projects.length > 0 || !!workspace.activeCollection
+    return [
+      { label: t('tabs.newArazzo'), shortcut: desktop ? `${MOD}N` : undefined, disabled: !canCreate, onSelect: createArazzoAndOpen },
+      { separator: true },
+      { label: t('tabs.close'), shortcut: desktop ? `${MOD}W` : undefined, disabled: !closable(tab), onSelect: () => closeTabs([tab]) },
+      { label: t('tabs.closeOthers'), disabled: !others.length, onSelect: () => closeTabs(others) },
+      { label: t('tabs.closeLeft'), disabled: !left.length, onSelect: () => closeTabs(left) },
+      { label: t('tabs.closeRight'), disabled: !right.length, onSelect: () => closeTabs(right) },
+      { label: t('tabs.closeAll'), shortcut: desktop ? `⇧${MOD}W` : undefined, disabled: !all.length, onSelect: () => closeTabs(all) },
+    ]
+  }
+  // Atajos de la app de escritorio (el navegador se reserva ⌘W y ⌘N).
+  const shortcuts = useRef({ closeCurrent: () => {}, closeAll: () => {}, create: () => {} })
+  useLayoutEffect(() => {
+    shortcuts.current = {
+      closeCurrent: () => currentTab && closeTabs([currentTab]),
+      closeAll: () => closeTabs(tabList.filter(closable)),
+      create: () => (projects.length > 0 || workspace.activeCollection) && createArazzoAndOpen(),
+    }
+  })
+  useEffect(
+    () =>
+      desktop?.onShortcut((name) => {
+        if (name === 'closeTab') shortcuts.current.closeCurrent()
+        else if (name === 'closeAll') shortcuts.current.closeAll()
+        else if (name === 'newArazzo') shortcuts.current.create()
+      }),
+    [],
+  )
+  const tabContextMenu = menu ? <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.tab)} onClose={() => setMenu(undefined)} /> : null
+
   const homeTab = workspace.isOpen ? (
-    <div className={`ws-tab ws-home-tab ${showHome ? 'active' : ''}`} role="tab" aria-selected={showHome}>
+    <div className={`ws-tab ws-home-tab ${showHome ? 'active' : ''}`} role="tab" aria-selected={showHome} onContextMenu={tabMenu({ kind: 'home', id: 'home' })}>
       <button className="ws-tab-main" onClick={() => setHomeActive(true)} title={t('home.title')}>
         <Icon d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10" size={14} /> {t('home.title')}
       </button>
@@ -405,7 +506,6 @@ export function Workspace({
     />
   )
 
-  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
   // Dentro de un workspace, una colección sin Arazzo no es un error (puede tener solo contratos).
   const shownErrors = workspace.isOpen ? studio.errors.filter((e) => e !== t('load.noArazzo')) : studio.errors
 
@@ -585,7 +685,7 @@ export function Workspace({
           <div className="ws-tabs" role="tablist">
             {homeTab}
             {colTab && workspace.activeCollection && (
-              <div className={`ws-tab ${colShown ? 'active' : ''}`} role="tab" aria-selected={colShown}>
+              <div className={`ws-tab ${colShown ? 'active' : ''}`} role="tab" aria-selected={colShown} onContextMenu={tabMenu({ kind: 'collection', id: 'collection' })}>
                 <button className="ws-tab-main ws-home-tab-btn" onClick={() => void openCollectionOverview()} title={t('collection.overview')}>
                   <Icon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" size={13} />{' '}
                   {workspace.activeCollection.name}
@@ -604,20 +704,20 @@ export function Workspace({
               </div>
             )}
             {tabs.map((id) => (
-              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown}>
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'journey', id })}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
                   {journeyName(id)}
                   {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
                 </button>
-                {tabs.length > 1 && (
-                  <button className="ws-tab-close" onClick={() => closeTab(id)} aria-label={t('common.close')} title={t('common.close')}>
+                {(tabs.length > 1 || workspace.isOpen) && (
+                  <button className="ws-tab-close" onClick={() => closeTabs([{ kind: 'journey', id }])} aria-label={t('common.close')} title={t('common.close')}>
                     ×
                   </button>
                 )}
               </div>
             ))}
             {envOpen && (
-              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome && !colShown}>
+              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'env', id: 'env' })}>
                 <button
                   className="ws-tab-main ws-env-tab"
                   onClick={() => {
@@ -643,7 +743,7 @@ export function Workspace({
               </div>
             )}
             {shownContracts.map((file) => (
-              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome && !colShown}>
+              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'contract', id: file })}>
                 <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
                   <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
                 </button>
@@ -655,7 +755,7 @@ export function Workspace({
             {shownTries.map((key) => {
               const [, method, ...rest] = key.split('|')
               return (
-                <div key={key} className={`ws-tab ${key === tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome && !colShown}>
+                <div key={key} className={`ws-tab ${key === tryOpen && !showHome && !colShown ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome && !colShown} onContextMenu={tabMenu({ kind: 'try', id: key })}>
                   <button
                     className="ws-tab-main ws-try-tab"
                     onClick={() => {
@@ -884,6 +984,7 @@ export function Workspace({
         </main>
       </div>
       {statusBar}
+      {tabContextMenu}
     </TemplateVarsProvider>
   )
 }

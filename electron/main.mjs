@@ -42,6 +42,18 @@ function createWindow() {
   // En pantalla completa macOS oculta los semáforos: la barra superior deja de reservarles espacio.
   const sendFullscreen = () => !win.isDestroyed() && win.webContents.send('app:fullscreen', win.isFullScreen())
   win.on('enter-full-screen', sendFullscreen)
+  // Atajos de pestañas (como Bruno): se interceptan antes que el menú, que con ⌘W cerraría la ventana.
+  // En macOS solo con ⌘ (Ctrl+W borra una palabra en la terminal); en Windows y Linux con Ctrl.
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const mod = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+    if (!mod || input.alt) return
+    const key = input.key.toLowerCase()
+    const name = key === 'w' ? (input.shift ? 'closeAll' : 'closeTab') : key === 'n' && !input.shift ? 'newArazzo' : undefined
+    if (!name) return
+    event.preventDefault()
+    win.webContents.send('app:shortcut', name)
+  })
   win.on('leave-full-screen', sendFullscreen)
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url)

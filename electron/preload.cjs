@@ -27,6 +27,11 @@ contextBridge.exposeInMainWorld('arazzoDesktop', {
   appToggleDevTools: () => ipcRenderer.invoke('app:toggleDevTools'),
   appMetrics: () => ipcRenderer.invoke('app:metrics'),
   appIsFullscreen: () => ipcRenderer.invoke('app:isFullscreen'),
+  onShortcut: (cb) => {
+    const listener = (_e, name) => cb(name)
+    ipcRenderer.on('app:shortcut', listener)
+    return () => ipcRenderer.removeListener('app:shortcut', listener)
+  },
   onFullscreen: (cb) => {
     const listener = (_e, value) => cb(value)
     ipcRenderer.on('app:fullscreen', listener)
