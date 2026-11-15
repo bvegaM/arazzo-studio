@@ -12,6 +12,10 @@ import { NetworkError, type HttpExecutor, type MessageExecutor } from './http'
 import { createSimulatedMessenger } from './simulator'
 import { redactSecrets } from './environments'
 import { t } from '../i18n'
+import { workflowDependencies } from './dependencies'
+import { loadXPath, replaceXPath, usesXPath } from './xpath'
+
+export { workflowDependencies }
 
 export type StepStatus = 'success' | 'warning' | 'failed' | 'skipped'
 
@@ -86,6 +90,13 @@ export interface RunOptions {
   maxRetryWaitMs?: number
   /** Valores que se envían pero no se muestran: aparecen como •••• en los resultados. */
   secrets?: string[]
+  /**
+   * Si el ejecutor puede enviar el header Cookie (app de escritorio). En el navegador no se puede:
+   * los parámetros y credenciales en cookie se omiten y, si el paso falla, se explica por qué.
+   */
+  canSendCookies?: boolean
+  /** Outputs de los workflows de los que depende (dependsOn), como $workflows.<id>.outputs. */
+  workflowOutputs?: Record<string, Record<string, any>>
 }
 
 const MAX_EXECUTIONS = 200
@@ -131,6 +142,7 @@ function applyAuth(
   headers: Record<string, string>,
   display: Record<string, string>,
   query: URLSearchParams,
+  cookies: [string, string][] = [],
 ): string[] {
   const secretQuery: string[] = []
   for (const s of schemes) {
@@ -149,6 +161,8 @@ function applyAuth(
       } else if (s.in === 'query') {
         query.set(s.paramName, value)
         secretQuery.push(s.paramName)
+      } else if (s.in === 'cookie') {
+        cookies.push([s.paramName, value])
       }
     }
   }
@@ -194,7 +208,10 @@ function buildPayload(body: RequestBody, ctx: ExprContext): any {
       if (!pointers.length) ctx.unresolved?.push(r.target)
       for (const pointer of pointers) payload = setByPointer(payload, pointer, value)
     } else if (type === 'xpath') {
-      ctx.unresolved?.push(r.target)
+      // Payload XML (texto): se cambia el texto de los nodos que selecciona la expresión.
+      const replaced = typeof payload === 'string' ? replaceXPath(payload, r.target, value) : { xml: payload, count: 0 }
+      if (!replaced.count) ctx.unresolved?.push(r.target)
+      payload = replaced.xml
     } else payload = setByPointer(payload, r.target, value)
   }
   return payload
@@ -239,6 +256,7 @@ async function executeOperationStep(
   const displayHeaders: Record<string, string> = {}
   const query = new URLSearchParams()
   const pathParams: Record<string, string> = {}
+  const cookies: [string, string][] = []
 
   for (const p of byKey.values()) {
     const value = interpolate(p.value, ctx)
@@ -250,13 +268,21 @@ async function executeOperationStep(
     } else if (p.in === 'header') {
       headers[p.name] = String(value)
       displayHeaders[p.name] = SENSITIVE_HEADER.test(p.name) ? mask(String(value)) : String(value)
+    } else if (p.in === 'cookie') {
+      cookies.push([p.name, typeof value === 'object' ? JSON.stringify(value) : String(value)])
     } else if (p.in === 'querystring') {
       // Arazzo 1.1: la query completa ya armada ('a=1&b=2').
       for (const [k, v] of new URLSearchParams(String(value).replace(/^\?/, ''))) query.append(k, v)
     }
   }
 
-  const secretQuery = opts.dropAuth ? [] : applyAuth(rs.security, opts.credentials, headers, displayHeaders, query)
+  const secretQuery = opts.dropAuth ? [] : applyAuth(rs.security, opts.credentials, headers, displayHeaders, query, cookies)
+  // Cookies: un solo header. Sus valores se muestran tapados (suelen ser sesiones o API keys).
+  const skippedCookies = opts.canSendCookies ? [] : cookies.map(([name]) => name)
+  if (cookies.length && opts.canSendCookies) {
+    headers['Cookie'] = cookies.map(([k, v]) => `${k}=${v}`).join('; ')
+    displayHeaders['Cookie'] = cookies.map(([k, v]) => `${k}=${mask(v)}`).join('; ')
+  }
 
   // Body
   let payload: any
@@ -437,6 +463,10 @@ async function executeOperationStep(
       result.reason = { category: 'criterio', message: failedCriterion?.detail ?? t('run.criterionFailed') }
     }
   }
+  // En el navegador las cookies no se pueden enviar: si el paso falló, eso es lo primero a revisar.
+  if (skippedCookies.length && result.status === 'failed' && result.reason) {
+    result.reason = { ...result.reason, message: `${t('run.cookiesWeb', { names: skippedCookies.join(', ') })} ${result.reason.message}` }
+  }
   return result
 }
 
@@ -571,12 +601,14 @@ export async function runWorkflow(
   depth = 0,
 ): Promise<WorkflowRunResult> {
   const started = performance.now()
+  // XPath se carga solo si este Arazzo lo usa (no está en la carga inicial de la app).
+  if (depth === 0 && usesXPath(project.arazzo)) await loadXPath()
   const wa = analysis.workflows.find((w) => w.workflow.workflowId === workflowId) as WorkflowAnalysis
   const wf = wa.workflow
   const ctx: ExprContext = {
     inputs: opts.inputs,
     steps: {},
-    workflows: {},
+    workflows: Object.fromEntries(Object.entries(opts.workflowOutputs ?? {}).map(([id, outputs]) => [id, { outputs }])),
     sourceUrls: Object.fromEntries(project.sources.map((s) => [s.name, s.url])),
     components: project.arazzo.components,
     self: project.arazzo.$self ?? project.arazzoFileName,
@@ -801,4 +833,45 @@ export async function runWorkflow(
     reason: redactSecrets(failure, opts.secrets ?? []),
     actions,
   }
+}
+
+// --- dependsOn entre workflows ---
+
+export interface DependencyRun {
+  workflowId: string
+  result: WorkflowRunResult
+}
+
+/**
+ * Ejecuta, en orden y una sola vez, los workflows de los que depende `workflowId`. Cada uno recibe
+ * los outputs de los anteriores. Si uno falla se detiene y lo explica.
+ */
+export async function runDependencies(
+  project: Project,
+  analysis: ProjectAnalysis,
+  workflowId: string,
+  opts: Omit<RunOptions, 'inputs' | 'workflowOutputs'> & {
+    /** Inputs de cada dependencia (los del journey de ese workflow). */
+    inputsFor: (workflowId: string) => Record<string, any>
+    /** Executor de cada dependencia (en simulación, uno por workflow). */
+    executorFor?: (workflowId: string) => HttpExecutor
+  },
+): Promise<{ runs: DependencyRun[]; outputs: Record<string, Record<string, any>>; error?: string }> {
+  const { order, error } = workflowDependencies(project, workflowId)
+  if (error) return { runs: [], outputs: {}, error }
+  const runs: DependencyRun[] = []
+  const outputs: Record<string, Record<string, any>> = {}
+  for (const id of order) {
+    const result = await runWorkflow(project, analysis, id, {
+      ...opts,
+      executor: opts.executorFor?.(id) ?? opts.executor,
+      inputs: opts.inputsFor(id),
+      workflowOutputs: { ...outputs },
+      onStep: undefined,
+    })
+    runs.push({ workflowId: id, result })
+    if (result.status === 'failed') return { runs, outputs, error: t('run.depFailed', { workflow: id, reason: result.reason?.message ?? '' }) }
+    outputs[id] = result.outputs
+  }
+  return { runs, outputs }
 }

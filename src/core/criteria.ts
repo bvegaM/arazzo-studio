@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { JSONPath } from 'jsonpath-plus'
+import { parseXml, selectXPath } from './xpath'
 import type { Criterion } from './types'
 import * as i18n from '../i18n'
 import { evaluateExpression, type ExprContext } from './expressions'
@@ -349,6 +350,15 @@ export function evaluateCriterion(c: Criterion, ctx: ExprContext): CriterionResu
         detail: passed
           ? i18n.t('crit.jsonpathOk', { n: result.length })
           : i18n.t('crit.jsonpathNone', { context: c.context }),
+      }
+    }
+    if (type === 'xpath') {
+      if (!parseXml(ctxValue.value)) return { ...base, passed: false, detail: i18n.t('crit.xpathNotXml', { context: c.context }) }
+      const result = selectXPath(ctxValue.value, c.condition)
+      return {
+        ...base,
+        passed: result.found,
+        detail: result.found ? i18n.t('crit.xpathOk', { value: fmt(result.value), n: result.count }) : i18n.t('crit.xpathNone', { context: c.context }),
       }
     }
     return { ...base, passed: false, detail: i18n.t('crit.unsupported', { type }) }

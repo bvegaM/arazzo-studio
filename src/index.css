@@ -5757,3 +5757,36 @@ body:has(.ws-shell) {
 .prefs-hint {
   font-weight: 400;
 }
+
+/* Preparación: workflows de dependsOn ejecutados antes de los casos */
+.prelude {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.prelude.failed {
+  border-left-color: var(--err);
+}
+.prelude-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.prelude-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  text-align: left;
+  color: var(--text);
+}
+.prelude-error {
+  margin: 6px 0 0;
+}

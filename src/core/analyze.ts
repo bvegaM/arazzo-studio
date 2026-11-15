@@ -20,6 +20,7 @@ import {
 import { collectReferences } from './expressions'
 import { statusesInCriteria } from './criteria'
 import { t } from '../i18n'
+import { workflowDependencies } from './dependencies'
 
 export type IssueLevel = 'error' | 'warning' | 'info'
 
@@ -141,6 +142,12 @@ export function analyzeProject(project: Project): ProjectAnalysis {
 
 function analyzeWorkflow(project: Project, wf: Workflow, wfIds: Set<string>): WorkflowAnalysis {
   const issues: Issue[] = []
+  // dependsOn del workflow: qué se ejecuta antes, o por qué no se puede (no existe, ciclo, otro documento).
+  if (wf.dependsOn?.length) {
+    const deps = workflowDependencies(project, wf.workflowId)
+    if (deps.error) issues.push({ level: 'error', message: deps.error })
+    else issues.push({ level: 'info', message: t('an.wfDependsInfo', { workflows: deps.order.map((d) => `"${d}"`).join(' → ') }) })
+  }
   const add = (level: IssueLevel, message: string, stepId?: string) =>
     issues.push({ level, message, workflowId: wf.workflowId, stepId })
 
@@ -363,7 +370,7 @@ function checkOperationCoverage(r: ResolvedStep, add: (l: IssueLevel, m: string,
   const body = operationRequestBody(op)
   if (body?.required && !r.step.requestBody) add('warning', t('an.bodyMissing'), r.step.stepId)
   if (r.parameters.some((p) => p.in === 'cookie')) {
-    add('warning', t('an.cookies'), r.step.stepId)
+    add('info', t('an.cookies'), r.step.stepId)
   }
   if (r.parameters.some((p) => p.in === 'querystring') && r.parameters.some((p) => p.in === 'query')) {
     add('warning', t('an.querystringMix'), r.step.stepId)

@@ -1,3 +1,5 @@
+import { humanizeId } from '../../core/format'
+import type { Prelude } from '../../app/useStudio'
 import { useState } from 'react'
 import { realRequest, reasonLabel, type StepResult } from '../../core/runner'
 import { hasMaskedValues, toCurl, type CurlRequest } from '../../core/curl'
@@ -19,6 +21,8 @@ interface Props {
   onRunSimulated: () => void
   onEditEnvironment: () => void
   onExport: (format: 'html' | 'json') => void
+  /** Workflows de dependsOn ejecutados antes de los casos. */
+  prelude?: Prelude
 }
 
 type Filter = 'all' | Verdict
@@ -310,7 +314,36 @@ export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: numb
 }
 
 /** Panel derecho: resultado de la última ejecución del journey activo. */
-export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport }: Props) {
+/** "Preparación": los workflows de dependsOn que corrieron antes de los casos, con sus pasos. */
+function PreludeView({ prelude }: { prelude: Prelude }) {
+  const [open, setOpen] = useState<string>()
+  const failed = !!prelude.error
+  return (
+    <div className={`prelude ${failed ? 'failed' : ''}`}>
+      <div className="prelude-head">
+        <strong>{t('prelude.title')}</strong>
+        <span className="muted small">dependsOn</span>
+        <span className="spacer" />
+        {prelude.state === 'running' && <span className="muted small">{t('prelude.running', { workflows: (prelude.order ?? []).join(' → ') })}</span>}
+      </div>
+      {prelude.runs.map((r) => (
+        <div key={r.workflowId} className="prelude-run">
+          <button className="prelude-row" onClick={() => setOpen(open === r.workflowId ? undefined : r.workflowId)} aria-expanded={open === r.workflowId}>
+            <span className={`status-dot ${r.result.status === 'success' ? 'sd-passed' : 'sd-failed'}`} />
+            <strong className="grow clamp-1">{humanizeId(r.workflowId)}</strong>
+            <span className="muted small">
+              {t('prelude.steps', { n: r.result.steps.length })} · {Math.round(r.result.durationMs)} ms
+            </span>
+          </button>
+          {open === r.workflowId && r.result.steps.map((s, i) => <StepCard key={`${s.stepId}-${i}`} s={s} index={i} />)}
+        </div>
+      ))}
+      {prelude.error && <p className="err small prelude-error">{prelude.error}</p>}
+    </div>
+  )
+}
+
+export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport, prelude }: Props) {
   // Pasos que no llegaron a la API (servidor caído, URL errónea o CORS).
   const unreachable = runs.flatMap((r) => r.steps.filter((s) => s.reason?.code === 'network' && s.request).map((s) => s.request!))
   const unreachableCases = runs.filter((r) => r.steps.some((s) => s.reason?.code === 'network')).length
@@ -387,6 +420,7 @@ export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated,
       {running && <RunProgress runs={runs} onCancel={onCancel} />}
 
       <ConnectionHelp requests={unreachable} caseCount={unreachableCases} onSimulate={onRunSimulated} onEditEnvironment={onEditEnvironment} />
+      {prelude && <PreludeView prelude={prelude} />}
 
       <div className="rp-cases">
         {runs.length > 3 && (

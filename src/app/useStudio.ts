@@ -8,7 +8,7 @@ import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
 import { fetchExecutor } from '../core/http'
 import { createSimulatedExecutor, createSimulatedMessenger } from '../core/simulator'
-import { runWorkflow, type StepResult } from '../core/runner'
+import { runDependencies, runWorkflow, workflowDependencies, type DependencyRun, type StepResult } from '../core/runner'
 import { buildTryProject, TRY_WORKFLOW, type TryForm } from '../core/tryOperation'
 import type { OperationRef } from '../core/openapi'
 import {
@@ -44,6 +44,14 @@ const SESSION_KEY = 'session'
 // En la app de escritorio las peticiones salen del proceso principal (sin CORS).
 const realExecutor = desktop ? createDesktopExecutor(desktop) : fetchExecutor
 
+/** Los workflows de dependsOn de un journey, ejecutados antes de sus casos. */
+export interface Prelude {
+  state: 'running' | 'done'
+  runs: DependencyRun[]
+  order?: string[]
+  error?: string
+}
+
 export function useStudio() {
   const [files, setFiles] = useState<ParsedFile[]>([])
   // Texto original de lo cargado, para poder guardar la sesión y reconstruirla.
@@ -72,6 +80,8 @@ export function useStudio() {
   const [confirmed, setConfirmed] = useState(false)
   const [mode, setMode] = useState<RunMode>('real')
   const [runs, setRuns] = useState<CaseRun[]>([])
+  // Workflows de dependsOn ejecutados antes de cada journey (por clave del journey).
+  const [preludes, setPreludes] = useState<Record<string, Prelude>>({})
   // Ambiente con el que se corrió la última ejecución (el reporte lo usa aunque después se cambie).
   const [runEnv, setRunEnv] = useState<{ name: string; servers: Record<string, string> }>()
   const [running, setRunning] = useState(false)
@@ -522,9 +532,41 @@ export function useStudio() {
     const journeyName = humanizeId(journey.workflowId)
     log('info', t('devlog.runStart', { journey: journeyName, n: selectedCases.length, env: activeEnv.name }), { source: 'run' })
 
+    // dependsOn: los workflows de los que depende corren una vez, antes de los casos.
+    const deps = workflowDependencies(project, journey.workflowId)
+    let depOutputs: Record<string, Record<string, any>> = {}
+    let depError = deps.error
+    if (deps.error) setPreludes((p) => ({ ...p, [key]: { state: 'done', runs: [], error: deps.error } }))
+    else if (deps.order.length) {
+      setPreludes((p) => ({ ...p, [key]: { state: 'running', runs: [], order: deps.order } }))
+      log('info', t('devlog.prelude', { workflows: deps.order.join(' → ') }), { source: 'run' })
+      const simulateDeps = runMode === 'simulado'
+      const prepared = await runDependencies(project, analysis, journey.workflowId, {
+        credentials: runCredentials,
+        servers: runServers,
+        secrets,
+        signal: controller.signal,
+        canSendCookies: !!desktop,
+        executor: realExecutor,
+        executorFor: simulateDeps ? (id) => createSimulatedExecutor(project, project.arazzo.workflows.find((w) => w.workflowId === id)?.steps ?? []) : undefined,
+        maxRetryWaitMs: simulateDeps ? 0 : undefined,
+        inputsFor: (id) => resolveTemplates(inputs[journeyKey(journey.file, id)] ?? {}, variables),
+      })
+      for (const dep of prepared.runs)
+        for (const s of dep.result.steps) logStep(s, { journey: humanizeId(dep.workflowId), caseName: t('devlog.preludeCase'), simulated: simulateDeps })
+      depOutputs = prepared.outputs
+      depError = prepared.error
+      setPreludes((p) => ({ ...p, [key]: { state: 'done', runs: prepared.runs, error: prepared.error, order: deps.order } }))
+    } else setPreludes((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== key)))
+
     for (const tc of selectedCases) {
       if (controller.signal.aborted) break
       const update = (patch: Partial<CaseRun>) => setRuns((rs) => rs.map((r) => (r.tc.id === tc.id ? { ...r, ...patch } : r)))
+      // Sin sus dependencias el journey no se puede probar: el caso queda no concluyente.
+      if (depError) {
+        update({ state: 'done', steps: [], verdict: 'inconclusive', explanation: depError })
+        continue
+      }
       update({ state: 'running' })
       const live: CaseRun['steps'] = []
       const wf = project.arazzo.workflows.find((w) => w.workflowId === tc.workflowId)
@@ -543,6 +585,8 @@ export function useStudio() {
         messenger: simulate ? createSimulatedMessenger(wf?.steps ?? [], tc.scenario) : undefined,
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
+        canSendCookies: !!desktop,
+        workflowOutputs: depOutputs,
         onStep: (s) => {
           logStep(s, logCtx)
           live.push(s)
@@ -580,6 +624,7 @@ export function useStudio() {
       executor: simulate ? createSimulatedExecutor(built.project, steps) : realExecutor,
       maxRetryWaitMs: simulate ? 0 : undefined,
       signal,
+      canSendCookies: !!desktop,
     })
     const step = result.steps[0]
     if (step) logStep(step, { journey: t('try.title'), caseName: `${op.method.toUpperCase()} ${op.path}`, simulated: simulate })
@@ -709,6 +754,7 @@ export function useStudio() {
     contractText,
     editContract,
     tryOperation,
+    preludeOf: (key: string): Prelude | undefined => preludes[key],
     requestEnv,
     /** Envía una petición con el mismo ejecutor que los journeys (en escritorio, sin CORS). */
     sendHttp: realExecutor,

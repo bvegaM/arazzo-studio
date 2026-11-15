@@ -778,4 +778,9 @@ export const ui: Record<keyof typeof es, string> = {
   'sidebar.newAsyncapi': 'New AsyncAPI contract',
   'sidebar.importContract': 'Import contract…',
   'sidebar.unboundHint': 'No Arazzo in the collection uses this file yet',
+  'devlog.prelude': 'Preparing the journey (dependsOn): {workflows}',
+  'devlog.preludeCase': 'Preparation',
+  'prelude.title': 'Preparation',
+  'prelude.running': 'Running {workflows}…',
+  'prelude.steps': '{n} step(s)',
 }

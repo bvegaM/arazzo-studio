@@ -804,6 +804,7 @@ export function Workspace({
                     onRunSimulated={() => void studio.runJourney(activeId!, 'simulado')}
                     onEditEnvironment={openEnv}
                     onExport={studio.exportReport}
+                    prelude={activeId ? studio.preludeOf(activeId) : undefined}
                   />
                 </aside>
               </div>

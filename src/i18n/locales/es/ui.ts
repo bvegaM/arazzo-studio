@@ -777,4 +777,9 @@ export const ui = {
   'sidebar.newAsyncapi': 'Nuevo contrato AsyncAPI',
   'sidebar.importContract': 'Importar contrato…',
   'sidebar.unboundHint': 'Ningún Arazzo de la colección usa este archivo todavía',
+  'devlog.prelude': 'Preparando el journey (dependsOn): {workflows}',
+  'devlog.preludeCase': 'Preparación',
+  'prelude.title': 'Preparación',
+  'prelude.running': 'Ejecutando {workflows}…',
+  'prelude.steps': '{n} paso(s)',
 }

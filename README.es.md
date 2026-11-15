@@ -233,29 +233,29 @@ Se soportan documentos Arazzo **1.0.x** y **1.1.x**, con contratos OpenAPI **3.x
 | Pasos con `workflowId` (sub-workflows) | ✅ Soportado |
 | Parámetros path, query y header | ✅ Soportado |
 | Parámetros `in: querystring` (1.1) | ✅ Soportado |
-| Parámetros cookie | ❌ No soportado (restricción del navegador) |
-| `requestBody` con `payload` y `replacements` | ✅ Soportado (`targetSelectorType` JSON Pointer y JSONPath) |
+| Parámetros cookie y API keys `in: cookie` | ✅ En la app de escritorio · ⚠️ en la web no (el navegador no permite enviar cookies; el resultado lo explica) |
+| `requestBody` con `payload` y `replacements` | ✅ Soportado (`targetSelectorType` JSON Pointer, JSONPath y XPath sobre payloads XML) |
 | `successCriteria` simple, regex y JSONPath | ✅ Soportado (JSONPath con sintaxis de jsonpath-plus) |
-| `successCriteria` y selectores XPath | ❌ No soportado |
+| `successCriteria` y selectores XPath | ✅ XPath 1.0 sobre respuestas XML (también si se declara `xpath-20` o `xpath-30`, con las expresiones compatibles con 1.0) |
 | `onSuccess` / `onFailure`: `end`, `goto`, `retry` | ✅ Soportado |
 | `parameters` en las acciones (1.1) | ✅ Soportado en `goto` y `retry` con `workflowId` |
-| Selector Object en outputs, parámetros y payloads (1.1) | ✅ Soportado (JSONPath y JSON Pointer) |
+| Selector Object en outputs, parámetros y payloads (1.1) | ✅ Soportado (JSONPath, JSON Pointer y XPath) |
 | `components` (parameters, successActions, failureActions, inputs) | ✅ Soportado |
 | Fuentes AsyncAPI (1.1): `channelPath`, `action`, `correlationId`, `$message` | ✅ Soportado, siempre simulado |
 | `timeout` de un paso (1.1) | ✅ Soportado |
 | `dependsOn` de un paso (1.1) | ✅ Se valida en el análisis y antes de cada paso; los pasos corren en el orden del documento |
-| `dependsOn` de un workflow | ⚠️ No se ejecuta automáticamente |
+| `dependsOn` de un workflow | ✅ Los workflows de los que depende corren antes (una vez por ejecución) y sus outputs quedan en `$workflows.<id>.outputs`; se detectan ciclos. Solo del mismo documento |
 | `$ref` externos en OpenAPI, AsyncAPI y Arazzo | ✅ Soportado entre los archivos cargados (y descargados junto a un contrato que se baja de su URL) |
 
 ## Limitaciones conocidas
 
 - **Los pasos de mensajería se simulan.** Arazzo Studio todavía no se conecta a brokers.
-- **CORS (solo en la versión web).** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga. La app de escritorio no tiene estas restricciones.
+- **CORS (solo en la versión web).** La API probada tiene que permitir el origen de la app. Los navegadores no pueden enviar cookies ni el header `Host`, y solo leen los headers de respuesta que la API exponga. La app de escritorio no tiene estas restricciones: ahí las cookies sí se envían.
 - **Instaladores sin firmar.** macOS y Windows muestran una advertencia la primera vez que se abre la app.
 - **Probada en macOS.** Las versiones para Windows y Linux todavía no se probaron en esos sistemas; en Linux la terminal necesita compilar su módulo nativo al instalar.
 - **Swagger UI solo para OpenAPI.** Los contratos AsyncAPI y los archivos de schemas usan la vista propia de Arazzo Studio.
-- **XPath** en criterios y selectores no está soportado.
-- **`retry` con `stepId`** y el **`dependsOn` de un workflow** no se ejecutan automáticamente.
+- **XPath 1.0.** Las funciones propias de XPath 2.0 o 3.0 no están disponibles.
+- **`retry` con `stepId`** no se ejecuta automáticamente, y el **`dependsOn` hacia otro documento Arazzo** se informa pero no se ejecuta.
 - **No es un runner de CI.** Las ejecuciones las inicia una persona desde el navegador.
 - **Todavía no hay versión publicada en línea.** Se ejecuta localmente, como app de escritorio o publicando el build estático.
 

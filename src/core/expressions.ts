@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { selectXPath } from './xpath'
 import { JSONPath } from 'jsonpath-plus'
 import { getByPointer } from './jsonPointer'
 import type { Selector } from './types'
@@ -134,7 +135,7 @@ export function selectorType(type: Selector['type'] | undefined): string {
   return (typeof type === 'object' ? type.type : type) ?? ''
 }
 
-/** Aplica un Selector Object. XPath no está soportado: queda sin resolver. */
+/** Aplica un Selector Object (JSON Pointer, JSONPath o XPath 1.0 sobre XML). */
 export function evaluateSelector(sel: Selector, ctx: ExprContext): EvalResult {
   const base = evaluateExpression(sel.context, ctx)
   if (!base.found) return base
@@ -147,6 +148,14 @@ export function evaluateSelector(sel: Selector, ctx: ExprContext): EvalResult {
     }
   }
   const type = selectorType(sel.type)
+  if (type === 'xpath') {
+    try {
+      const r = selectXPath(base.value, sel.selector)
+      return { found: r.found, value: r.value }
+    } catch {
+      return { found: false, value: undefined }
+    }
+  }
   if (type === 'jsonpointer') return getByPointer(data, sel.selector)
   if (type === 'jsonpath') {
     try {
