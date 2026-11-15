@@ -20,8 +20,27 @@ import { StepView } from '../ui/workspace/StepView'
 import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
 import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
 import type { ContractUsage } from '../ui/components/ContractEditor'
+import { TryOperation, type TryState } from '../ui/workspace/TryOperation'
+import { redactSecrets, secretValues, variableValues } from '../core/environments'
+import { resolveTemplates } from '../core/templates'
+import type { HttpRequest } from '../core/http'
+import { byteSize, log, logNetwork } from '../lib/devlog'
+
+/** Body de texto como JSON si se puede (para verlo ordenado en Network). */
+function parseBody(text?: string): unknown {
+  if (text === undefined || text === '') return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+import { initialForm, tryKey } from '../core/tryOperation'
+import { getServerUrl, listOperations, operationSecurity, type OperationRef } from '../core/openapi'
+import { MethodBadge as TabMethod } from '../ui/components/badges'
 import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
+import { WorkspaceHome } from '../ui/workspace/WorkspaceHome'
 import type { Studio } from './useStudio'
 import type { WorkspaceState } from './useWorkspace'
 
@@ -61,7 +80,21 @@ function Splitter({ width, onChange }: { width: number; onChange: (w: number) =>
   return <div className="ws-splitter" role="separator" aria-orientation="vertical" aria-label={t('ws.resize')} onPointerDown={start} />
 }
 
-export function Workspace({ studio, workspace, dev }: { studio: Studio; workspace: WorkspaceState; dev: { open: boolean; toggle: () => void } }) {
+export function Workspace({
+  studio,
+  workspace,
+  dev,
+  homeRequest = 0,
+  onOpenTerminal,
+}: {
+  studio: Studio
+  workspace: WorkspaceState
+  dev: { open: boolean; toggle: () => void }
+  /** Sube cada vez que se pide ir al inicio (logo de la barra superior). */
+  homeRequest?: number
+  /** Escritorio: abre la terminal de Dev Tools en una carpeta. */
+  onOpenTerminal?: (cwd?: string) => void
+}) {
   const { journeys, projects } = studio
   // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
   const [openTabs, setOpenTabs] = useState<string[]>([])
@@ -76,6 +109,18 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
   // Contratos abiertos como pestañas (por nombre de archivo) y el que se está viendo.
   const [contractTabs, setContractTabs] = useState<string[]>([])
   const [activeContract, setActiveContract] = useState<string>()
+  // Operaciones abiertas para probarlas solas (clave fuente|MÉTODO|ruta) y lo escrito en cada una.
+  const [tryTabs, setTryTabs] = useState<string[]>([])
+  const [activeTry, setActiveTry] = useState<string>()
+  const [tryStates, setTryStates] = useState<Record<string, TryState>>({})
+  // Inicio del workspace: se muestra al abrirlo y al pulsar el logo.
+  const [homeActive, setHomeActive] = useState(true)
+  const [homeFor, setHomeFor] = useState({ ws: workspace.name, request: homeRequest })
+  if (homeFor.ws !== workspace.name || homeFor.request !== homeRequest) {
+    setHomeFor({ ws: workspace.name, request: homeRequest })
+    setHomeActive(true)
+  }
+  const showHome = workspace.isOpen && homeActive
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
   const [welcomeClosed, setWelcomeClosed] = useState(false)
   if (projects.length && welcomeClosed) setWelcomeClosed(false)
@@ -111,6 +156,8 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     setOpenTabs((prev) => [...new Set([...prev, ...(activeId ? [activeId] : []), id])])
     setEnvActive(false)
     setActiveContract(undefined)
+    setActiveTry(undefined)
+    setHomeActive(false)
     setAskConfirm(false)
     if (nextView) setViews((v) => ({ ...v, [id]: nextView }))
   }
@@ -127,6 +174,30 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     setEnvOpen(true)
     setEnvActive(true)
     setActiveContract(undefined)
+    setActiveTry(undefined)
+    setHomeActive(false)
+  }
+  /** La operación de una clave, buscada en los contratos cargados ahora (sigue a las ediciones). */
+  const findOperation = (key: string): OperationRef | undefined => {
+    const [sourceName, method, ...rest] = key.split('|')
+    const path = rest.join('|')
+    const source = studio.collectionSources.find((s) => s.name === sourceName && s.status === 'loaded')
+    return source ? listOperations(source).find((o) => o.method.toUpperCase() === method && o.path === path) : undefined
+  }
+  const shownTries = tryTabs.filter((k) => findOperation(k))
+  const tryOpen = activeTry && shownTries.includes(activeTry) ? activeTry : undefined
+  const openTry = (op: OperationRef) => {
+    const key = tryKey(op)
+    setTryStates((prev) => (prev[key] ? prev : { ...prev, [key]: { form: initialForm(op), simulate: false } }))
+    setTryTabs((prev) => (prev.includes(key) ? prev : [...prev, key]))
+    setActiveTry(key)
+    setHomeActive(false)
+    setActiveContract(undefined)
+    setEnvActive(false)
+  }
+  const closeTry = (key: string) => {
+    setTryTabs((prev) => prev.filter((k) => k !== key))
+    if (key === activeTry) setActiveTry(undefined)
   }
   // Pestañas de contrato que siguen existiendo en la colección.
   const shownContracts = contractTabs.filter((f) => studio.contractText(f) !== undefined)
@@ -134,6 +205,8 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
   const openContract = (file: string) => {
     setContractTabs((prev) => (prev.includes(file) ? prev : [...prev, file]))
     setActiveContract(file)
+    setHomeActive(false)
+    setActiveTry(undefined)
     setEnvActive(false)
   }
   const closeContract = (file: string) => {
@@ -143,6 +216,8 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
 
   const run = (force = false) => {
     if (!activeId || studio.running || !ready.length) return
+    // Con un contrato, una operación o el ambiente a la vista, ⌘Enter no ejecuta el journey de fondo.
+    if (activeContract || activeTry || envActive) return
     if (mutating.length && !studio.confirmed && !force) {
       setAskConfirm(true)
       return
@@ -204,6 +279,7 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
       onOpenEnv={openEnv}
       onOpenContract={openContract}
       activeContract={contractOpen}
+      onOpenTerminal={onOpenTerminal}
     />
   )
 
@@ -272,7 +348,33 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     </>
   )
 
-  if (!projects.length) {
+  const homeTab = workspace.isOpen ? (
+    <div className={`ws-tab ws-home-tab ${showHome ? 'active' : ''}`} role="tab" aria-selected={showHome}>
+      <button className="ws-tab-main" onClick={() => setHomeActive(true)} title={t('home.title')}>
+        <Icon d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10" size={14} /> {t('home.title')}
+      </button>
+    </div>
+  ) : null
+  const homeView = (
+    <WorkspaceHome
+      workspace={workspace}
+      stats={{ journeys: journeys.length, arazzo: projects.length, contracts: studio.collectionSources.length, environments: workspace.activeCollection ? studio.environments.length : 0 }}
+      onFiles={(files) => {
+        void studio.addFiles(files)
+        setHomeActive(false)
+      }}
+      onOpenCollection={(folder) => {
+        if (folder !== workspace.activeCollection?.folder) void workspace.openCollection(folder)
+        setHomeActive(false)
+      }}
+    />
+  )
+
+  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
+  // Dentro de un workspace, una colección sin Arazzo no es un error (puede tener solo contratos).
+  const shownErrors = workspace.isOpen ? studio.errors.filter((e) => e !== t('load.noArazzo')) : studio.errors
+
+  if (!projects.length && !workspace.isOpen) {
     const actions = {
       errors: studio.errors,
       onFiles: studio.addFiles,
@@ -289,7 +391,16 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
         {sidebar}
         <main className="ws-welcome">
           {workspace.isOpen ? (
-            <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={actions.onCreate} />
+            showHome || !workspace.collections.length ? (
+              <div className="ws-main ws-home-only">
+                <div className="ws-tabs" role="tablist">
+                  {homeTab}
+                </div>
+                <div className="ws-body ws-home">{homeView}</div>
+              </div>
+            ) : (
+              <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={actions.onCreate} />
+            )
           ) : (
             <EmptyWorkspace {...actions} onShowWelcome={() => setWelcomeClosed(false)} />
           )}
@@ -314,6 +425,49 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
     }))
   }
 
+  /** Swagger UI de un contrato: servidor y credenciales del ambiente, y "Try it out" por la app. */
+  const swaggerFor = (file: string) => {
+    // Sin fuente (un contrato que ningún Arazzo usa todavía) no hay URL ni credenciales del ambiente.
+    const src = studio.collectionSources.find((s) => s.fileName === file && s.status === 'loaded')
+    const vars = variableValues(studio.activeEnv)
+    const schemes = src?.doc?.components?.securitySchemes ?? {}
+    const credentials = Object.entries<any>(schemes).map(([name, scheme]) => ({
+      schemeName: name,
+      type: scheme?.type === 'http' && String(scheme?.scheme).toLowerCase() === 'basic' ? 'basic' : String(scheme?.type ?? ''),
+      value: src ? String(resolveTemplates(studio.credentials[`${src.name}:${name}`] ?? '', vars)) : '',
+    }))
+    const url = src ? String(resolveTemplates(studio.servers[src.name] ?? '', vars)) : ''
+    return {
+      envServer: url ? { url, envName: studio.activeEnv.name } : undefined,
+      credentials,
+      secrets: secretValues({ variables: studio.activeEnv.variables, credentials: Object.fromEntries(credentials.map((c) => [c.schemeName, c.value])) }),
+      onRequest: async (req: HttpRequest) => {
+        const env = await studio.requestEnv()
+        const shown = redactSecrets(req, env.secrets)
+        const entry = {
+          kind: 'http' as const,
+          method: req.method,
+          url: shown.url,
+          simulated: false,
+          journey: 'Swagger UI',
+          step: new URL(req.url).pathname,
+          caseName: 'Try it out',
+          request: { headers: shown.headers, body: parseBody(shown.body) },
+        }
+        try {
+          const res = await studio.sendHttp(req)
+          const body = redactSecrets(parseBody(res.bodyText), env.secrets)
+          logNetwork({ ...entry, status: res.status, statusText: res.statusText, durationMs: res.durationMs, size: byteSize(res.bodyText), failed: res.status >= 400, response: { headers: res.headers, body } })
+          return res
+        } catch (e) {
+          logNetwork({ ...entry, failed: true })
+          log('error', `${req.method} ${shown.url}: ${(e as Error).message}`, { source: 'app' })
+          throw e
+        }
+      },
+    }
+  }
+
   const contractView = (file: string) => {
     const current = studio.contractText(file)
     if (!current) return null
@@ -331,9 +485,36 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
           usage={contractUsage(file)}
           related={studio.contractFiles.filter((f) => f !== file && current.text.includes(f.split(/[\\/]/).pop() ?? f))}
           onOpenFile={openContract}
+          docDoc={studio.collectionSources.find((s) => s.fileName === file && s.status === 'loaded')?.doc}
+          swagger={swaggerFor(file)}
           onOpenJourney={(key, step) => (step ? openStep(key, step) : openJourney(key))}
         />
       </Suspense>
+    )
+  }
+
+  const tryView = (key: string, known?: OperationRef, compact = false) => {
+    const op = known ?? findOperation(key)
+    if (!op) return null
+    // Sin estado todavía (primer "Try it out"): se parte del ejemplo del contrato.
+    const state = tryStates[key] ?? { form: initialForm(op), simulate: false }
+    const source = studio.collectionSources.find((s) => s.name === op.sourceName)
+    return (
+      <TryOperation
+        key={key}
+        op={op}
+        server={studio.servers[op.sourceName] || getServerUrl(source)}
+        env={{ name: studio.activeEnv.name, color: studio.activeEnv.color }}
+        security={operationSecurity(op).map((s) => ({ ...s, set: !!studio.credentials[s.key] }))}
+        state={state}
+        onState={(next) => setTryStates((prev) => ({ ...prev, [key]: next }))}
+        onSend={async (signal) => {
+          const r = await studio.tryOperation(op, state.form, state.simulate, signal)
+          setTryStates((prev) => ({ ...prev, [key]: { ...prev[key], result: r.step, error: r.error, runId: (prev[key]?.runId ?? 0) + 1 } }))
+        }}
+        onOpenEnv={openEnv}
+        compact={compact}
+      />
     )
   }
 
@@ -366,8 +547,9 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
         {sidebar}
         <main className="ws-main">
           <div className="ws-tabs" role="tablist">
+            {homeTab}
             {tabs.map((id) => (
-              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen}>
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome}>
                 <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
                   {journeyName(id)}
                   {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
@@ -380,12 +562,14 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
               </div>
             ))}
             {envOpen && (
-              <div className={`ws-tab ${envActive && !contractOpen ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen}>
+              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome}>
                 <button
                   className="ws-tab-main ws-env-tab"
                   onClick={() => {
                     setEnvActive(true)
                     setActiveContract(undefined)
+                    setActiveTry(undefined)
+                    setHomeActive(false)
                   }}
                 >
                   <EnvDot color={studio.activeEnv.color} /> {studio.activeEnv.name}
@@ -403,7 +587,7 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
               </div>
             )}
             {shownContracts.map((file) => (
-              <div key={file} className={`ws-tab ${file === contractOpen ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen}>
+              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome}>
                 <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
                   <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
                 </button>
@@ -412,13 +596,31 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
                 </button>
               </div>
             ))}
+            {shownTries.map((key) => {
+              const [, method, ...rest] = key.split('|')
+              return (
+                <div key={key} className={`ws-tab ${key === tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome}>
+                  <button
+                    className="ws-tab-main ws-try-tab"
+                    onClick={() => {
+                      setActiveTry(key)
+                      setHomeActive(false)
+                    }} title={key.replace(/\|/g, ' ')}>
+                    <TabMethod method={method} /> {rest.join('|')}
+                  </button>
+                  <button className="ws-tab-close" onClick={() => closeTry(key)} aria-label={t('common.close')} title={t('common.close')}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
           </div>
 
-          {studio.errors.length > 0 && !errorsHidden && (
+          {shownErrors.length > 0 && !errorsHidden && (
             <div className="callout err small ws-errors">
               <div className="row">
                 <div className="grow">
-                  {studio.errors.map((e) => (
+                  {shownErrors.map((e) => (
                     <div key={e}>{e}</div>
                   ))}
                 </div>
@@ -429,7 +631,11 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
             </div>
           )}
 
-          {contractOpen ? (
+          {showHome ? (
+            <div className="ws-body ws-home">{homeView}</div>
+          ) : tryOpen ? (
+            <div className="ws-body ws-try">{tryView(tryOpen)}</div>
+          ) : contractOpen ? (
             <div className="ws-body ws-contract">{contractView(contractOpen)}</div>
           ) : envActive ? (
             <div className="ws-body">{envView}</div>
@@ -577,7 +783,13 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
                       </Suspense>
                     )}
                     {shownView === 'step' && rs && (
-                      <StepView wa={wa} rs={rs} servers={studio.servers} onEditYaml={() => setViews((prev) => ({ ...prev, [activeId!]: 'yaml' }))} />
+                      <StepView
+                        wa={wa}
+                        rs={rs}
+                        servers={studio.servers}
+                        onEditYaml={() => setViews((prev) => ({ ...prev, [activeId!]: 'yaml' }))}
+                        onTry={rs.op ? () => openTry(rs.op!) : undefined}
+                      />
                     )}
                   </div>
                 </div>
@@ -598,7 +810,15 @@ export function Workspace({ studio, workspace, dev }: { studio: Studio; workspac
             </>
           ) : (
             <div className="ws-body">
-              <Empty>{t('ws.noJourneys')}</Empty>
+              {workspace.isOpen ? (
+                workspace.collections.length ? (
+                  <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={createArazzoAndOpen} />
+                ) : (
+                  homeView
+                )
+              ) : (
+                <Empty>{t('ws.noJourneys')}</Empty>
+              )}
             </div>
           )}
         </main>

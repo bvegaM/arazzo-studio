@@ -398,4 +398,11 @@ export const core = {
   'clint.noChannels': 'Falta la sección channels.',
   'clint.badAction': 'La operación «{id}» necesita action: send o receive.',
   'clint.noChannelRef': 'La operación «{id}» necesita channel con un $ref a un canal.',
+  'try.title': 'Probar operación',
+  'try.badJson': 'El body no es JSON válido: {error}',
+  'try.noSource': 'El contrato «{source}» no está cargado.',
+  'newContract.title': 'Nueva API',
+  'newContract.health': 'Estado del servicio',
+  'newContract.ok': 'El servicio responde',
+  'newContract.eventsTitle': 'Nuevos eventos',
 }

@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('arazzoDesktop', {
   appSetTheme: (theme) => ipcRenderer.invoke('app:setTheme', theme),
   appToggleDevTools: () => ipcRenderer.invoke('app:toggleDevTools'),
   appMetrics: () => ipcRenderer.invoke('app:metrics'),
+  appIsFullscreen: () => ipcRenderer.invoke('app:isFullscreen'),
+  onFullscreen: (cb) => {
+    const listener = (_e, value) => cb(value)
+    ipcRenderer.on('app:fullscreen', listener)
+    return () => ipcRenderer.removeListener('app:fullscreen', listener)
+  },
   termCreate: (opts) => ipcRenderer.invoke('term:create', opts),
   termWrite: (id, data) => ipcRenderer.send('term:write', { id, data }),
   termResize: (id, cols, rows) => ipcRenderer.send('term:resize', { id, cols, rows }),

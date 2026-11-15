@@ -93,8 +93,8 @@ function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void
   )
 }
 
-function StepCard({ s, index }: { s: StepResult; index: number }) {
-  const [open, setOpen] = useState(s.status === 'failed' || s.status === 'warning')
+export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: number; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? (s.status === 'failed' || s.status === 'warning'))
   const [tab, setTab] = useState<StepTab>('resumen')
   // Mensajería es un aviso (paso simulado) salvo que el paso haya fallado (no llegó el mensaje).
   const reasonTone = !s.reason

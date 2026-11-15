@@ -6,7 +6,7 @@ import { t } from '../../i18n'
 import { desktop, type AppMetrics } from '../../lib/desktop'
 import { clearLogs, clearNetwork, useDevLog, type LogEntry, type LogLevel, type NetworkEntry } from '../../lib/devlog'
 import { Icon } from '../components/kit'
-import { TerminalSessions, type SessionsHandle } from './TerminalSessions'
+import { TerminalSessions, type SessionsHandle, type TerminalRequest } from './TerminalSessions'
 import type { TerminalInfo } from './TerminalView'
 
 export type DevTab = 'console' | 'network' | 'performance' | 'terminal'
@@ -343,7 +343,21 @@ function PerformanceTab({ entries }: { entries: NetworkEntry[] }) {
 
 // --- Panel ---
 
-export function DevPanel({ tab, onTab, onClose, hidden, cwd }: { tab: DevTab; onTab: (t: DevTab) => void; onClose: () => void; hidden: boolean; cwd?: string }) {
+export function DevPanel({
+  tab,
+  onTab,
+  onClose,
+  hidden,
+  cwd,
+  terminalRequest,
+}: {
+  tab: DevTab
+  onTab: (t: DevTab) => void
+  onClose: () => void
+  hidden: boolean
+  cwd?: string
+  terminalRequest?: TerminalRequest
+}) {
   const { logs, network } = useDevLog()
   // La terminal, una vez abierta, sigue viva aunque se cambie de pestaña o se oculte el panel.
   const [termOpened, setTermOpened] = useState(false)
@@ -442,7 +456,7 @@ export function DevPanel({ tab, onTab, onClose, hidden, cwd }: { tab: DevTab; on
         {tab === 'performance' && <PerformanceTab entries={network} />}
         {termOpened && (
           <div className="dev-term-wrap" hidden={tab !== 'terminal'}>
-            <TerminalSessions ref={termRef} cwd={cwd} visible={!hidden && tab === 'terminal'} onActiveInfo={setTermInfo} />
+            <TerminalSessions ref={termRef} cwd={cwd} visible={!hidden && tab === 'terminal'} onActiveInfo={setTermInfo} request={terminalRequest} />
           </div>
         )}
       </div>

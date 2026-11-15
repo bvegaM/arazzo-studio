@@ -12,6 +12,8 @@ interface Props {
   /** URL base de cada fuente en el ambiente activo. */
   servers: Record<string, string>
   onEditYaml: () => void
+  /** Probar la operación de este paso sola (solo pasos HTTP). */
+  onTry?: () => void
 }
 
 const show = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
@@ -45,7 +47,7 @@ function ActionList({ title, actions }: { title: string; actions: Action[] }) {
 }
 
 /** Un paso del journey como una petición: método y URL, parámetros, body, criterios, acciones y outputs. */
-export function StepView({ wa, rs, servers, onEditYaml }: Props) {
+export function StepView({ wa, rs, servers, onEditYaml, onTry }: Props) {
   const step = rs.step
   const op = rs.op
   const isAsync = isAsyncOperation(op)
@@ -59,6 +61,11 @@ export function StepView({ wa, rs, servers, onEditYaml }: Props) {
       <div className="sv-request">
         {op ? <MethodBadge method={op.method} /> : <span className="badge b-skip">{rs.kind === 'workflow' ? 'workflow' : '?'}</span>}
         <code className="grow">{url ?? rs.label}</code>
+        {onTry && op && !isAsync && (
+          <button className="small primary" onClick={onTry} title={t('try.stepHint')}>
+            ▶ {t('try.step')}
+          </button>
+        )}
         <button className="small" onClick={onEditYaml}>
           {t('ws.step.editYaml')}
         </button>

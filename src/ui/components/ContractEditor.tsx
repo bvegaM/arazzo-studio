@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Editor de contratos (OpenAPI / AsyncAPI): YAML con revisión en vivo, la lista de operaciones para
 // saltar a cada una y el impacto de los cambios en los journeys que usan el contrato.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { yaml } from '@codemirror/lang-yaml'
@@ -9,13 +9,17 @@ import { lintGutter, setDiagnostics } from '@codemirror/lint'
 import { syntaxHighlighting } from '@codemirror/language'
 import YAML from 'yaml'
 import { yamlProblems, type TextProblem } from '../../core/authoring'
-import { contractOutline, contractProblems, lintContract, pathRange, type OutlineItem } from '../../core/contractLint'
+import { contractProblems, lintContract, pathRange } from '../../core/contractLint'
 import type { SaveResult } from '../../lib/browser'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge } from './badges'
 import { Empty, Icon } from './kit'
 import { editorTheme, highlight, toDiagnostics } from './editorTheme'
+import { ContractDocs } from './ContractDocs'
+import { SwaggerPreview, type PreviewCredential } from './SwaggerPreview'
+import type { DocPath } from '../../core/contractLint'
+import type { HttpRequest, HttpResponse } from '../../core/http'
 
 /** Un journey que usa el contrato y sus problemas actuales. */
 export interface ContractUsage {
@@ -39,22 +43,43 @@ interface Props {
   /** Otros archivos de la colección que este referencia con $ref (p. ej. schemas). */
   related: string[]
   onOpenFile: (file: string) => void
+  /** Contrato ya armado (con los $ref a otros archivos resueltos) para la vista previa. */
+  docDoc?: any
+  /** Vista previa con Swagger UI (contratos OpenAPI): servidor y credenciales del ambiente. */
+  swagger?: {
+    envServer?: { url: string; envName: string }
+    credentials: PreviewCredential[]
+    onRequest: (req: HttpRequest) => Promise<HttpResponse>
+    secrets: string[]
+  }
 }
 
 interface Parsed {
   doc?: any
+  /** Última versión legible: la documentación la sigue mostrando mientras el YAML tiene errores. */
+  lastDoc?: any
   problems: TextProblem[]
   yamlError: boolean
+  /** Texto analizado (para saber la línea de cada problema). */
+  text: string
 }
 
 function analyze(text: string): Parsed {
   const syntax = yamlProblems(text)
-  if (syntax.length) return { problems: syntax, yamlError: true }
+  if (syntax.length) {
+    // El parser a veces repite el mismo error en la misma línea: se muestra una vez.
+    const seen = new Set<string>()
+    const unique = syntax.filter((x) => {
+      const key = `${text.slice(0, x.from).split('\n').length}|${x.message.replace(/ at line \d+, column \d+:?$/, '')}`
+      return seen.has(key) ? false : (seen.add(key), true)
+    })
+    return { problems: unique, yamlError: true, text }
+  }
   try {
     const doc = YAML.parse(text, { maxAliasCount: -1 })
-    return { doc, problems: contractProblems(text, lintContract(doc)).sort((a, b) => a.from - b.from), yamlError: false }
+    return { doc, problems: contractProblems(text, lintContract(doc)).sort((a, b) => a.from - b.from), yamlError: false, text }
   } catch (e) {
-    return { problems: [{ from: 0, to: 1, level: 'error', message: (e as Error).message }], yamlError: true }
+    return { problems: [{ from: 0, to: 1, level: 'error', message: (e as Error).message }], yamlError: true, text }
   }
 }
 
@@ -73,10 +98,17 @@ export function ContractEditor(p: Props) {
     latest.current = p
   })
   const locale = useLocale()
-  const [parsed, setParsed] = useState<Parsed>(() => analyze(p.text))
+  const [parsed, setParsed] = useState<Parsed>(() => {
+    const first = analyze(p.text)
+    return { ...first, lastDoc: first.doc }
+  })
+  const reanalyze = (text: string) =>
+    setParsed((prev) => {
+      const next = analyze(text)
+      return { ...next, lastDoc: next.doc ?? prev.lastDoc }
+    })
   const [dirty, setDirty] = useState(p.text !== p.original)
   const [saved, setSaved] = useState<string>()
-  const [filter, setFilter] = useState('')
   // Problemas de cada journey al abrir el contrato: el impacto muestra solo lo que apareció después.
   const [baseline] = useState(() => new Map(p.usage.map((u) => [u.key, new Set(u.problems.map((x) => x.message))])))
 
@@ -105,7 +137,7 @@ export function ContractEditor(p: Props) {
             const text = u.state.doc.toString()
             setDirty(text !== latest.current.original)
             latest.current.onChange(text)
-            setParsed(analyze(text))
+            reanalyze(text)
           }, 300)
         }),
       ],
@@ -121,7 +153,7 @@ export function ContractEditor(p: Props) {
   // Los mensajes siguen el idioma; se recalculan al cambiarlo.
   useEffect(() => {
     const v = view.current
-    if (v) setParsed(analyze(v.state.doc.toString()))
+    if (v) reanalyze(v.state.doc.toString())
   }, [locale])
 
   useEffect(() => showDiagnostics(parsed.problems), [parsed])
@@ -132,29 +164,30 @@ export function ContractEditor(p: Props) {
     v.dispatch({ selection: { anchor: from, head: Math.min(to, v.state.doc.length) }, scrollIntoView: true })
     v.focus()
   }
-  const goToPath = (item: OutlineItem) => {
-    const v = view.current
-    if (!v) return
-    const [from] = pathRange(v.state.doc.toString(), item.path)
-    const lineEnd = v.state.doc.lineAt(from).to
-    goTo(from, lineEnd)
-  }
-
   const discard = () => {
     const v = view.current
     if (v) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: p.original } })
   }
 
-  const outline = useMemo(() => contractOutline(parsed.doc), [parsed.doc])
-  const q = filter.trim().toLowerCase()
-  const shownOps = q ? outline.filter((o) => `${o.method} ${o.target} ${o.operationId ?? ''} ${o.summary ?? ''}`.toLowerCase().includes(q)) : outline
   const errors = parsed.problems.filter((x) => x.level === 'error').length
   const warnings = parsed.problems.filter((x) => x.level === 'warning').length
   const kind = kindLabel(parsed.doc)
+  const [errorsOpen, setErrorsOpen] = useState(true)
+  const [impactOpen, setImpactOpen] = useState(false)
+  const lineOf = (offset: number) => parsed.text.slice(0, offset).split('\n').length
+  const goToDocPath = (path: DocPath) => {
+    const v = view.current
+    if (!v) return
+    const [from] = pathRange(v.state.doc.toString(), path)
+    goTo(from, v.state.doc.lineAt(from).to)
+  }
 
   // Impacto: problemas de cada journey que no estaban al abrir el contrato.
   const impact = p.usage.map((u) => ({ ...u, added: u.problems.filter((x) => x.level !== 'info' && !baseline.get(u.key)?.has(x.message)) }))
   const broken = impact.filter((u) => u.added.length)
+  // Lo que se muestra a la derecha: el contrato armado (con $ref resueltos) o el último legible.
+  const shown = p.docDoc ?? parsed.lastDoc
+  const isOpenApi = !!(shown?.openapi || shown?.swagger)
 
   return (
     <div className="editor contract-editor">
@@ -162,16 +195,11 @@ export function ContractEditor(p: Props) {
         <code className="editor-file">{p.fileName}</code>
         {kind && <span className="badge">{kind}</span>}
         {!p.editable && <span className="badge b-warn">{t('contract.readOnly')}</span>}
-        {parsed.yamlError ? (
-          <span className="badge b-err">✕ {t('editor.yamlError')}</span>
-        ) : errors + warnings === 0 ? (
-          <span className="badge b-ok">✓ {t('contracts.allValid')}</span>
-        ) : (
-          <>
-            {errors > 0 && <span className="badge b-err">{t('nav.errors', { n: errors })}</span>}
-            {warnings > 0 && <span className="badge b-warn">{t('contracts.warningsN', { n: warnings })}</span>}
-          </>
-        )}
+        {p.related.map((f) => (
+          <button key={f} className="link small contract-ref" onClick={() => p.onOpenFile(f)} title={t('contract.open', { file: f })}>
+            $ref: {f}
+          </button>
+        ))}
         <span className="spacer" />
         {saved ? <span className="editor-state ok">✓ {saved}</span> : dirty && <span className="editor-state">● {t('editor.unsaved')}</span>}
         <div className="editor-actions">
@@ -200,96 +228,77 @@ export function ContractEditor(p: Props) {
         </div>
       </div>
 
-      {broken.length > 0 && (
-        <div className="callout warn small contract-impact-alert">
-          <strong>{t('contract.breaks', { n: broken.length })}</strong> {t('contract.breaksHint')}
+      <div className="se-split">
+        <div className="se-editor" ref={host} />
+        <div className="se-preview">
+          {/* Como en Swagger Editor: los errores arriba de la vista previa, con su línea. */}
+          {parsed.problems.length > 0 && (
+            <div className={`se-errors ${errors ? '' : 'only-warnings'}`}>
+              <div className="se-errors-head">
+                <strong>{errors ? t('swagger.errors', { n: errors + warnings }) : t('swagger.warnings', { n: warnings || parsed.problems.length })}</strong>
+                <span className="spacer" />
+                <button className="link small" onClick={() => setErrorsOpen(!errorsOpen)}>
+                  {errorsOpen ? t('swagger.hide') : t('swagger.show')}
+                </button>
+              </div>
+              {errorsOpen && (
+                <ul>
+                  {parsed.problems.map((pr, i) => (
+                    <li key={`${pr.from}-${i}`}>
+                      <button className="link-like" onClick={() => goTo(pr.from, pr.to)}>
+                        <span className="se-level">{t(`swagger.level.${pr.level}` as 'swagger.level.error')}</span>
+                        <span className="se-line">{t('swagger.line', { n: lineOf(pr.from) })}</span>
+                        <span>{pr.message}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {p.usage.length > 0 && (
+            <div className={`se-impact ${broken.length ? 'broken' : ''}`}>
+              <button className="se-impact-head" onClick={() => setImpactOpen(!impactOpen)} aria-expanded={impactOpen}>
+                <strong>{broken.length ? t('contract.breaks', { n: broken.length }) : t('swagger.impactOk', { n: p.usage.length })}</strong>
+                <span className="spacer" />
+                <span className="small">{impactOpen ? t('swagger.hide') : t('swagger.show')}</span>
+              </button>
+              {impactOpen && (
+                <ul className="contract-usage">
+                  {impact.map((u) => (
+                    <li key={u.key} className={u.added.length ? 'broken' : ''}>
+                      <button className="link-like" onClick={() => p.onOpenJourney(u.key)}>
+                        <span className={`status-dot ${u.added.length ? 'sd-failed' : 'sd-passed'}`} />
+                        <strong className="grow clamp-1">{u.name}</strong>
+                        <span className="muted small">{u.added.length ? t('contract.newProblems', { n: u.added.length }) : t('contract.noChange')}</span>
+                      </button>
+                      {u.added.length > 0 && (
+                        <ul>
+                          {u.added.slice(0, 6).map((x, i) => (
+                            <li key={i}>
+                              <button className="link-like" onClick={() => p.onOpenJourney(u.key, x.stepId)}>
+                                <IssueBadge level={x.level} /> <span>{x.stepId ? <code>{x.stepId}</code> : null} {x.message}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {isOpenApi && p.swagger ? (
+            <SwaggerPreview spec={shown} envServer={p.swagger.envServer} credentials={p.swagger.credentials} onRequest={p.swagger.onRequest} secrets={p.swagger.secrets} />
+          ) : shown ? (
+            <div className="se-docs">
+              <ContractDocs doc={shown} onGoTo={goToDocPath} onOpenEnv={() => {}} />
+            </div>
+          ) : (
+            <Empty>{t('docs.unreadable')}</Empty>
+          )}
         </div>
-      )}
-
-      <div className="editor-body">
-        <div className="editor-code" ref={host} />
-        <aside className="editor-side contract-side">
-          <h4>
-            {t('contract.operations')} <span className="muted">{outline.length}</span>
-          </h4>
-          {outline.length > 6 && <input className="contract-filter" value={filter} placeholder={t('contract.filterOps')} onChange={(e) => setFilter(e.target.value)} aria-label={t('contract.filterOps')} />}
-          {outline.length ? (
-            <ul className="contract-ops">
-              {shownOps.map((o) => (
-                <li key={o.path.join('/')}>
-                  <button className="link-like" onClick={() => goToPath(o)} title={o.summary ?? o.operationId}>
-                    <span className={`method m-${o.method.toLowerCase()}`}>{o.method}</span>
-                    <span className="grow clamp-1 contract-op-target">{o.target}</span>
-                    {o.operationId && <span className="muted small clamp-1">{o.operationId}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty>{parsed.yamlError ? t('editor.staleDiagram') : t('contract.noOps')}</Empty>
-          )}
-
-          {p.related.length > 0 && (
-            <>
-              <h4>{t('contract.related')}</h4>
-              <ul className="contract-ops">
-                {p.related.map((f) => (
-                  <li key={f}>
-                    <button className="link-like" onClick={() => p.onOpenFile(f)} title={t('contract.open', { file: f })}>
-                      <span className="ws-tab-icon">{'{ }'}</span>
-                      <span className="grow clamp-1 contract-op-target">{f}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <h4>{t('editor.problems')}</h4>
-          <div className="editor-problems-box">
-            {parsed.problems.length === 0 ? (
-              <Empty>{t('editor.noProblems')}</Empty>
-            ) : (
-              <ul className="issues editor-problems">
-                {parsed.problems.map((pr, i) => (
-                  <li key={`${pr.from}-${i}`}>
-                    <button className="link-like" onClick={() => goTo(pr.from, pr.to)} title={t('editor.goTo')}>
-                      <IssueBadge level={pr.level} /> <span>{pr.message}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <h4>{t('contract.impact')}</h4>
-          {p.usage.length === 0 ? (
-            <Empty>{t('contract.unused')}</Empty>
-          ) : (
-            <ul className="contract-usage">
-              {impact.map((u) => (
-                <li key={u.key} className={u.added.length ? 'broken' : ''}>
-                  <button className="link-like" onClick={() => p.onOpenJourney(u.key)}>
-                    <span className={`status-dot ${u.added.length ? 'sd-failed' : 'sd-passed'}`} />
-                    <strong className="grow clamp-1">{u.name}</strong>
-                    <span className="muted small">{u.added.length ? t('contract.newProblems', { n: u.added.length }) : t('contract.noChange')}</span>
-                  </button>
-                  {u.added.length > 0 && (
-                    <ul>
-                      {u.added.slice(0, 6).map((x, i) => (
-                        <li key={i}>
-                          <button className="link-like" onClick={() => p.onOpenJourney(u.key, x.stepId)}>
-                            <IssueBadge level={x.level} /> <span>{x.stepId ? <code>{x.stepId}</code> : null} {x.message}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
       </div>
     </div>
   )

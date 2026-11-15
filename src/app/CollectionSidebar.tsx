@@ -32,6 +32,8 @@ interface Props {
   /** Abre un contrato (por nombre de archivo) en el editor. */
   onOpenContract: (file: string) => void
   activeContract?: string
+  /** Escritorio: abre la terminal de Dev Tools en una carpeta. */
+  onOpenTerminal?: (cwd?: string) => void
 }
 
 /** Estado del journey para el punto de color: la última ejecución o, si no hay, su validación. */
@@ -90,11 +92,18 @@ function RenameForm({ value, onSubmit, onCancel }: { value: string; onSubmit: (v
 }
 
 const COLLECTIONS_ICON = 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8'
+ const SEARCH_ICON = 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35'
+const SORT_ICON = 'M3 6h9M3 12h6M3 18h3M17 4v16m0 0l-3-3m3 3l3-3'
+const COLLAPSE_ICON = 'M4 4h16v16H4zM8 12h8'
+const TERMINAL_ICON = 'M4 17l6-6-6-6M12 19h8'
+const OPENAPI_ICON = 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zm0 0v5h5M9 13h6M9 17h4'
+const EVENTS_ICON = 'M4 12h4l3-8 4 16 3-8h2'
+const IMPORT_ICON = 'M12 3v12m0 0l-5-5m5 5l5-5M5 21h14'
 const FOLDER_ICON = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'
 const PLUS_ICON = 'M12 5v14M5 12h14'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
-export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract }: Props) {
+export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv, onOpenContract, activeContract, onOpenTerminal }: Props) {
   const { projects, journeys, runs, environments, activeEnv, envActions } = studio
   const sources = studio.collectionSources
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -103,8 +112,24 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
   const attach = useRef<HTMLInputElement>(null)
   const [attachTo, setAttachTo] = useState<string>()
   const toggle = (key: string, def = false) => setCollapsed((c) => ({ ...c, [key]: !(c[key] ?? def) }))
-  const isCollapsed = (key: string, def = false) => collapsed[key] ?? def
+  // Búsqueda en el árbol: con texto, todo lo que coincide queda desplegado.
+  const [query, setQuery] = useState<string>()
+  const q = (query ?? '').trim().toLowerCase()
+  const hit = (...texts: (string | undefined)[]) => texts.some((x) => x?.toLowerCase().includes(q))
+  const isCollapsed = (key: string, def = false) => (q && key !== 'contracts' && key !== 'envs' ? false : (collapsed[key] ?? def))
+  const collapseAll = () =>
+    setCollapsed((c) => ({
+      ...c,
+      ...Object.fromEntries(workspace.collections.map((x) => [`col:${x.folder}`, true])),
+      ...Object.fromEntries(projects.map((p) => [`file:${p.arazzoFileName}`, true])),
+      ...Object.fromEntries(journeys.map((j) => [j.key, true])),
+    }))
+  const terminalAt = (folder?: string) => onOpenTerminal?.(folder === undefined ? workspace.location : workspace.folderPath(folder))
   const [newCollection, setNewCollection] = useState<string>()
+  const contractFiles = useRef<HTMLInputElement>(null)
+  // Contratos de la colección que ningún Arazzo usa todavía (p. ej. uno recién creado).
+  const bound = new Set(sources.map((s) => s.fileName).filter(Boolean))
+  const unbound = studio.files.filter((f) => f.kind !== 'arazzo' && !bound.has(f.name))
   // Renombrar en línea y confirmar antes de quitar o borrar (colección o archivo).
   const [editing, setEditing] = useState<{ kind: 'collection' | 'file'; id: string }>()
   const [confirm, setConfirm] = useState<{ kind: 'removeCollection' | 'deleteCollection' | 'deleteFile'; id: string }>()
@@ -124,6 +149,7 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
   const collectionActions = (folder: string): RowAction[] => [
     { label: t('studio.rename'), onSelect: () => setEditing({ kind: 'collection', id: folder }) },
     ...(workspace.reveal ? [{ label: revealLabel, onSelect: () => workspace.reveal!(folder) }] : []),
+    ...(onOpenTerminal && workspace.folderPath(folder) ? [{ label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, onSelect: () => terminalAt(folder) }] : []),
     { label: t('studio.removeCollection'), onSelect: () => setConfirm({ kind: 'removeCollection', id: folder }) },
     ...(folder !== '.' ? [{ label: t('studio.deleteCollection'), danger: true, onSelect: () => setConfirm({ kind: 'deleteCollection', id: folder }) }] : []),
   ]
@@ -151,7 +177,10 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
             {projects.map((project) => {
         const file = project.arazzoFileName
         const fileKey = `file:${file}`
-        const fileJourneys = journeys.filter((j) => j.file === file)
+        const fileJourneys = journeys.filter(
+          (j) => j.file === file && (!q || hit(j.workflowId, humanizeId(j.workflowId), j.wa.workflow.summary) || j.wa.steps.some((rs) => hit(rs.step.stepId, rs.op?.path))),
+        )
+        if (q && !fileJourneys.length) return null
         const fileErrors = (studio.analysisOf(file)?.issues ?? []).filter((i) => i.level === 'error').length
         return (
           <div key={file} className="tree-group">
@@ -196,7 +225,9 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                       </button>
                     </div>
                     {open &&
-                      wa.steps.map((rs) => {
+                      wa.steps
+                        .filter((rs) => !q || hit(wa.workflow.workflowId, humanizeId(wa.workflow.workflowId), wa.workflow.summary) || hit(rs.step.stepId, rs.op?.path))
+                        .map((rs) => {
                         const stepActive = selection.journey === key && selection.step === rs.step.stepId && !selection.env
                         const hasError = wa.issues.some((i) => i.stepId === rs.step.stepId && i.level === 'error')
                         return (
@@ -228,10 +259,41 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
             <Icon d={COLLECTIONS_ICON} size={15} />
             <strong className="tree-title">{t('studio.collections')}</strong>
             <span className="spacer" />
+            <button
+              className={`icon-btn ${query !== undefined ? 'on' : ''}`}
+              onClick={() => setQuery((v) => (v === undefined ? '' : undefined))}
+              title={t('sidebar.search')}
+              aria-label={t('sidebar.search')}
+              aria-pressed={query !== undefined}
+            >
+              <Icon d={SEARCH_ICON} size={14} />
+            </button>
             <button className="icon-btn" onClick={() => setNewCollection('')} title={t('studio.newCollection')} aria-label={t('studio.newCollection')}>
               <Icon d={PLUS_ICON} size={14} />
             </button>
+            <RowMenu
+              inline
+              label={t('sidebar.collectionsMenu')}
+              actions={[
+                { label: t('sidebar.sortAz'), icon: SORT_ICON, onSelect: () => void act(workspace.sortCollections()) },
+                { label: t('sidebar.collapseAll'), icon: COLLAPSE_ICON, onSelect: collapseAll },
+                ...(onOpenTerminal && workspace.location && workspace.kind === 'desktop' ? [{ label: t('sidebar.openTerminal'), icon: TERMINAL_ICON, onSelect: () => terminalAt() }] : []),
+              ]}
+            />
           </div>
+          {query !== undefined && (
+            <div className="tree-search">
+              <Icon d={SEARCH_ICON} size={13} />
+              <input
+                autoFocus
+                value={query}
+                placeholder={t('sidebar.searchPlaceholder')}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setQuery(undefined)}
+                aria-label={t('sidebar.search')}
+              />
+            </div>
+          )}
           {newCollection !== undefined && (
             <form
               className="tree-form"
@@ -305,6 +367,7 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
             {workspace.isOpen ? (
               workspace.collections.map((c) => {
                 const isActive = c.folder === workspace.activeCollection?.folder
+                if (q && !isActive && !hit(c.name)) return null
                 return (
                   <div key={c.folder} className="tree-group">
                     {editing?.kind === 'collection' && editing.id === c.folder ? (
@@ -360,13 +423,38 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
           </nav>
 
           <div className="tree-section">
-            <button className="tree-head tree-toggle" onClick={() => toggle('contracts')} aria-expanded={!isCollapsed('contracts')}>
-              <Chevron open={!isCollapsed('contracts')} />
-              <span className="tree-label">{t('ws.tree.contracts')}</span>
-              <span className="muted small">
-                {sources.filter((s) => s.status === 'loaded').length}/{sources.length}
-              </span>
-            </button>
+            <div className="tree-head">
+              <button className="tree-toggle" onClick={() => toggle('contracts')} aria-expanded={!isCollapsed('contracts')}>
+                <Chevron open={!isCollapsed('contracts')} />
+                <span className="tree-label">{t('ws.tree.contracts')}</span>
+                <span className="muted small">
+                  {sources.filter((s) => s.status === 'loaded').length}/{sources.length}
+                </span>
+              </button>
+              <span className="spacer" />
+              <RowMenu
+                inline
+                label={t('sidebar.contractsMenu')}
+                trigger={<Icon d={PLUS_ICON} size={14} />}
+                actions={[
+                  { label: t('sidebar.newOpenapi'), icon: OPENAPI_ICON, onSelect: () => onOpenContract(studio.createContract('openapi')) },
+                  { label: t('sidebar.newAsyncapi'), icon: EVENTS_ICON, onSelect: () => onOpenContract(studio.createContract('asyncapi')) },
+                  { label: t('sidebar.importContract'), icon: IMPORT_ICON, onSelect: () => contractFiles.current?.click() },
+                ]}
+              />
+              <input
+                ref={contractFiles}
+                type="file"
+                multiple
+                accept=".yaml,.yml,.json"
+                hidden
+                onChange={(e) => {
+                  const picked = [...(e.target.files ?? [])]
+                  e.target.value = ''
+                  void studio.addFiles(picked).then(() => picked[0] && onOpenContract(picked[0].name))
+                }}
+              />
+            </div>
             {!isCollapsed('contracts') && (
               <ul className="tree-list">
                 {sources.map((s) => {
@@ -408,6 +496,14 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                     </li>
                   )
                 })}
+                {unbound.map((f) => (
+                  <li key={f.name} className={f.name === activeContract ? 'active' : ''} title={t('sidebar.unboundHint')}>
+                    <span className="muted">○</span>
+                    <button className="tree-contract grow clamp-1" onClick={() => onOpenContract(f.name)}>
+                      {f.name.split('/').pop()} <span className="muted small">{f.kind === 'unknown' ? 'schemas' : f.kind}</span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
             <input

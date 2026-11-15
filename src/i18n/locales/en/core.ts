@@ -399,4 +399,11 @@ export const core: Record<keyof typeof es, string> = {
   'clint.noChannels': 'The channels section is missing.',
   'clint.badAction': 'The operation “{id}” needs action: send or receive.',
   'clint.noChannelRef': 'The operation “{id}” needs a channel with a $ref to a channel.',
+  'try.title': 'Try operation',
+  'try.badJson': 'The body isn’t valid JSON: {error}',
+  'try.noSource': 'The “{source}” contract isn’t loaded.',
+  'newContract.title': 'New API',
+  'newContract.health': 'Service health',
+  'newContract.ok': 'The service is up',
+  'newContract.eventsTitle': 'New events',
 }

@@ -39,6 +39,10 @@ function createWindow() {
     },
   })
   // Los enlaces externos se abren en el navegador del sistema, nunca dentro de la app.
+  // En pantalla completa macOS oculta los semáforos: la barra superior deja de reservarles espacio.
+  const sendFullscreen = () => !win.isDestroyed() && win.webContents.send('app:fullscreen', win.isFullScreen())
+  win.on('enter-full-screen', sendFullscreen)
+  win.on('leave-full-screen', sendFullscreen)
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
@@ -300,6 +304,8 @@ ipcMain.handle('app:metrics', () => {
 })
 
 /** Herramientas de desarrollo de la ventana (para inspeccionar peticiones y errores). */
+ipcMain.handle('app:isFullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false)
+
 ipcMain.handle('app:toggleDevTools', (event) => {
   event.sender.toggleDevTools()
 })
@@ -333,7 +339,10 @@ function defaultShell() {
 
 /** Abre una terminal. Solo en un workspace autorizado o, si no, en la carpeta personal. */
 ipcMain.handle('term:create', (event, { cols, rows, cwd }) => {
-  const dir = cwd && workspaceRoots.has(path.resolve(cwd)) ? path.resolve(cwd) : os.homedir()
+  // Solo carpetas de un workspace autorizado (su raíz o una colección dentro); si no, la carpeta personal.
+  const wanted = cwd ? path.resolve(cwd) : undefined
+  const allowed = wanted && [...workspaceRoots].some((root) => wanted === root || wanted.startsWith(root + path.sep))
+  const dir = allowed && existsSync(wanted) ? wanted : os.homedir()
   const { file, args } = defaultShell()
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'ArazzoStudio' }
   delete env.ELECTRON_RUN_AS_NODE

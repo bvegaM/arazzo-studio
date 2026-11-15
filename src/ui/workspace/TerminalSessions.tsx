@@ -1,6 +1,6 @@
 // Varias terminales a la vez, con la lista de sesiones a la derecha (como VS Code): cambiar entre
 // ellas, renombrarlas con doble clic y cerrarlas. Cada sesión sigue viva aunque no se esté viendo.
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { t } from '../../i18n'
 import { Icon } from '../components/kit'
 import { TerminalView, type TerminalHandle, type TerminalInfo } from './TerminalView'
@@ -10,8 +10,16 @@ export interface SessionsHandle {
   clear: () => void
 }
 
+/** Pedido de abrir una terminal (p. ej. "Abrir en terminal" de una colección). */
+export interface TerminalRequest {
+  n: number
+  cwd?: string
+}
+
 interface Session {
   key: number
+  /** Carpeta propia (si se abrió desde una colección); si no, la del workspace. */
+  cwd?: string
   /** Nombre puesto por el usuario (si no, el de la shell). */
   name?: string
   info?: TerminalInfo
@@ -22,12 +30,14 @@ const TRASH_ICON = 'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14'
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
 
-export const TerminalSessions = forwardRef<SessionsHandle, { cwd?: string; visible: boolean; onActiveInfo: (info?: TerminalInfo) => void }>(function TerminalSessions(
-  { cwd, visible, onActiveInfo },
-  ref,
-) {
+export const TerminalSessions = forwardRef<
+  SessionsHandle,
+  { cwd?: string; visible: boolean; onActiveInfo: (info?: TerminalInfo) => void; request?: TerminalRequest }
+>(function TerminalSessions({ cwd, visible, onActiveInfo, request }, ref) {
   const next = useRef(2)
-  const [sessions, setSessions] = useState<Session[]>([{ key: 1 }])
+  // Si el panel se abrió por un pedido, la primera sesión ya nace en esa carpeta.
+  const [sessions, setSessions] = useState<Session[]>([{ key: 1, cwd: request?.cwd }])
+  const handled = useRef(request?.n ?? 0)
   const [active, setActive] = useState(1)
   const [renaming, setRenaming] = useState<number>()
   const views = useRef(new Map<number, TerminalHandle>())
@@ -41,9 +51,9 @@ export const TerminalSessions = forwardRef<SessionsHandle, { cwd?: string; visib
     setActive(key)
     onActiveInfo(list.find((s) => s.key === key)?.info)
   }
-  const add = () => {
+  const add = (dir?: string) => {
     const key = next.current++
-    setSessions((prev) => [...prev, { key }])
+    setSessions((prev) => [...prev, { key, cwd: dir }])
     setActive(key)
     onActiveInfo(undefined)
   }
@@ -59,7 +69,14 @@ export const TerminalSessions = forwardRef<SessionsHandle, { cwd?: string; visib
       else onActiveInfo(undefined)
     }
   }
-  useImperativeHandle(ref, () => ({ add, clear: () => views.current.get(active)?.clear() }))
+  useImperativeHandle(ref, () => ({ add: () => add(), clear: () => views.current.get(active)?.clear() }))
+  // Un pedido nuevo abre otra sesión en su carpeta.
+  useEffect(() => {
+    if (!request || request.n <= handled.current) return
+    handled.current = request.n
+    add(request.cwd)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.n])
 
   const label = (s: Session, i: number) => s.name ?? `${s.info?.shell ?? t('dev.term.shell')} ${i + 1}`
 
@@ -68,7 +85,7 @@ export const TerminalSessions = forwardRef<SessionsHandle, { cwd?: string; visib
       <div className="dev-empty">
         <Icon d={TERMINAL_ICON} size={26} />
         <strong>{t('dev.term.none')}</strong>
-        <button className="small primary" onClick={add}>
+        <button className="small primary" onClick={() => add()}>
           {t('dev.term.new')}
         </button>
       </div>
@@ -84,7 +101,7 @@ export const TerminalSessions = forwardRef<SessionsHandle, { cwd?: string; visib
               ref={(h) => {
                 if (h) views.current.set(s.key, h)
               }}
-              cwd={cwd}
+              cwd={s.cwd ?? cwd}
               visible={visible && s.key === active}
               onInfo={(info) => {
                 setSessions((prev) => prev.map((x) => (x.key === s.key ? { ...x, info } : x)))

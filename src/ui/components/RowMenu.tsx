@@ -1,14 +1,29 @@
 // Menú "⋯" de una fila de la barra lateral: acciones como renombrar, mostrar en Finder o eliminar.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { t } from '../../i18n'
+import { Icon } from './kit'
 
 export interface RowAction {
   label: string
   onSelect: () => void
   danger?: boolean
+  /** Trazo SVG del ícono (opcional), como en los menús de Bruno. */
+  icon?: string
 }
 
-export function RowMenu({ actions, label = t('studio.more') }: { actions: RowAction[]; label?: string }) {
+export function RowMenu({
+  actions,
+  label = t('studio.more'),
+  trigger,
+  inline,
+}: {
+  actions: RowAction[]
+  label?: string
+  /** Contenido del botón (por defecto, los tres puntos). */
+  trigger?: ReactNode
+  /** En un encabezado (siempre visible), no flotando sobre una fila. */
+  inline?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -29,7 +44,7 @@ export function RowMenu({ actions, label = t('studio.more') }: { actions: RowAct
   }, [open])
 
   return (
-    <div className={`row-menu ${open ? 'open' : ''}`} ref={root}>
+    <div className={`row-menu ${open ? 'open' : ''} ${inline ? 'inline' : ''}`} ref={root}>
       <button
         type="button"
         className="icon-btn row-menu-btn"
@@ -42,11 +57,13 @@ export function RowMenu({ actions, label = t('studio.more') }: { actions: RowAct
           setOpen((o) => !o)
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-          <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-          <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-        </svg>
+        {trigger ?? (
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+          </svg>
+        )}
       </button>
       {open && (
         <div className="row-menu-list" role="menu">
@@ -62,6 +79,7 @@ export function RowMenu({ actions, label = t('studio.more') }: { actions: RowAct
                 a.onSelect()
               }}
             >
+              {a.icon && <Icon d={a.icon} size={14} />}
               {a.label}
             </button>
           ))}

@@ -53,6 +53,9 @@ export interface DesktopBridge {
   appToggleDevTools: () => Promise<void>
   /** CPU (%), memoria (bytes), tiempo encendida (s) y PID del proceso principal. */
   appMetrics: () => Promise<AppMetrics>
+  appIsFullscreen: () => Promise<boolean>
+  /** Avisa al entrar o salir de pantalla completa; devuelve la función para dejar de escuchar. */
+  onFullscreen: (cb: (fullscreen: boolean) => void) => () => void
   /** Terminal integrada: abre la shell del sistema (en `cwd` si es un workspace autorizado). */
   termCreate: (opts: { cols: number; rows: number; cwd?: string }) => Promise<{ id: string; cwd: string; shell: string }>
   termWrite: (id: string, data: string) => void

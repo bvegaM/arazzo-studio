@@ -151,15 +151,37 @@ function WorkspaceMenu({ workspace }: { workspace: WorkspaceState }) {
   )
 }
 
-export function AppBar({ workspace }: { workspace: WorkspaceState }) {
-  const mac = desktop?.platform === 'darwin'
+const HOME_ICON = 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10'
+
+/** En macOS de escritorio: si la ventana está en pantalla completa (sin semáforos). */
+function useFullscreen(): boolean {
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    if (!desktop) return
+    void desktop.appIsFullscreen().then(setFull)
+    return desktop.onFullscreen(setFull)
+  }, [])
+  return full
+}
+
+export function AppBar({ workspace, onHome }: { workspace: WorkspaceState; onHome: () => void }) {
+  // Espacio para los semáforos de la ventana solo cuando se ven (macOS, fuera de pantalla completa).
+  const fullscreen = useFullscreen()
+  const traffic = desktop?.platform === 'darwin' && !fullscreen
   return (
-    <header className={`app-bar ${mac ? 'app-bar-mac' : ''}`}>
-      <span className="brand-mark app-mark" aria-hidden="true">
-        A
-      </span>
-      {workspace.isOpen ? <WorkspaceMenu workspace={workspace} /> : <strong className="app-bar-title">Arazzo Studio</strong>}
+    <header className={`app-bar ${traffic ? 'app-bar-mac' : ''}`}>
+      {workspace.isOpen && (
+        <button className="icon-btn app-home" onClick={onHome} title={t('home.title')} aria-label={t('home.title')}>
+          <Icon d={HOME_ICON} size={16} />
+        </button>
+      )}
+      {workspace.isOpen && <WorkspaceMenu workspace={workspace} />}
       <span className="app-bar-drag" />
+      {/* Marca centrada, como el título de la ventana en Bruno. */}
+      <div className="app-brand" aria-hidden="true">
+        <span className="brand-mark app-mark">A</span>
+        <strong>Arazzo Studio</strong>
+      </div>
       {workspace.isOpen && <SaveBadge status={workspace.status} error={workspace.error} />}
     </header>
   )

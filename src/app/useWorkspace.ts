@@ -51,6 +51,7 @@ export type ParentLocation =
   | { kind: 'browser' }
 
 const LAST_PARENT_KEY = 'ws.lastParent'
+const DOCS_FILE = 'README.md'
 
 interface Open {
   fs: WorkspaceFs
@@ -90,6 +91,8 @@ export function useWorkspace(studio: Studio) {
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string>()
   const [last, setLast] = useState<WorkspaceRef>()
+  // Documentación del workspace (README.md en su carpeta), para el inicio.
+  const [docs, setDocs] = useState<string>()
   const written = useRef<CollectionSnapshot>(EMPTY)
   // Al abrir una colección, lo leído de disco es el punto de partida: no se vuelve a escribir.
   const baseline = useRef(false)
@@ -153,6 +156,7 @@ export function useWorkspace(studio: Studio) {
 
   async function attach(o: Open) {
     setOpen(o)
+    setDocs(await o.fs.read(DOCS_FILE))
     log('info', t('devlog.workspaceOpened', { name: o.manifest.name, place: o.ref.label }))
     const ref = { ...o.ref, name: o.manifest.name }
     setLast(ref)
@@ -309,6 +313,24 @@ export function useWorkspace(studio: Studio) {
     studio.reset()
   }
 
+  /** Ordena las colecciones por nombre (A-Z) y guarda ese orden en studio.yaml. */
+  async function sortCollections() {
+    if (!open) return
+    const sorted = [...collections].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    const manifest = { ...open.manifest, collections: sorted.map((c) => c.folder) }
+    await writeManifest(open.fs, manifest)
+    setOpen({ ...open, manifest })
+    setCollections(sorted)
+  }
+
+  /** Guarda la documentación del workspace (README.md); vacía, borra el archivo. */
+  async function saveDocs(text: string) {
+    if (!open) return
+    if (text.trim()) await open.fs.write(DOCS_FILE, text.endsWith('\n') ? text : `${text}\n`)
+    else await open.fs.remove(DOCS_FILE)
+    setDocs(text.trim() ? text : undefined)
+  }
+
   /** Carpeta que tendrá una colección nueva con ese nombre. */
   const collectionFolderFor = (name: string) => (open ? uniqueFolder(name, open.manifest.collections) : slugify(name))
 
@@ -382,6 +404,11 @@ export function useWorkspace(studio: Studio) {
     pickParent,
     collectionFolderFor,
     renameWorkspace,
+    docs,
+    saveDocs,
+    sortCollections,
+    /** Carpeta en disco de una colección (escritorio), para abrir una terminal ahí. */
+    folderPath: (folder: string) => (open?.fs.kind === 'desktop' ? (folder === '.' ? open.ref.label : `${open.ref.label}/${folder}`) : undefined),
     deleteWorkspace,
     renameCollection,
     removeCollection,

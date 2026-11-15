@@ -8,7 +8,9 @@ import { analyzeProject, type ProjectAnalysis } from '../core/analyze'
 import { getServerUrl } from '../core/openapi'
 import { fetchExecutor } from '../core/http'
 import { createSimulatedExecutor, createSimulatedMessenger } from '../core/simulator'
-import { runWorkflow } from '../core/runner'
+import { runWorkflow, type StepResult } from '../core/runner'
+import { buildTryProject, TRY_WORKFLOW, type TryForm } from '../core/tryOperation'
+import type { OperationRef } from '../core/openapi'
 import {
   applyCaseInputs,
   defaultInputs,
@@ -196,6 +198,58 @@ export function useStudio() {
     ].join('\n')
     loadFiles([{ name, text }], false)
     return journeyKey(name, 'miJourney')
+  }
+
+  /** Crea un contrato nuevo (OpenAPI o AsyncAPI) con un esqueleto válido; devuelve su nombre. */
+  function createContract(kind: 'openapi' | 'asyncapi'): string {
+    const taken = new Set([...texts.map((f) => f.name), ...files.map((f) => f.name)])
+    const base = kind === 'openapi' ? 'nuevo-contrato.openapi' : 'nuevos-eventos.asyncapi'
+    let name = `${base}.yaml`
+    for (let i = 2; taken.has(name); i++) name = `${base}-${i}.yaml`
+    const text =
+      kind === 'openapi'
+        ? [
+            'openapi: 3.0.3',
+            'info:',
+            `  title: ${t('newContract.title')}`,
+            '  version: 1.0.0',
+            'servers:',
+            '  - url: https://api.example.com',
+            'paths:',
+            '  /health:',
+            '    get:',
+            '      operationId: getHealth',
+            `      summary: ${t('newContract.health')}`,
+            '      responses:',
+            "        '200':",
+            `          description: ${t('newContract.ok')}`,
+            '          content:',
+            '            application/json:',
+            '              example: { status: UP }',
+            '',
+          ].join('\n')
+        : [
+            'asyncapi: 3.0.0',
+            'info:',
+            `  title: ${t('newContract.eventsTitle')}`,
+            '  version: 1.0.0',
+            'channels:',
+            '  events:',
+            '    address: mi.evento',
+            '    messages:',
+            '      evento:',
+            '        payload:',
+            '          type: object',
+            '          properties:',
+            '            id: { type: string }',
+            'operations:',
+            '  publishEvent:',
+            '    action: send',
+            "    channel: { $ref: '#/channels/events' }",
+            '',
+          ].join('\n')
+    loadFiles([{ name, text }], false)
+    return name
   }
 
   function loadExample(id: ExampleId = 'cards') {
@@ -503,6 +557,50 @@ export function useStudio() {
     setRunning(false)
   }
 
+  /**
+   * Prueba una operación del contrato por sí sola, con el ambiente activo (URLs, variables y
+   * credenciales). Los secretos no se muestran; la petición queda también en Network.
+   */
+  async function tryOperation(op: OperationRef, form: TryForm, simulate: boolean, signal?: AbortSignal): Promise<{ step?: StepResult; error?: string }> {
+    const source = projects.flatMap((p) => p.sources).find((s) => s.name === op.sourceName && s.status === 'loaded')
+    if (!source) return { error: t('try.noSource', { source: op.sourceName }) }
+    await loadFaker()
+    const variables = variableValues(activeEnv)
+    const runServers: Record<string, string> = resolveTemplates(servers, variables)
+    const runCredentials: Record<string, string> = resolveTemplates(credentials, variables)
+    const secrets = secretValues({ variables: activeEnv.variables, credentials: runCredentials })
+    const built = buildTryProject(source, op, form, (text) => resolveTemplates(text, variables))
+    if (built.error || !built.project || !built.analysis) return { error: built.error }
+    const steps = built.project.arazzo.workflows[0].steps
+    const result = await runWorkflow(built.project, built.analysis, TRY_WORKFLOW, {
+      inputs: {},
+      credentials: runCredentials,
+      servers: runServers,
+      secrets,
+      executor: simulate ? createSimulatedExecutor(built.project, steps) : realExecutor,
+      maxRetryWaitMs: simulate ? 0 : undefined,
+      signal,
+    })
+    const step = result.steps[0]
+    if (step) logStep(step, { journey: t('try.title'), caseName: `${op.method.toUpperCase()} ${op.path}`, simulated: simulate })
+    return step ? { step } : { error: result.reason?.message }
+  }
+
+  /**
+   * El ambiente activo listo para enviar peticiones fuera de un journey (Swagger UI): URLs y
+   * credenciales con las {{variables}} resueltas, y los valores secretos que no se deben mostrar.
+   */
+  async function requestEnv(): Promise<{ servers: Record<string, string>; credentials: Record<string, string>; secrets: string[] }> {
+    await loadFaker()
+    const variables = variableValues(activeEnv)
+    const runCredentials: Record<string, string> = resolveTemplates(credentials, variables)
+    return {
+      servers: resolveTemplates(servers, variables),
+      credentials: runCredentials,
+      secrets: secretValues({ variables: activeEnv.variables, credentials: runCredentials }),
+    }
+  }
+
   /** Cambia el idioma y regenera el análisis y los casos para que sus textos lo sigan. */
   function changeLocale(l: Locale) {
     setLocale(l)
@@ -610,6 +708,10 @@ export function useStudio() {
     editArazzo,
     contractText,
     editContract,
+    tryOperation,
+    requestEnv,
+    /** Envía una petición con el mismo ejecutor que los journeys (en escritorio, sin CORS). */
+    sendHttp: realExecutor,
     makeLocalCopy,
     /** Archivos de la colección que no son Arazzo (contratos y archivos de schemas). */
     contractFiles: files.filter((f) => f.kind !== 'arazzo').map((f) => f.name),
@@ -620,6 +722,7 @@ export function useStudio() {
     fetchRemote,
     loadExample,
     createArazzo,
+    createContract,
     openCollectionData,
     scenarioFiles,
     texts,
