@@ -1,0 +1,162 @@
+arazzo: 1.1.0
+info:
+  title: Pokédex
+  version: 1.0.0
+  description: >-
+    Journeys sobre la PokéAPI pública (https://pokeapi.co): no necesitan credenciales, así que se
+    pueden probar contra la API real desde el primer momento. Cada paso usa lo que devolvió el anterior.
+sourceDescriptions:
+  - name: pokeapi
+    url: ./pokeapi.openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: pokemonCard
+    summary: Ficha de un Pokémon
+    description: >-
+      Consulta un Pokémon y, con sus datos, su especie, a qué tipo es débil y qué hace su habilidad.
+    inputs:
+      type: object
+      required: [pokemon]
+      properties:
+        pokemon:
+          type: string
+          description: Nombre en minúsculas o número de Pokédex.
+          example: pikachu
+    steps:
+      - stepId: getPokemon
+        description: Consulta el Pokémon por nombre o número.
+        operationId: $sourceDescriptions.pokeapi.getPokemon
+        parameters:
+          - name: idOrName
+            in: path
+            value: $inputs.pokemon
+        successCriteria:
+          - condition: $statusCode == 200
+          # Tiene al menos una habilidad que no es oculta.
+          - context: $response.body
+            condition: $.abilities[?(@.is_hidden == false)]
+            type: jsonpath
+        onFailure:
+          - name: pokemonNotFound
+            type: end
+            criteria:
+              - condition: $statusCode == 404
+        outputs:
+          id: $response.body#/id
+          name: $response.body#/name
+          mainType: $response.body#/types/0/type/name
+          firstAbility: $response.body#/abilities/0/ability/name
+          baseExperience: $response.body#/base_experience
+      - stepId: getSpecies
+        description: Consulta su especie (legendario, tasa de captura, generación).
+        operationId: $sourceDescriptions.pokeapi.getPokemonSpecies
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getPokemon.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/capture_rate >= 0
+        outputs:
+          isLegendary: $response.body#/is_legendary
+          captureRate: $response.body#/capture_rate
+          generation: $response.body#/generation/name
+          evolutionChain: $response.body#/evolution_chain/url
+      - stepId: getWeakness
+        description: Consulta su tipo principal para saber a qué es débil.
+        operationId: $sourceDescriptions.pokeapi.getType
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getPokemon.outputs.mainType
+        successCriteria:
+          - condition: $statusCode == 200
+          # Tiene al menos un tipo al que le hace el doble de daño.
+          - context: $response.body
+            condition: $.damage_relations.double_damage_to[0]
+            type: jsonpath
+        outputs:
+          weakTo: $response.body#/damage_relations/double_damage_from/0/name
+          strongAgainst: $response.body#/damage_relations/double_damage_to/0/name
+      - stepId: getAbility
+        description: Consulta qué hace su primera habilidad (en inglés).
+        operationId: $sourceDescriptions.pokeapi.getAbility
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getPokemon.outputs.firstAbility
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          effect:
+            context: $response.body
+            selector: $.effect_entries[?(@.language.name == 'en')].short_effect
+            type: jsonpath
+    outputs:
+      name: $steps.getPokemon.outputs.name
+      mainType: $steps.getPokemon.outputs.mainType
+      weakTo: $steps.getWeakness.outputs.weakTo
+      isLegendary: $steps.getSpecies.outputs.isLegendary
+      captureRate: $steps.getSpecies.outputs.captureRate
+      abilityEffect: $steps.getAbility.outputs.effect
+
+  - workflowId: typeExplorer
+    summary: Explorar un tipo
+    description: >-
+      Parte de un tipo, toma el primer Pokémon que lo tiene y consulta su ficha y su especie.
+    inputs:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          description: Nombre del tipo en inglés.
+          enum: [normal, fire, water, grass, electric, ice, fighting, poison, ground, flying, psychic, bug, rock, ghost, dragon, dark, steel, fairy]
+          example: fire
+    steps:
+      - stepId: getType
+        description: Consulta el tipo.
+        operationId: $sourceDescriptions.pokeapi.getType
+        parameters:
+          - name: idOrName
+            in: path
+            value: $inputs.type
+        successCriteria:
+          - condition: $statusCode == 200
+          # Hay al menos un Pokémon de ese tipo.
+          - context: $response.body
+            condition: $.pokemon[0].pokemon.name
+            type: jsonpath
+        outputs:
+          firstPokemon: $response.body#/pokemon/0/pokemon/name
+          strongAgainst: $response.body#/damage_relations/double_damage_to/0/name
+      - stepId: getFirstPokemon
+        description: Consulta el primer Pokémon de ese tipo.
+        operationId: $sourceDescriptions.pokeapi.getPokemon
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getType.outputs.firstPokemon
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/weight > 0
+        outputs:
+          id: $response.body#/id
+          height: $response.body#/height
+          weight: $response.body#/weight
+      - stepId: getFirstSpecies
+        description: Consulta su especie.
+        operationId: $sourceDescriptions.pokeapi.getPokemonSpecies
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getFirstPokemon.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          isLegendary: $response.body#/is_legendary
+          captureRate: $response.body#/capture_rate
+    outputs:
+      pokemon: $steps.getType.outputs.firstPokemon
+      strongAgainst: $steps.getType.outputs.strongAgainst
+      isLegendary: $steps.getFirstSpecies.outputs.isLegendary

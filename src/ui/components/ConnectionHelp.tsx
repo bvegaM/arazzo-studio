@@ -4,6 +4,7 @@ import { corsHeadersFor, isMixedContent, targetOrigins, type FailedRequest } fro
 import { t } from '../../i18n'
 import { tn } from '../../i18n/react'
 import { copyText } from '../../lib/browser'
+import { desktop } from '../../lib/desktop'
 
 interface Props {
   requests: FailedRequest[]
@@ -20,7 +21,8 @@ export function ConnectionHelp({ requests, caseCount, onSimulate, onEditEnvironm
   const origin = window.location.origin
   const targets = targetOrigins(requests)
   const headers = corsHeadersFor(requests, origin)
-  const mixed = requests.some((r) => isMixedContent(window.location.protocol, r.url))
+  // En la app de escritorio no hay CORS ni contenido mixto: las peticiones no salen del navegador.
+  const mixed = !desktop && requests.some((r) => isMixedContent(window.location.protocol, r.url))
 
   return (
     <section className="conn-help" aria-labelledby="conn-help-title">
@@ -59,22 +61,24 @@ export function ConnectionHelp({ requests, caseCount, onSimulate, onEditEnvironm
             <span>{t('conn.mixed.text')}</span>
           </li>
         )}
-        <li>
-          <strong>{t('conn.check2.title')}</strong>
-          <span>{tn('conn.check2.text', { origin: <code>{origin}</code> })}</span>
-          <div className="conn-code">
-            <pre>{headers}</pre>
-            <button
-              className="small"
-              onClick={async () => {
-                setCopied(await copyText(headers))
-                setTimeout(() => setCopied(false), 1600)
-              }}
-            >
-              {copied ? `✓ ${t('results.copied')}` : t('conn.copyHeaders')}
-            </button>
-          </div>
-        </li>
+        {!desktop && (
+          <li>
+            <strong>{t('conn.check2.title')}</strong>
+            <span>{tn('conn.check2.text', { origin: <code>{origin}</code> })}</span>
+            <div className="conn-code">
+              <pre>{headers}</pre>
+              <button
+                className="small"
+                onClick={async () => {
+                  setCopied(await copyText(headers))
+                  setTimeout(() => setCopied(false), 1600)
+                }}
+              >
+                {copied ? `✓ ${t('results.copied')}` : t('conn.copyHeaders')}
+              </button>
+            </div>
+          </li>
+        )}
       </ol>
 
       <div className="conn-actions">

@@ -39,7 +39,14 @@ export function toSavedSession(state: SessionState, now = new Date()): SavedSess
     savedAt: now.toISOString(),
     inputs: omitSensitive(state.inputs),
     cases: state.cases.map((c) => (c.inputOverrides ? { ...c, inputOverrides: omitSensitive(c.inputOverrides) } : c)),
-    environments: state.environments.map((e) => ({ id: e.id, name: e.name, servers: e.servers })),
+    // De los secretos se guarda solo el nombre: su valor, como las credenciales, vive en la pestaña.
+    environments: state.environments.map((e) => ({
+      id: e.id,
+      name: e.name,
+      ...(e.color ? { color: e.color } : {}),
+      servers: e.servers,
+      variables: (e.variables ?? []).map((v) => (v.secret ? { ...v, value: '' } : v)),
+    })),
   }
 }
 

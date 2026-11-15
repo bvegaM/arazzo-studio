@@ -1,0 +1,829 @@
+// Espacio de trabajo: colección a la izquierda, journey abierto al centro y su resultado a la derecha.
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import type { WorkflowAnalysis } from '../core/analyze'
+import { caseJourney, splitJourneyKey } from '../core/collection'
+import { loadFaker } from '../core/dynamicVars'
+import { humanizeId } from '../core/format'
+import { isAsyncOperation } from '../core/openapi'
+import { invalidPaths, missingInputs } from '../core/schemaForm'
+import { isSimulated, runnability } from '../core/testcases'
+import { t } from '../i18n'
+import { MethodBadge } from '../ui/components/badges'
+import { Empty, EnvDot, Icon, Segmented, Tabs } from '../ui/components/kit'
+import { TemplateVarsProvider, type TemplateVars } from '../ui/components/TemplateInput'
+import { CasesView } from '../ui/workspace/CasesView'
+import { EnvironmentView } from '../ui/workspace/EnvironmentView'
+import { InputsView } from '../ui/workspace/InputsView'
+import { OverviewView } from '../ui/workspace/OverviewView'
+import { ResultsPanel } from '../ui/workspace/ResultsPanel'
+import { StepView } from '../ui/workspace/StepView'
+import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
+import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
+import type { ContractUsage } from '../ui/components/ContractEditor'
+import { TryOperation, type TryState } from '../ui/workspace/TryOperation'
+import { redactSecrets, secretValues, variableValues } from '../core/environments'
+import { resolveTemplates } from '../core/templates'
+import type { HttpRequest } from '../core/http'
+import { byteSize, log, logNetwork } from '../lib/devlog'
+
+/** Body de texto como JSON si se puede (para verlo ordenado en Network). */
+function parseBody(text?: string): unknown {
+  if (text === undefined || text === '') return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+import { initialForm, tryKey } from '../core/tryOperation'
+import { getServerUrl, listOperations, operationSecurity, type OperationRef } from '../core/openapi'
+import { MethodBadge as TabMethod } from '../ui/components/badges'
+import { CollectionSidebar } from './CollectionSidebar'
+import { StatusBar } from './StatusBar'
+import { WorkspaceHome } from '../ui/workspace/WorkspaceHome'
+import type { Studio } from './useStudio'
+import type { WorkspaceState } from './useWorkspace'
+
+// El editor (CodeMirror) pesa bastante: se carga solo al abrir la pestaña YAML.
+const ArazzoEditor = lazy(() => import('../ui/components/ArazzoEditor').then((m) => ({ default: m.ArazzoEditor })))
+const ContractEditor = lazy(() => import('../ui/components/ContractEditor').then((m) => ({ default: m.ContractEditor })))
+
+type View = 'overview' | 'inputs' | 'cases' | 'yaml' | 'step'
+
+const RESULTS_WIDTH_KEY = 'ws.resultsWidth'
+const PLAY_ICON = 'M7 5l12 7-12 7V5z'
+
+function savedWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(RESULTS_WIDTH_KEY))
+    return n >= 320 ? n : 520
+  } catch {
+    return 520
+  }
+}
+
+/** Divisor arrastrable entre el centro y el panel de resultados. */
+function Splitter({ width, onChange }: { width: number; onChange: (w: number) => void }) {
+  const start = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const x0 = e.clientX
+    const w0 = width
+    const target = e.currentTarget
+    target.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => onChange(Math.min(Math.max(w0 + x0 - ev.clientX, 320), window.innerWidth * 0.7))
+    const up = () => {
+      target.removeEventListener('pointermove', move)
+      target.removeEventListener('pointerup', up)
+    }
+    target.addEventListener('pointermove', move)
+    target.addEventListener('pointerup', up)
+  }
+  return <div className="ws-splitter" role="separator" aria-orientation="vertical" aria-label={t('ws.resize')} onPointerDown={start} />
+}
+
+export function Workspace({
+  studio,
+  workspace,
+  dev,
+  homeRequest = 0,
+  onOpenTerminal,
+}: {
+  studio: Studio
+  workspace: WorkspaceState
+  dev: { open: boolean; toggle: () => void }
+  /** Sube cada vez que se pide ir al inicio (logo de la barra superior). */
+  homeRequest?: number
+  /** Escritorio: abre la terminal de Dev Tools en una carpeta. */
+  onOpenTerminal?: (cwd?: string) => void
+}) {
+  const { journeys, projects } = studio
+  // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
+  const [openTabs, setOpenTabs] = useState<string[]>([])
+  const [envOpen, setEnvOpen] = useState(false)
+  const [envActive, setEnvActive] = useState(false)
+  const [views, setViews] = useState<Record<string, View>>({})
+  const [steps, setSteps] = useState<Record<string, string>>({})
+  const [askConfirm, setAskConfirm] = useState(false)
+  const [errorsHidden, setErrorsHidden] = useState(false)
+  const [resultsWidth, setResultsWidth] = useState(savedWidth)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  // Contratos abiertos como pestañas (por nombre de archivo) y el que se está viendo.
+  const [contractTabs, setContractTabs] = useState<string[]>([])
+  const [activeContract, setActiveContract] = useState<string>()
+  // Operaciones abiertas para probarlas solas (clave fuente|MÉTODO|ruta) y lo escrito en cada una.
+  const [tryTabs, setTryTabs] = useState<string[]>([])
+  const [activeTry, setActiveTry] = useState<string>()
+  const [tryStates, setTryStates] = useState<Record<string, TryState>>({})
+  // Inicio del workspace: se muestra al abrirlo y al pulsar el logo.
+  const [homeActive, setHomeActive] = useState(true)
+  const [homeFor, setHomeFor] = useState({ ws: workspace.name, request: homeRequest })
+  if (homeFor.ws !== workspace.name || homeFor.request !== homeRequest) {
+    setHomeFor({ ws: workspace.name, request: homeRequest })
+    setHomeActive(true)
+  }
+  const showHome = workspace.isOpen && homeActive
+  // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
+  const [welcomeClosed, setWelcomeClosed] = useState(false)
+  if (projects.length && welcomeClosed) setWelcomeClosed(false)
+
+  // Las pestañas y la selección usan la clave del journey (archivo#workflowId).
+  const exists = (key: string) => journeys.some((j) => j.key === key)
+  const activeId = exists(studio.selected) ? studio.selected : journeys[0]?.key
+  const tabs = [...new Set([...openTabs.filter(exists), ...(activeId ? [activeId] : [])])]
+  const journey = journeys.find((j) => j.key === activeId)
+  const wa: WorkflowAnalysis | undefined = journey?.wa
+  const analysis = journey?.analysis
+  // Con varios Arazzo, cada journey muestra de qué archivo viene.
+  const multiFile = projects.length > 1
+  const journeyName = (key: string) => humanizeId(splitJourneyKey(key).workflowId)
+  const stepId = activeId ? steps[activeId] : undefined
+  const rs = wa?.steps.find((s) => s.step.stepId === stepId)
+  const view: View = (activeId && views[activeId]) || 'overview'
+  const shownView: View = view === 'step' && !rs ? 'overview' : view
+
+  const journeyCases = studio.cases.filter((c) => caseJourney(c) === activeId)
+  const ready = journeyCases.filter((c) => c.enabled && runnability(c, studio.mode).ok)
+  const realCases = ready.filter((c) => !isSimulated(c, studio.mode))
+  const mutating = realCases.length ? (wa?.steps.filter((s) => s.mutating && s.op) ?? []) : []
+  const messaging = realCases.length ? (wa?.steps.filter((s) => isAsyncOperation(s.op)) ?? []) : []
+  const credsMissing = realCases.length > 0 && (analysis?.credentials ?? []).some((c) => !studio.credentials[c.key])
+  const values = (activeId && studio.inputs[activeId]) || {}
+  const inputsMissing = wa ? missingInputs(wa.inputsSchema, values).length + invalidPaths(wa.inputsSchema, values).length : 0
+  const journeyRuns = studio.runs.filter((r) => caseJourney(r.tc) === activeId)
+
+  const openJourney = (id: string, nextView?: View) => {
+    studio.setSelected(id)
+    // El journey que estaba activo queda abierto como pestaña (al empezar no está en la lista).
+    setOpenTabs((prev) => [...new Set([...prev, ...(activeId ? [activeId] : []), id])])
+    setEnvActive(false)
+    setActiveContract(undefined)
+    setActiveTry(undefined)
+    setHomeActive(false)
+    setAskConfirm(false)
+    if (nextView) setViews((v) => ({ ...v, [id]: nextView }))
+  }
+  const openStep = (id: string, step: string) => {
+    setSteps((s) => ({ ...s, [id]: step }))
+    openJourney(id, 'step')
+  }
+  const closeTab = (id: string) => {
+    const rest = tabs.filter((x) => x !== id)
+    setOpenTabs(rest)
+    if (id === activeId && rest.length) studio.setSelected(rest[rest.length - 1])
+  }
+  const openEnv = () => {
+    setEnvOpen(true)
+    setEnvActive(true)
+    setActiveContract(undefined)
+    setActiveTry(undefined)
+    setHomeActive(false)
+  }
+  /** La operación de una clave, buscada en los contratos cargados ahora (sigue a las ediciones). */
+  const findOperation = (key: string): OperationRef | undefined => {
+    const [sourceName, method, ...rest] = key.split('|')
+    const path = rest.join('|')
+    const source = studio.collectionSources.find((s) => s.name === sourceName && s.status === 'loaded')
+    return source ? listOperations(source).find((o) => o.method.toUpperCase() === method && o.path === path) : undefined
+  }
+  const shownTries = tryTabs.filter((k) => findOperation(k))
+  const tryOpen = activeTry && shownTries.includes(activeTry) ? activeTry : undefined
+  const openTry = (op: OperationRef) => {
+    const key = tryKey(op)
+    setTryStates((prev) => (prev[key] ? prev : { ...prev, [key]: { form: initialForm(op), simulate: false } }))
+    setTryTabs((prev) => (prev.includes(key) ? prev : [...prev, key]))
+    setActiveTry(key)
+    setHomeActive(false)
+    setActiveContract(undefined)
+    setEnvActive(false)
+  }
+  const closeTry = (key: string) => {
+    setTryTabs((prev) => prev.filter((k) => k !== key))
+    if (key === activeTry) setActiveTry(undefined)
+  }
+  // Pestañas de contrato que siguen existiendo en la colección.
+  const shownContracts = contractTabs.filter((f) => studio.contractText(f) !== undefined)
+  const contractOpen = activeContract && shownContracts.includes(activeContract) ? activeContract : undefined
+  const openContract = (file: string) => {
+    setContractTabs((prev) => (prev.includes(file) ? prev : [...prev, file]))
+    setActiveContract(file)
+    setHomeActive(false)
+    setActiveTry(undefined)
+    setEnvActive(false)
+  }
+  const closeContract = (file: string) => {
+    setContractTabs((prev) => prev.filter((f) => f !== file))
+    if (file === activeContract) setActiveContract(undefined)
+  }
+
+  const run = (force = false) => {
+    if (!activeId || studio.running || !ready.length) return
+    // Con un contrato, una operación o el ambiente a la vista, ⌘Enter no ejecuta el journey de fondo.
+    if (activeContract || activeTry || envActive) return
+    if (mutating.length && !studio.confirmed && !force) {
+      setAskConfirm(true)
+      return
+    }
+    setAskConfirm(false)
+    void studio.runJourney(activeId)
+  }
+
+  // faker (variables {{$…}}) se carga en segundo plano, fuera de la carga inicial.
+  useEffect(() => {
+    void loadFaker()
+  }, [])
+
+  // ⌘/Ctrl + Enter ejecuta el journey activo, como "Send" en un cliente de APIs.
+  const runRef = useRef(run)
+  useEffect(() => {
+    runRef.current = run
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        runRef.current()
+      }
+      // ⌘/Ctrl + K abre el buscador.
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const changeWidth = (w: number) => {
+    setResultsWidth(w)
+    try {
+      localStorage.setItem(RESULTS_WIDTH_KEY, String(Math.round(w)))
+    } catch {
+      /* sin almacenamiento: el ancho no se recuerda */
+    }
+  }
+
+  // Variables del ambiente activo para los campos que aceptan {{nombre}}.
+  const templateVars: TemplateVars = {
+    variables: studio.activeEnv.variables,
+    envName: studio.activeEnv.name,
+    onCreate: (name, secret) => studio.envActions.setVariables([...studio.activeEnv.variables, { name, value: '', secret }]),
+    onOpenEnv: openEnv,
+  }
+
+  const sidebar = (
+    <CollectionSidebar
+      studio={studio}
+      workspace={workspace}
+      selection={{ journey: activeId, step: shownView === 'step' ? stepId : undefined, env: envActive }}
+      onOpenJourney={(id) => openJourney(id, views[id] === 'step' ? 'overview' : undefined)}
+      onOpenStep={openStep}
+      onOpenEnv={openEnv}
+      onOpenContract={openContract}
+      activeContract={contractOpen}
+      onOpenTerminal={onOpenTerminal}
+    />
+  )
+
+  // Lo que se puede buscar con ⌘K: journeys, pasos, ambientes y colecciones.
+  const paletteItems = (): PaletteItem[] => [
+    ...journeys.map((j) => ({
+      id: `j:${j.key}`,
+      group: t('palette.journeys'),
+      label: humanizeId(j.workflowId),
+      detail: multiFile ? j.file.split(/[\\/]/).pop() : j.wa.workflow.summary,
+      run: () => openJourney(j.key),
+    })),
+    ...journeys.flatMap((j) =>
+      j.wa.steps.map((s) => ({
+        id: `s:${j.key}:${s.step.stepId}`,
+        group: t('palette.steps'),
+        label: s.step.stepId,
+        detail: humanizeId(j.workflowId),
+        badge: s.op ? { text: s.op.method.toUpperCase(), cls: `m-${s.op.method.toLowerCase()}` } : { text: 'FLOW', cls: 'm-flow' },
+        run: () => openStep(j.key, s.step.stepId),
+      })),
+    ),
+    ...studio.environments.map((e) => ({
+      id: `e:${e.id}`,
+      group: t('palette.environments'),
+      label: e.name,
+      detail: e.id === studio.activeEnv.id ? t('palette.active') : undefined,
+      envColor: e.color ?? '',
+      run: () => {
+        studio.envActions.select(e.id)
+        openEnv()
+      },
+    })),
+    ...studio.collectionSources
+      .filter((src) => src.fileName)
+      .map((src) => ({
+        id: `k:${src.name}`,
+        group: t('palette.contracts'),
+        label: src.name,
+        detail: src.fileName,
+        badge: { text: src.type === 'asyncapi' ? 'ASYNC' : 'API', cls: 'm-flow' },
+        run: () => openContract(src.fileName!),
+      })),
+    ...workspace.collections.map((c) => ({
+      id: `c:${c.folder}`,
+      group: t('palette.collections'),
+      label: c.name,
+      detail: c.folder,
+      run: () => void workspace.openCollection(c.folder),
+    })),
+  ]
+  const hasCollection = projects.length > 0 || !!workspace.activeCollection
+  const statusBar = (
+    <>
+      <StatusBar
+        devOpen={dev.open}
+        onDevTools={dev.toggle}
+        locale={studio.locale}
+        onLocale={studio.changeLocale}
+        privacy={t(workspace.isOpen ? 'studio.privacy' : studio.isDesktop ? 'sidebar.privacyDesktop' : 'sidebar.privacy')}
+        env={hasCollection ? { name: studio.activeEnv.name, color: studio.activeEnv.color } : undefined}
+        onOpenEnv={openEnv}
+        onSearch={() => setPaletteOpen(true)}
+      />
+      {paletteOpen && <CommandPalette items={paletteItems()} onClose={() => setPaletteOpen(false)} />}
+    </>
+  )
+
+  const homeTab = workspace.isOpen ? (
+    <div className={`ws-tab ws-home-tab ${showHome ? 'active' : ''}`} role="tab" aria-selected={showHome}>
+      <button className="ws-tab-main" onClick={() => setHomeActive(true)} title={t('home.title')}>
+        <Icon d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10" size={14} /> {t('home.title')}
+      </button>
+    </div>
+  ) : null
+  const homeView = (
+    <WorkspaceHome
+      workspace={workspace}
+      stats={{ journeys: journeys.length, arazzo: projects.length, contracts: studio.collectionSources.length, environments: workspace.activeCollection ? studio.environments.length : 0 }}
+      onFiles={(files) => {
+        void studio.addFiles(files)
+        setHomeActive(false)
+      }}
+      onOpenCollection={(folder) => {
+        if (folder !== workspace.activeCollection?.folder) void workspace.openCollection(folder)
+        setHomeActive(false)
+      }}
+    />
+  )
+
+  const createArazzoAndOpen = () => openJourney(studio.createArazzo(), 'yaml')
+  // Dentro de un workspace, una colección sin Arazzo no es un error (puede tener solo contratos).
+  const shownErrors = workspace.isOpen ? studio.errors.filter((e) => e !== t('load.noArazzo')) : studio.errors
+
+  if (!projects.length && !workspace.isOpen) {
+    const actions = {
+      errors: studio.errors,
+      onFiles: studio.addFiles,
+      onExample: studio.loadExample,
+      onOpenFolder: studio.isDesktop ? studio.openFolder : undefined,
+      onCreate: () => openJourney(studio.createArazzo(), 'yaml'),
+      savedSession: studio.savedSession,
+      onRestore: studio.restoreSession,
+      onDiscard: studio.discardSession,
+    }
+    return (
+      <>
+      <div className="ws-shell">
+        {sidebar}
+        <main className="ws-welcome">
+          {workspace.isOpen ? (
+            showHome || !workspace.collections.length ? (
+              <div className="ws-main ws-home-only">
+                <div className="ws-tabs" role="tablist">
+                  {homeTab}
+                </div>
+                <div className="ws-body ws-home">{homeView}</div>
+              </div>
+            ) : (
+              <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={actions.onCreate} />
+            )
+          ) : (
+            <EmptyWorkspace {...actions} onShowWelcome={() => setWelcomeClosed(false)} />
+          )}
+        </main>
+        {!welcomeClosed && !workspace.isOpen && <WelcomeDialog {...actions} workspace={workspace} onClose={() => setWelcomeClosed(true)} />}
+      </div>
+      {statusBar}
+      </>
+    )
+  }
+
+  /** Journeys que usan un contrato (directo, o por $ref desde su contrato) y sus problemas actuales. */
+  const contractUsage = (file: string): ContractUsage[] => {
+    const base = file.split(/[\\/]/).pop() ?? file
+    const usesFile = (j: (typeof journeys)[number]) =>
+      j.project.sources.some((s) => s.fileName === file || (!!s.fileName && !!studio.contractText(s.fileName)?.text.includes(base)))
+    return journeys.filter(usesFile).map((j) => ({
+      key: j.key,
+      name: humanizeId(j.workflowId),
+      file: j.file,
+      problems: j.wa.issues.map((i) => ({ level: i.level, message: i.message, stepId: i.stepId })),
+    }))
+  }
+
+  /** Swagger UI de un contrato: servidor y credenciales del ambiente, y "Try it out" por la app. */
+  const swaggerFor = (file: string) => {
+    // Sin fuente (un contrato que ningún Arazzo usa todavía) no hay URL ni credenciales del ambiente.
+    const src = studio.collectionSources.find((s) => s.fileName === file && s.status === 'loaded')
+    const vars = variableValues(studio.activeEnv)
+    const schemes = src?.doc?.components?.securitySchemes ?? {}
+    const credentials = Object.entries<any>(schemes).map(([name, scheme]) => ({
+      schemeName: name,
+      type: scheme?.type === 'http' && String(scheme?.scheme).toLowerCase() === 'basic' ? 'basic' : String(scheme?.type ?? ''),
+      value: src ? String(resolveTemplates(studio.credentials[`${src.name}:${name}`] ?? '', vars)) : '',
+    }))
+    const url = src ? String(resolveTemplates(studio.servers[src.name] ?? '', vars)) : ''
+    return {
+      envServer: url ? { url, envName: studio.activeEnv.name } : undefined,
+      credentials,
+      secrets: secretValues({ variables: studio.activeEnv.variables, credentials: Object.fromEntries(credentials.map((c) => [c.schemeName, c.value])) }),
+      onRequest: async (req: HttpRequest) => {
+        const env = await studio.requestEnv()
+        const shown = redactSecrets(req, env.secrets)
+        const entry = {
+          kind: 'http' as const,
+          method: req.method,
+          url: shown.url,
+          simulated: false,
+          journey: 'Swagger UI',
+          step: new URL(req.url).pathname,
+          caseName: 'Try it out',
+          request: { headers: shown.headers, body: parseBody(shown.body) },
+        }
+        try {
+          const res = await studio.sendHttp(req)
+          const body = redactSecrets(parseBody(res.bodyText), env.secrets)
+          logNetwork({ ...entry, status: res.status, statusText: res.statusText, durationMs: res.durationMs, size: byteSize(res.bodyText), failed: res.status >= 400, response: { headers: res.headers, body } })
+          return res
+        } catch (e) {
+          logNetwork({ ...entry, failed: true })
+          log('error', `${req.method} ${shown.url}: ${(e as Error).message}`, { source: 'app' })
+          throw e
+        }
+      },
+    }
+  }
+
+  const contractView = (file: string) => {
+    const current = studio.contractText(file)
+    if (!current) return null
+    return (
+      <Suspense fallback={<Empty>{t('editor.loading')}</Empty>}>
+        <ContractEditor
+          key={`${file}:${current.editable}`}
+          fileName={file}
+          text={current.text}
+          original={studio.arazzoOriginal(file) ?? current.text}
+          editable={current.editable}
+          onChange={(text) => studio.editContract(file, text)}
+          onSave={(text) => (workspace.isOpen ? workspace.saveNow().then(() => 'saved' as const) : studio.saveArazzo(file, text))}
+          onMakeLocalCopy={() => studio.makeLocalCopy(file)}
+          usage={contractUsage(file)}
+          related={studio.contractFiles.filter((f) => f !== file && current.text.includes(f.split(/[\\/]/).pop() ?? f))}
+          onOpenFile={openContract}
+          docDoc={studio.collectionSources.find((s) => s.fileName === file && s.status === 'loaded')?.doc}
+          swagger={swaggerFor(file)}
+          onOpenJourney={(key, step) => (step ? openStep(key, step) : openJourney(key))}
+        />
+      </Suspense>
+    )
+  }
+
+  const tryView = (key: string, known?: OperationRef, compact = false) => {
+    const op = known ?? findOperation(key)
+    if (!op) return null
+    // Sin estado todavía (primer "Try it out"): se parte del ejemplo del contrato.
+    const state = tryStates[key] ?? { form: initialForm(op), simulate: false }
+    const source = studio.collectionSources.find((s) => s.name === op.sourceName)
+    return (
+      <TryOperation
+        key={key}
+        op={op}
+        server={studio.servers[op.sourceName] || getServerUrl(source)}
+        env={{ name: studio.activeEnv.name, color: studio.activeEnv.color }}
+        security={operationSecurity(op).map((s) => ({ ...s, set: !!studio.credentials[s.key] }))}
+        state={state}
+        onState={(next) => setTryStates((prev) => ({ ...prev, [key]: next }))}
+        onSend={async (signal) => {
+          const r = await studio.tryOperation(op, state.form, state.simulate, signal)
+          setTryStates((prev) => ({ ...prev, [key]: { ...prev[key], result: r.step, error: r.error, runId: (prev[key]?.runId ?? 0) + 1 } }))
+        }}
+        onOpenEnv={openEnv}
+        compact={compact}
+      />
+    )
+  }
+
+  const envView = (
+    <div className="ws-center">
+      <div className="ws-center-head">
+        <h2 className="ws-env-title">
+          <EnvDot color={studio.activeEnv.color} /> {t('ws.env.title', { name: studio.activeEnv.name })}
+        </h2>
+      </div>
+      <div className="ws-center-body">
+        <EnvironmentView
+          sources={studio.collectionSources}
+          schemes={studio.collectionSchemes}
+          environments={studio.environments}
+          activeEnv={studio.activeEnv}
+          envActions={studio.envActions}
+          credentials={studio.credentials}
+          setCredential={studio.setCredential}
+          servers={studio.servers}
+          setServer={studio.setServer}
+        />
+      </div>
+    </div>
+  )
+
+  return (
+    <TemplateVarsProvider value={templateVars}>
+      <div className="ws-shell">
+        {sidebar}
+        <main className="ws-main">
+          <div className="ws-tabs" role="tablist">
+            {homeTab}
+            {tabs.map((id) => (
+              <div key={id} className={`ws-tab ${id === activeId && !envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={id === activeId && !envActive && !contractOpen && !tryOpen && !showHome}>
+                <button className="ws-tab-main" onClick={() => openJourney(id)} title={id}>
+                  {journeyName(id)}
+                  {multiFile && <span className="ws-tab-file">{splitJourneyKey(id).file.split(/[\\/]/).pop()}</span>}
+                </button>
+                {tabs.length > 1 && (
+                  <button className="ws-tab-close" onClick={() => closeTab(id)} aria-label={t('common.close')} title={t('common.close')}>
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            {envOpen && (
+              <div className={`ws-tab ${envActive && !contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={envActive && !contractOpen && !tryOpen && !showHome}>
+                <button
+                  className="ws-tab-main ws-env-tab"
+                  onClick={() => {
+                    setEnvActive(true)
+                    setActiveContract(undefined)
+                    setActiveTry(undefined)
+                    setHomeActive(false)
+                  }}
+                >
+                  <EnvDot color={studio.activeEnv.color} /> {studio.activeEnv.name}
+                </button>
+                <button
+                  className="ws-tab-close"
+                  onClick={() => {
+                    setEnvOpen(false)
+                    setEnvActive(false)
+                  }}
+                  aria-label={t('common.close')}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {shownContracts.map((file) => (
+              <div key={file} className={`ws-tab ${file === contractOpen && !tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={file === contractOpen && !tryOpen && !showHome}>
+                <button className="ws-tab-main ws-contract-tab" onClick={() => openContract(file)} title={file}>
+                  <span className="ws-tab-icon">{'{ }'}</span> {file.split(/[\\/]/).pop()}
+                </button>
+                <button className="ws-tab-close" onClick={() => closeContract(file)} aria-label={t('common.close')} title={t('common.close')}>
+                  ×
+                </button>
+              </div>
+            ))}
+            {shownTries.map((key) => {
+              const [, method, ...rest] = key.split('|')
+              return (
+                <div key={key} className={`ws-tab ${key === tryOpen && !showHome ? 'active' : ''}`} role="tab" aria-selected={key === tryOpen && !showHome}>
+                  <button
+                    className="ws-tab-main ws-try-tab"
+                    onClick={() => {
+                      setActiveTry(key)
+                      setHomeActive(false)
+                    }} title={key.replace(/\|/g, ' ')}>
+                    <TabMethod method={method} /> {rest.join('|')}
+                  </button>
+                  <button className="ws-tab-close" onClick={() => closeTry(key)} aria-label={t('common.close')} title={t('common.close')}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {shownErrors.length > 0 && !errorsHidden && (
+            <div className="callout err small ws-errors">
+              <div className="row">
+                <div className="grow">
+                  {shownErrors.map((e) => (
+                    <div key={e}>{e}</div>
+                  ))}
+                </div>
+                <button className="link" onClick={() => setErrorsHidden(true)}>
+                  {t('common.close')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showHome ? (
+            <div className="ws-body ws-home">{homeView}</div>
+          ) : tryOpen ? (
+            <div className="ws-body ws-try">{tryView(tryOpen)}</div>
+          ) : contractOpen ? (
+            <div className="ws-body ws-contract">{contractView(contractOpen)}</div>
+          ) : envActive ? (
+            <div className="ws-body">{envView}</div>
+          ) : wa ? (
+            <>
+              <div className="ws-runbar">
+                <div className="ws-runbar-title">
+                  <h2 title={wa.workflow.workflowId}>{humanizeId(wa.workflow.workflowId)}</h2>
+                  <span className="muted small clamp-1">
+                    {[multiFile ? journey?.file : '', wa.workflow.summary, messaging.length ? t('ws.run.messaging', { n: messaging.length }) : ''].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+                <span className="spacer" />
+                <Segmented
+                  options={[
+                    { id: 'real', label: t('common.realApi'), hint: t('cases.mode.realHint') },
+                    { id: 'simulado', label: t('cases.mode.simulation'), hint: t('cases.mode.simHint') },
+                  ]}
+                  value={studio.mode}
+                  onChange={(m) => {
+                    studio.setMode(m)
+                    setAskConfirm(false)
+                  }}
+                />
+                <label className="ws-env-select" title={t('ws.run.env')}>
+                  <span className="muted small">{t('ws.run.env')}</span>
+                  <select
+                    className={studio.activeEnv.color ? `c-${studio.activeEnv.color}` : undefined}
+                    value={studio.activeEnv.id}
+                    onChange={(e) => {
+                      if (e.target.value === '__config') openEnv()
+                      else studio.envActions.select(e.target.value)
+                    }}
+                  >
+                    {studio.environments.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                    <option value="__config">{t('ws.run.configureEnv')}</option>
+                  </select>
+                </label>
+                {studio.running ? (
+                  <button onClick={studio.cancelRun}>{t('common.cancel')}</button>
+                ) : (
+                  <button className="primary ws-run" disabled={!ready.length} onClick={() => run()} title={ready.length ? t('ws.run.shortcut') : t('cases.block.none')}>
+                    <Icon d={PLAY_ICON} size={14} /> {t('ws.run.button', { n: ready.length })}
+                  </button>
+                )}
+              </div>
+
+              {askConfirm && (
+                <div className="ws-strip warn" role="alert">
+                  <div className="grow">
+                    <strong>{t('cases.mutatingEnv', { env: studio.activeEnv.name })}</strong>
+                    <div className="ws-strip-list">
+                      {mutating.map((s) => (
+                        <span key={s.step.stepId}>
+                          <MethodBadge method={s.op!.method} /> <code>{(studio.servers[s.op!.sourceName] || t('cases.noServer')) + s.op!.path}</code>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      studio.setConfirmed(true)
+                      run(true)
+                    }}
+                  >
+                    {t('ws.run.confirm')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAskConfirm(false)
+                      void studio.runJourney(activeId!, 'simulado')
+                    }}
+                  >
+                    {t('ws.run.simulateInstead')}
+                  </button>
+                  <button className="link" onClick={() => setAskConfirm(false)}>
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              )}
+              {!askConfirm && credsMissing && (
+                <div className="ws-strip info">
+                  <span className="grow">{t('ws.run.credsMissing', { env: studio.activeEnv.name })}</span>
+                  <button className="small" onClick={openEnv}>
+                    {t('ws.run.completeCreds')}
+                  </button>
+                </div>
+              )}
+
+              <div className="ws-body">
+                <div className="ws-center">
+                  <div className="ws-center-head">
+                    <Tabs<View>
+                      value={shownView}
+                      onChange={(v) => setViews((prev) => ({ ...prev, [activeId!]: v }))}
+                      tabs={[
+                        { id: 'overview', label: t('ws.view.overview'), ...(wa.issues.some((i) => i.level === 'error') ? { count: wa.issues.filter((i) => i.level === 'error').length, tone: 'err' as const } : {}) },
+                        { id: 'inputs', label: 'Inputs', ...(inputsMissing ? { count: inputsMissing, tone: 'warn' as const } : {}) },
+                        { id: 'cases', label: t('ws.view.cases'), count: ready.length },
+                        { id: 'yaml', label: 'YAML' },
+                        ...(rs ? [{ id: 'step' as const, label: <span className="ws-step-tab">{rs.op && <MethodBadge method={rs.op.method} />} {rs.step.stepId}</span> }] : []),
+                      ]}
+                    />
+                  </div>
+                  <div className={`ws-center-body ${shownView === 'yaml' ? 'fill' : ''}`}>
+                    {shownView === 'overview' && analysis && <OverviewView analysis={analysis} wa={wa} />}
+                    {shownView === 'inputs' && <InputsView wa={wa} values={values} setInput={(_, name, v) => studio.setInput(activeId!, name, v)} />}
+                    {shownView === 'cases' && (
+                      <CasesView
+                        wa={wa}
+                        cases={journeyCases}
+                        {...studio.caseActions}
+                        addCase={(tc) => studio.caseActions.addCase(tc, activeId!)}
+                        onExportScenarios={studio.exportScenariosFile}
+                        onImportScenarios={studio.importScenariosFile}
+                        base={values}
+                        mode={studio.mode}
+                        running={studio.running}
+                        onRunCase={(id) => void studio.runJourney(activeId!, studio.mode, [id])}
+                        variables={studio.activeEnv.variables.filter((v) => v.name).map((v) => v.name)}
+                      />
+                    )}
+                    {shownView === 'yaml' && journey && studio.arazzoText(journey.file) !== undefined && (
+                      <Suspense fallback={<Empty>{t('editor.loading')}</Empty>}>
+                        <ArazzoEditor
+                          key={journey.file}
+                          fileName={journey.file}
+                          text={studio.arazzoText(journey.file)!}
+                          original={studio.arazzoOriginal(journey.file) ?? studio.arazzoText(journey.file)!}
+                          project={journey.project}
+                          analysis={journey.analysis}
+                          selected={wa.workflow.workflowId}
+                          onChange={(text) => studio.editArazzo(journey.file, text)}
+                          onSave={(text) =>
+                            // En un workspace todo se guarda solo; "Guardar" solo adelanta el guardado.
+                            workspace.isOpen ? workspace.saveNow().then(() => 'saved' as const) : studio.saveArazzo(journey.file, text)
+                          }
+                          showDiagram={false}
+                        />
+                      </Suspense>
+                    )}
+                    {shownView === 'step' && rs && (
+                      <StepView
+                        wa={wa}
+                        rs={rs}
+                        servers={studio.servers}
+                        onEditYaml={() => setViews((prev) => ({ ...prev, [activeId!]: 'yaml' }))}
+                        onTry={rs.op ? () => openTry(rs.op!) : undefined}
+                      />
+                    )}
+                  </div>
+                </div>
+                <Splitter width={resultsWidth} onChange={changeWidth} />
+                <aside className="ws-results" style={{ width: resultsWidth }}>
+                  <ResultsPanel
+                    key={activeId}
+                    runs={journeyRuns}
+                    running={studio.running && journeyRuns.some((r) => r.state !== 'done')}
+                    onCancel={studio.cancelRun}
+                    onRerun={() => run()}
+                    onRunSimulated={() => void studio.runJourney(activeId!, 'simulado')}
+                    onEditEnvironment={openEnv}
+                    onExport={studio.exportReport}
+                  />
+                </aside>
+              </div>
+            </>
+          ) : (
+            <div className="ws-body">
+              {workspace.isOpen ? (
+                workspace.collections.length ? (
+                  <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={createArazzoAndOpen} />
+                ) : (
+                  homeView
+                )
+              ) : (
+                <Empty>{t('ws.noJourneys')}</Empty>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+      {statusBar}
+    </TemplateVarsProvider>
+  )
+}

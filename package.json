@@ -1,10 +1,12 @@
 {
   "name": "arazzo-studio",
+  "productName": "Arazzo Studio",
   "private": true,
   "version": "0.1.0",
-  "description": "Run and test Arazzo workflows against real APIs, right in the browser.",
+  "description": "Test Arazzo workflows (OpenAPI and AsyncAPI) without writing tests, in the browser or as a desktop app.",
   "license": "MIT",
   "type": "module",
+  "main": "electron/main.mjs",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
@@ -16,7 +18,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "mock": "node examples/mock-server.mjs",
-    "mock:bug": "node examples/mock-server.mjs --bug"
+    "mock:bug": "node examples/mock-server.mjs --bug",
+    "desktop:dev": "node electron/dev.mjs",
+    "desktop:build": "npm run build && electron-builder",
+    "postinstall": "node scripts/fix-node-pty.mjs",
+    "test:e2e": "node e2e/smoke.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -25,14 +31,19 @@
     "@codemirror/lint": "6.9.7",
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.15",
+    "@faker-js/faker": "10.6.0",
     "@lezer/highlight": "1.2.5",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.12.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "codemirror": "6.0.2",
     "jsonpath-plus": "^11.2.1",
+    "node-pty": "1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "swagger-ui-dist": "5.34.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
@@ -40,9 +51,53 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "44.10.0",
+    "electron-builder": "26.18.1",
     "oxlint": "^1.88.0",
+    "playwright-core": "1.64.1",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
+  },
+  "author": "bvegam",
+  "build": {
+    "appId": "io.github.bvegam.arazzostudio",
+    "productName": "Arazzo Studio",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/main.mjs",
+      "electron/preload.cjs",
+      "package.json",
+      "!node_modules/**",
+      "node_modules/node-pty/package.json",
+      "node_modules/node-pty/lib/**",
+      "node_modules/node-pty/prebuilds/${platform}-${arch}/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false
   }
 }

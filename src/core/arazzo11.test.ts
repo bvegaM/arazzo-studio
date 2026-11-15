@@ -451,3 +451,26 @@ describe('ejemplo de traspaso de millas (examples/miles-transfer)', () => {
     expect(run.outputs.memberId).toMatch(/^MBR-/)
   })
 })
+
+describe('secretos al ejecutar', () => {
+  it('se envían con su valor real pero se muestran como ••••', async () => {
+    const { project, analysis, wa } = setup()
+    const sent: string[] = []
+    const simulated = createSimulatedExecutor(project, wa.workflow.steps)
+    const executor: HttpExecutor = async (req, signal, meta) => {
+      sent.push(req.body ?? '')
+      return simulated(req, signal, meta)
+    }
+    const run = await runWorkflow(project, analysis, 'transferMiles', {
+      inputs: { ...INPUTS, email: 'clave-privada@example.com' },
+      credentials: {},
+      servers: {},
+      executor,
+      messenger: createSimulatedMessenger(wa.workflow.steps),
+      secrets: ['clave-privada@example.com'],
+    })
+    expect(sent[0]).toContain('clave-privada@example.com')
+    expect(JSON.stringify(run.steps[0].request)).not.toContain('clave-privada')
+    expect(run.steps[0].request?.body).toEqual({ email: '••••' })
+  })
+})

@@ -93,40 +93,6 @@ export function Pill({ active, onClick, children }: { active: boolean; onClick: 
   )
 }
 
-export function PageHeader({ step, title, description, actions }: { step: number; title: string; description?: ReactNode; actions?: ReactNode }) {
-  return (
-    <header className="page-head">
-      <div>
-        <div className="eyebrow">{t('kit.stepOf', { step, total: 5 })}</div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
-      {actions && <div className="page-actions">{actions}</div>}
-    </header>
-  )
-}
-
-export function ActionBar({ left, right, info }: { left?: ReactNode; right?: ReactNode; info?: ReactNode }) {
-  return (
-    <div className="action-bar">
-      <div className="action-bar-inner">
-        <div>{left}</div>
-        <div className="action-bar-info">{info}</div>
-        <div className="row">{right}</div>
-      </div>
-    </div>
-  )
-}
-
-export function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'ok' | 'err' | 'warn' }) {
-  return (
-    <div className={`metric ${tone ? `m-${tone}` : ''}`}>
-      <div className="metric-value">{value}</div>
-      <div className="metric-label">{label}</div>
-    </div>
-  )
-}
-
 /** Ícono de línea (path SVG de 24×24) que toma el color del texto. */
 export function Icon({ d, size = 15 }: { d: string; size?: number }) {
   return (
@@ -137,6 +103,11 @@ export function Icon({ d, size = 15 }: { d: string; size?: number }) {
 }
 
 export const PENCIL_ICON = 'M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4'
+
+/** Punto con el color de la etiqueta de un ambiente (vacío si no tiene). */
+export function EnvDot({ color, title }: { color?: string; title?: string }) {
+  return <span className={`env-dot ${color ? `c-${color}` : ''}`} title={title} aria-hidden={title ? undefined : true} />
+}
 
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>

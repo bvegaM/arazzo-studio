@@ -10,6 +10,7 @@ import { getServerUrl, isAsyncOperation, operationRequestBody, type SecuritySche
 import { validateAgainstContract, validateMessage } from './contract'
 import { NetworkError, type HttpExecutor, type MessageExecutor } from './http'
 import { createSimulatedMessenger } from './simulator'
+import { redactSecrets } from './environments'
 import { t } from '../i18n'
 
 export type StepStatus = 'success' | 'warning' | 'failed' | 'skipped'
@@ -83,6 +84,8 @@ export interface RunOptions {
   signal?: AbortSignal
   onStep?: (r: StepResult) => void
   maxRetryWaitMs?: number
+  /** Valores que se envían pero no se muestran: aparecen como •••• en los resultados. */
+  secrets?: string[]
 }
 
 const MAX_EXECUTIONS = 200
@@ -420,7 +423,10 @@ async function executeOperationStep(
     } else if (relevantUnresolved.length) {
       result.reason = {
         category: 'dato-previo',
-        message: t('run.unresolved', { refs: relevantUnresolved.join(', '), status: response.status, msg: msg ? ` ("${msg}")` : '' }),
+        // Si faltó un dato de la ruta, la URL cambió de recurso: se muestra a cuál se llamó de verdad.
+        message: Object.values(pathParams).some((v) => v === '')
+          ? t('run.unresolvedPath', { refs: relevantUnresolved.join(', '), url: request.url, status: response.status, msg: msg ? ` ("${msg}")` : '' })
+          : t('run.unresolved', { refs: relevantUnresolved.join(', '), status: response.status, msg: msg ? ` ("${msg}")` : '' }),
       }
     } else if (response.status >= 400) {
       result.reason = {
@@ -542,6 +548,15 @@ async function executeMessageStep(
     result.reason = { category: 'mensajeria', message: t('run.msg.simulatedInReal') }
   } else result.status = 'success'
   return result
+}
+
+/** Copia del resultado con los secretos tapados; la petición real se conserva para copiarla como cURL. */
+function hideSecrets(result: StepResult, secrets: string[] = []): StepResult {
+  if (!secrets.length) return result
+  const shown = redactSecrets(result, secrets)
+  const real = result.request && realRequests.get(result.request)
+  if (real && shown.request) realRequests.set(shown.request, real)
+  return shown
 }
 
 function workflowById(project: Project, id: string): Workflow | undefined {
@@ -691,7 +706,7 @@ export async function runWorkflow(
       result.actionType = action.type
       actions.push({ stepId: step.stepId, name: result.actionName, type: action.type ?? '' })
     }
-    opts.onStep?.(result)
+    opts.onStep?.(hideSecrets(result, opts.secrets))
 
     if (action?.type === 'retry' && !succeeded) {
       const limit = action.retryLimit ?? 1
@@ -780,10 +795,10 @@ export async function runWorkflow(
   return {
     workflowId,
     status,
-    steps: results,
-    outputs,
+    steps: results.map((r) => hideSecrets(r, opts.secrets)),
+    outputs: redactSecrets(outputs, opts.secrets ?? []),
     durationMs: Math.round(performance.now() - started),
-    reason: failure,
+    reason: redactSecrets(failure, opts.secrets ?? []),
     actions,
   }
 }

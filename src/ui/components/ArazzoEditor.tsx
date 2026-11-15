@@ -3,14 +3,14 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { yaml } from '@codemirror/lang-yaml'
-import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint'
+import { lintGutter, setDiagnostics } from '@codemirror/lint'
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { tags } from '@lezer/highlight'
+import { syntaxHighlighting } from '@codemirror/language'
 import type { ProjectAnalysis } from '../../core/analyze'
 import type { Project } from '../../core/loader'
 import { issueRanges, suggest, yamlProblems, type TextProblem } from '../../core/authoring'
-import { download } from '../../lib/browser'
+import { editorTheme as theme, highlight, toDiagnostics } from './editorTheme'
+import type { SaveResult } from '../../lib/browser'
 import { t } from '../../i18n'
 import { useLocale } from '../../i18n/react'
 import { IssueBadge } from './badges'
@@ -28,58 +28,12 @@ interface Props {
   selected: string
   /** Aplica el texto; devuelve el error si no se pudo leer como Arazzo. */
   onChange: (text: string) => string | undefined
-  onClose: () => void
-}
-
-// Colores de la app (variables CSS): el resaltado sigue el tema claro u oscuro.
-const theme = EditorView.theme({
-  '&': { height: '100%', backgroundColor: 'var(--surface)', color: 'var(--text)', fontSize: '13px' },
-  '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.55' },
-  '.cm-content': { caretColor: 'var(--text)' },
-  '.cm-cursor': { borderLeftColor: 'var(--text)' },
-  '.cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--faint)', borderRight: '1px solid var(--border)' },
-  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--accent) 7%, transparent)' },
-  '.cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--info) 22%, transparent)' },
-  '.cm-tooltip': { backgroundColor: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border-strong)' },
-  '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--accent-soft)', color: 'var(--text)' },
-  '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
-})
-
-const highlight = HighlightStyle.define([
-  { tag: [tags.propertyName, tags.definition(tags.propertyName)], color: 'var(--info)' },
-  { tag: [tags.string, tags.special(tags.string)], color: 'var(--ok)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'var(--warn)' },
-  { tag: [tags.comment, tags.lineComment], color: 'var(--faint)', fontStyle: 'italic' },
-  { tag: [tags.keyword, tags.typeName, tags.labelName], color: 'var(--sim)' },
-])
-
-const SEVERITY: Record<TextProblem['level'], Diagnostic['severity']> = { error: 'error', warning: 'warning', info: 'info' }
-
-function toDiagnostics(problems: TextProblem[], length: number): Diagnostic[] {
-  return problems
-    .filter((p) => p.from <= length)
-    .map((p) => ({ from: p.from, to: Math.min(p.to, length), severity: SEVERITY[p.level], message: p.message }))
-}
-
-/** Guarda sobre un archivo elegido por el usuario (Chrome, Edge) o, si no se puede, lo descarga. */
-async function saveFile(text: string, name: string): Promise<'saved' | 'downloaded' | 'cancelled'> {
-  const picker = (window as any).showSaveFilePicker
-  if (!picker) {
-    download(text, name, 'application/yaml')
-    return 'downloaded'
-  }
-  try {
-    const handle = await picker({ suggestedName: name, types: [{ description: 'Arazzo', accept: { 'application/yaml': ['.yaml', '.yml'] } }] })
-    const writable = await handle.createWritable()
-    await writable.write(text)
-    await writable.close()
-    return 'saved'
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') return 'cancelled'
-    download(text, name, 'application/yaml')
-    return 'downloaded'
-  }
+  /** Guarda el texto: sobre el archivo original (escritorio), donde elija el usuario o como descarga. */
+  onSave: (text: string) => Promise<SaveResult>
+  /** Sin él, el editor no muestra el botón de cerrar (vive en una pestaña). */
+  onClose?: () => void
+  /** Mostrar el diagrama junto a los problemas (por defecto sí). */
+  showDiagram?: boolean
 }
 
 export function ArazzoEditor(p: Props) {
@@ -199,19 +153,21 @@ export function ArazzoEditor(p: Props) {
           <button
             className={dirty && !saved ? 'primary' : undefined}
             onClick={async () => {
-              const r = await saveFile(view.current?.state.doc.toString() ?? p.text, p.fileName)
+              const r = await p.onSave(view.current?.state.doc.toString() ?? p.text)
               if (r !== 'cancelled') setSaved(t(r === 'saved' ? 'editor.saved' : 'editor.downloaded'))
             }}
           >
             <Icon d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14" /> {t('editor.save')}
           </button>
-          <button onClick={p.onClose}>
-            <Icon d="M6 6l12 12M18 6L6 18" /> {t('editor.close')}
-          </button>
+          {p.onClose && (
+            <button onClick={p.onClose}>
+              <Icon d="M6 6l12 12M18 6L6 18" /> {t('editor.close')}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="editor-body">
+      <div className={`editor-body ${p.showDiagram === false ? 'stacked' : ''}`}>
         <div className="editor-code" ref={host} />
         <aside className="editor-side">
           <h4>{t('editor.problems')}</h4>
@@ -235,7 +191,7 @@ export function ArazzoEditor(p: Props) {
               </ul>
             )}
           </div>
-          {wa && (
+          {wa && p.showDiagram !== false && (
             <>
               <h4>
                 {t('contracts.diagram')} · <code>{wa.workflow.workflowId}</code>

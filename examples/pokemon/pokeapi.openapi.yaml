@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: PokéAPI (subconjunto)
+  version: 2.0.0
+  description: >-
+    Una parte de la [PokéAPI](https://pokeapi.co), la API pública y gratuita de Pokémon, para
+    probar Arazzo Studio contra una API real: no pide credenciales y permite CORS.
+
+
+    Los schemas describen solo los campos que usan los journeys; la API devuelve muchos más.
+  license:
+    name: BSD-3-Clause (PokéAPI)
+    url: https://github.com/PokeAPI/pokeapi/blob/master/LICENSE.md
+externalDocs:
+  description: Documentación de la PokéAPI
+  url: https://pokeapi.co/docs/v2
+servers:
+  - url: https://pokeapi.co/api/v2
+    description: PokéAPI pública
+tags:
+  - name: pokemon
+    description: Pokémon y sus especies
+  - name: types
+    description: Tipos y sus debilidades
+  - name: abilities
+    description: Habilidades
+paths:
+  /pokemon:
+    get:
+      tags: [pokemon]
+      operationId: listPokemon
+      summary: Lista Pokémon (paginado)
+      parameters:
+        - name: limit
+          in: query
+          description: Cuántos devolver.
+          schema: { type: integer, minimum: 1, default: 20, example: 5 }
+        - name: offset
+          in: query
+          description: Desde cuál empezar.
+          schema: { type: integer, minimum: 0, default: 0, example: 0 }
+      responses:
+        '200':
+          description: Una página de Pokémon
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PokemonPage' }
+              example:
+                count: 1351
+                next: https://pokeapi.co/api/v2/pokemon?offset=5&limit=5
+                previous: null
+                results:
+                  - { name: bulbasaur, url: 'https://pokeapi.co/api/v2/pokemon/1/' }
+                  - { name: ivysaur, url: 'https://pokeapi.co/api/v2/pokemon/2/' }
+  /pokemon/{idOrName}:
+    get:
+      tags: [pokemon]
+      operationId: getPokemon
+      summary: Consulta un Pokémon
+      description: Por número de Pokédex (`25`) o por nombre en minúsculas (`pikachu`).
+      parameters:
+        - $ref: '#/components/parameters/IdOrName'
+      responses:
+        '200':
+          description: El Pokémon
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pokemon' }
+              example:
+                id: 25
+                name: pikachu
+                base_experience: 112
+                height: 4
+                weight: 60
+                types:
+                  - slot: 1
+                    type: { name: electric, url: 'https://pokeapi.co/api/v2/type/13/' }
+                abilities:
+                  - is_hidden: false
+                    slot: 1
+                    ability: { name: static, url: 'https://pokeapi.co/api/v2/ability/9/' }
+                species: { name: pikachu, url: 'https://pokeapi.co/api/v2/pokemon-species/25/' }
+                stats:
+                  - base_stat: 35
+                    effort: 0
+                    stat: { name: hp, url: 'https://pokeapi.co/api/v2/stat/1/' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pokemon-species/{idOrName}:
+    get:
+      tags: [pokemon]
+      operationId: getPokemonSpecies
+      summary: Consulta la especie de un Pokémon
+      description: Datos de la especie (legendario, tasa de captura, cadena de evolución).
+      parameters:
+        - $ref: '#/components/parameters/IdOrName'
+      responses:
+        '200':
+          description: La especie
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PokemonSpecies' }
+              example:
+                id: 25
+                name: pikachu
+                is_legendary: false
+                is_mythical: false
+                capture_rate: 190
+                color: { name: yellow, url: 'https://pokeapi.co/api/v2/pokemon-color/10/' }
+                generation: { name: generation-i, url: 'https://pokeapi.co/api/v2/generation/1/' }
+                evolves_from_species: { name: pichu, url: 'https://pokeapi.co/api/v2/pokemon-species/172/' }
+                evolution_chain: { url: 'https://pokeapi.co/api/v2/evolution-chain/10/' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /evolution-chain/{id}:
+    get:
+      tags: [pokemon]
+      operationId: getEvolutionChain
+      summary: Consulta una cadena de evolución
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de la cadena (sale de la especie, en evolution_chain.url).
+          schema: { type: integer, example: 10 }
+      responses:
+        '200':
+          description: La cadena de evolución
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvolutionChain' }
+              example:
+                id: 10
+                chain:
+                  is_baby: true
+                  species: { name: pichu, url: 'https://pokeapi.co/api/v2/pokemon-species/172/' }
+                  evolves_to:
+                    - is_baby: false
+                      species: { name: pikachu, url: 'https://pokeapi.co/api/v2/pokemon-species/25/' }
+                      evolves_to:
+                        - is_baby: false
+                          species: { name: raichu, url: 'https://pokeapi.co/api/v2/pokemon-species/26/' }
+                          evolves_to: []
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /type/{idOrName}:
+    get:
+      tags: [types]
+      operationId: getType
+      summary: Consulta un tipo
+      description: Sus relaciones de daño y los Pokémon que lo tienen.
+      parameters:
+        - name: idOrName
+          in: path
+          required: true
+          description: Número o nombre del tipo.
+          schema: { type: string, example: electric }
+      responses:
+        '200':
+          description: El tipo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Type' }
+              example:
+                id: 13
+                name: electric
+                damage_relations:
+                  double_damage_from: [{ name: ground, url: 'https://pokeapi.co/api/v2/type/5/' }]
+                  double_damage_to:
+                    - { name: flying, url: 'https://pokeapi.co/api/v2/type/3/' }
+                    - { name: water, url: 'https://pokeapi.co/api/v2/type/11/' }
+                  half_damage_from: [{ name: steel, url: 'https://pokeapi.co/api/v2/type/9/' }]
+                  half_damage_to: [{ name: grass, url: 'https://pokeapi.co/api/v2/type/12/' }]
+                  no_damage_from: []
+                  no_damage_to: [{ name: ground, url: 'https://pokeapi.co/api/v2/type/5/' }]
+                pokemon:
+                  - slot: 1
+                    pokemon: { name: pikachu, url: 'https://pokeapi.co/api/v2/pokemon/25/' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /ability/{idOrName}:
+    get:
+      tags: [abilities]
+      operationId: getAbility
+      summary: Consulta una habilidad
+      parameters:
+        - name: idOrName
+          in: path
+          required: true
+          description: Número o nombre de la habilidad.
+          schema: { type: string, example: static }
+      responses:
+        '200':
+          description: La habilidad
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ability' }
+              example:
+                id: 9
+                name: static
+                effect_entries:
+                  - effect: Whenever a move makes contact with this Pokémon, the move's user has a 30% chance of being paralyzed.
+                    short_effect: Has a 30% chance of paralyzing attacking Pokémon on contact.
+                    language: { name: en, url: 'https://pokeapi.co/api/v2/language/9/' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    IdOrName:
+      name: idOrName
+      in: path
+      required: true
+      description: Número de Pokédex o nombre en minúsculas.
+      schema: { type: string, example: pikachu }
+  responses:
+    NotFound:
+      description: No existe
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/NotFound' }
+          example: { status: 404, message: Not Found }
+  schemas:
+    NamedResource:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string, format: uri }
+    NotFound:
+      type: object
+      properties:
+        status: { type: integer, example: 404 }
+        message: { type: string, example: Not Found }
+    PokemonPage:
+      type: object
+      required: [count, results]
+      properties:
+        count: { type: integer }
+        next: { type: string, nullable: true }
+        previous: { type: string, nullable: true }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/NamedResource' }
+    Pokemon:
+      type: object
+      required: [id, name, types, abilities, species]
+      properties:
+        id: { type: integer, example: 25 }
+        name: { type: string, example: pikachu }
+        base_experience: { type: integer, nullable: true }
+        height: { type: integer, description: En decímetros. }
+        weight: { type: integer, description: En hectogramos. }
+        types:
+          type: array
+          items:
+            type: object
+            required: [slot, type]
+            properties:
+              slot: { type: integer }
+              type: { $ref: '#/components/schemas/NamedResource' }
+        abilities:
+          type: array
+          items:
+            type: object
+            required: [ability, is_hidden]
+            properties:
+              is_hidden: { type: boolean }
+              slot: { type: integer }
+              ability: { $ref: '#/components/schemas/NamedResource' }
+        species: { $ref: '#/components/schemas/NamedResource' }
+        stats:
+          type: array
+          items:
+            type: object
+            properties:
+              base_stat: { type: integer }
+              effort: { type: integer }
+              stat: { $ref: '#/components/schemas/NamedResource' }
+    PokemonSpecies:
+      type: object
+      required: [id, name, is_legendary, capture_rate, evolution_chain]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        is_legendary: { type: boolean }
+        is_mythical: { type: boolean }
+        capture_rate: { type: integer, minimum: 0, maximum: 255 }
+        color: { $ref: '#/components/schemas/NamedResource' }
+        generation: { $ref: '#/components/schemas/NamedResource' }
+        evolves_from_species:
+          type: object
+          nullable: true
+          description: null en la primera forma de la cadena.
+          properties:
+            name: { type: string }
+            url: { type: string }
+        evolution_chain:
+          type: object
+          required: [url]
+          properties:
+            url: { type: string, format: uri }
+    EvolutionChain:
+      type: object
+      required: [id, chain]
+      properties:
+        id: { type: integer }
+        chain: { $ref: '#/components/schemas/ChainLink' }
+    ChainLink:
+      type: object
+      required: [species, evolves_to]
+      properties:
+        is_baby: { type: boolean }
+        species: { $ref: '#/components/schemas/NamedResource' }
+        evolves_to:
+          type: array
+          items: { $ref: '#/components/schemas/ChainLink' }
+    Type:
+      type: object
+      required: [id, name, damage_relations, pokemon]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        damage_relations:
+          type: object
+          properties:
+            double_damage_from: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+            double_damage_to: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+            half_damage_from: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+            half_damage_to: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+            no_damage_from: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+            no_damage_to: { type: array, items: { $ref: '#/components/schemas/NamedResource' } }
+        pokemon:
+          type: array
+          items:
+            type: object
+            properties:
+              slot: { type: integer }
+              pokemon: { $ref: '#/components/schemas/NamedResource' }
+    Ability:
+      type: object
+      required: [id, name, effect_entries]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        effect_entries:
+          type: array
+          items:
+            type: object
+            properties:
+              effect: { type: string }
+              short_effect: { type: string }
+              language: { $ref: '#/components/schemas/NamedResource' }

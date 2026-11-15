@@ -32,6 +32,8 @@ export interface CaseExpectation {
 
 export interface TestCase {
   id: string
+  /** Archivo Arazzo de la colección al que pertenece el workflow. */
+  arazzo?: string
   workflowId: string
   title: string
   origin: CaseOrigin
@@ -60,6 +62,19 @@ export function verdictLabel(verdict: Verdict): string {
 // Solo pasos HTTP: los de mensajería no responden con un error a un dato inválido.
 function firstConsumer(wa: WorkflowAnalysis, input: string) {
   return wa.steps.find((s) => !isAsyncOperation(s.op) && collectReferences({ ...s.step, parameters: s.parameters }).inputs.includes(input))
+}
+
+/**
+ * Si el input llega a un parámetro de ruta del paso, la ruta que queda sin él ("/type/");
+ * undefined si no va en la ruta.
+ */
+function urlWithoutPathInput(rs: WorkflowAnalysis['steps'][number], input: string): string | undefined {
+  const path = rs.op?.path
+  if (!path) return undefined
+  const ref = new RegExp(`\\$inputs\\.${input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`)
+  const params = rs.parameters.filter((p) => (p.in ?? (path.includes(`{${p.name}}`) ? 'path' : 'query')) === 'path' && ref.test(String(p.value)))
+  if (!params.length) return undefined
+  return params.reduce((url, p) => url.replace(`{${p.name}}`, ''), path)
 }
 
 function expectedClientErrors(wa: WorkflowAnalysis, stepId: string, preferred: number[]): number[] {
@@ -105,13 +120,18 @@ export function generateTestCases(wa: WorkflowAnalysis): TestCase[] {
   for (const name of wa.requiredInputs) {
     const consumer = firstConsumer(wa, name)
     if (!consumer) continue
-    const statuses = expectedClientErrors(wa, consumer.step.stepId, [400, 422])
+    // Si el input va en la ruta, faltarlo no deja la petición "incompleta": la URL apunta a otro
+    // recurso (p. ej. /type/ en vez de /type/fire). Ahí lo esperable es 400 o 404.
+    const pathUrl = urlWithoutPathInput(consumer, name)
+    const statuses = expectedClientErrors(wa, consumer.step.stepId, pathUrl ? [400, 404] : [400, 422])
     cases.push({
       id: id(`missing-${name}`),
       workflowId: wf.workflowId,
       title: t('tc.missing.title', { name }),
       origin: 'schema',
-      description: t('tc.missing.description', { name, step: consumer.step.stepId }),
+      description: pathUrl
+        ? t('tc.missing.pathDescription', { name, step: consumer.step.stepId, url: pathUrl })
+        : t('tc.missing.description', { name, step: consumer.step.stepId }),
       omitInput: name,
       expectation: {
         type: 'failure',
@@ -290,14 +310,14 @@ function messageScenarioCases(wa: WorkflowAnalysis, rs: ResolvedStep): TestCase[
   return out
 }
 
-/** Inputs con los que corre el caso: base → cambios del caso → datos propios → generadores. */
-export function applyCaseInputs(tc: TestCase, inputs: Record<string, any>): Record<string, any> {
+/** Inputs con los que corre el caso: base → cambios del caso → datos propios → variables y generadores. */
+export function applyCaseInputs(tc: TestCase, inputs: Record<string, any>, variables: Record<string, string> = {}): Record<string, any> {
   const out = { ...inputs, ...(tc.inputOverrides ?? {}) }
   if (tc.omitInput) delete out[tc.omitInput]
   for (const k of tc.omitInputs ?? []) delete out[k]
   if (tc.setInput) out[tc.setInput.name] = tc.setInput.value
   for (const [k, v] of Object.entries(out)) if (v === undefined || v === '') delete out[k]
-  return resolveTemplates(out)
+  return resolveTemplates(out, variables)
 }
 
 /** Texto corto que dice con qué datos corre el caso. */

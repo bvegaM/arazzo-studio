@@ -1,11 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { realRequest, reasonLabel, type StepResult } from '../../core/runner'
 import { hasMaskedValues, toCurl, type CurlRequest } from '../../core/curl'
 import { dataSummary, type CaseRun, type Verdict } from '../../core/testcases'
 import { maskDeep } from '../../core/report'
-import { humanizeId } from '../../core/format'
 import { Json, MethodBadge, StatusBadge, VerdictBadge } from '../components/badges'
-import { ActionBar, Chevron, Empty, Metric, PageHeader, Pill, Tabs } from '../components/kit'
+import { Chevron, Empty, Icon, Pill, Tabs } from '../components/kit'
 import { t } from '../../i18n'
 import { copyText } from '../../lib/browser'
 import { JsonView, MismatchList } from '../components/Diff'
@@ -20,10 +19,11 @@ interface Props {
   onRunSimulated: () => void
   onEditEnvironment: () => void
   onExport: (format: 'html' | 'json') => void
-  onBack: () => void
 }
 
 type Filter = 'all' | Verdict
+
+const RERUN_ICON = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5'
 type StepTab = 'resumen' | 'peticion' | 'respuesta' | 'contrato' | 'outputs'
 
 const REASON_CLS: Record<string, string> = { contrato: 'warn', output: 'warn', dependencia: 'skip' }
@@ -93,8 +93,8 @@ function RunProgress({ runs, onCancel }: { runs: CaseRun[]; onCancel: () => void
   )
 }
 
-function StepCard({ s, index }: { s: StepResult; index: number }) {
-  const [open, setOpen] = useState(s.status === 'failed' || s.status === 'warning')
+export function StepCard({ s, index, defaultOpen }: { s: StepResult; index: number; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? (s.status === 'failed' || s.status === 'warning'))
   const [tab, setTab] = useState<StepTab>('resumen')
   // Mensajería es un aviso (paso simulado) salvo que el paso haya fallado (no llegó el mensaje).
   const reasonTone = !s.reason
@@ -309,7 +309,8 @@ function StepCard({ s, index }: { s: StepResult; index: number }) {
   )
 }
 
-export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport, onBack }: Props) {
+/** Panel derecho: resultado de la última ejecución del journey activo. */
+export function ResultsPanel({ runs, running, onCancel, onRerun, onRunSimulated, onEditEnvironment, onExport }: Props) {
   // Pasos que no llegaron a la API (servidor caído, URL errónea o CORS).
   const unreachable = runs.flatMap((r) => r.steps.filter((s) => s.reason?.code === 'network' && s.request).map((s) => s.request!))
   const unreachableCases = runs.filter((r) => r.steps.some((s) => s.reason?.code === 'network')).length
@@ -323,69 +324,72 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
     if (running) setUserPicked(false)
   }
   const [filter, setFilter] = useState<Filter>('all')
-  // En pantallas angostas los grupos empiezan plegados para no empujar el detalle hacia abajo.
-  const narrow = typeof window !== 'undefined' && window.innerWidth < 960
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
-    narrow ? Object.fromEntries(runs.map((r) => [r.tc.workflowId, true])) : {},
-  )
-  const detailRef = useRef<HTMLDivElement>(null)
   const select = (id: string) => {
     setSelectedId(id)
     setUserPicked(true)
-    if (window.innerWidth < 960) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
   }
   const done = runs.filter((r) => r.state === 'done')
   const count = (v: Verdict) => done.filter((r) => r.verdict === v).length
   const visible = runs.filter((r) => filter === 'all' || r.verdict === filter)
-  const groups = useMemo(() => {
-    const map = new Map<string, CaseRun[]>()
-    for (const r of visible) map.set(r.tc.workflowId, [...(map.get(r.tc.workflowId) ?? []), r])
-    return [...map.entries()]
-  }, [visible])
   const runningCase = running && !userPicked ? runs.find((r) => r.state === 'running') : undefined
   const current = runningCase ?? runs.find((r) => r.tc.id === selectedId) ?? visible[0] ?? runs[0]
 
   if (!runs.length) {
     return (
-      <>
-        <PageHeader step={5} title={t('nav.results')} />
-        <Empty>{t('results.none')}</Empty>
-        <ActionBar left={<button onClick={onBack}>{t('results.back')}</button>} />
-      </>
+      <div className="results-panel">
+        <div className="rp-head">
+          <h3>{t('ws.results.title')}</h3>
+        </div>
+        <div className="rp-empty">
+          <span className="rp-empty-icon" aria-hidden="true">
+            ▶
+          </span>
+          <strong>{t('ws.results.emptyTitle')}</strong>
+          <span className="muted">{t('ws.results.emptyText')}</span>
+        </div>
+      </div>
     )
   }
 
   return (
-    <>
-      <PageHeader
-        step={5}
-        title={t('nav.results')}
-        description={t(running ? 'results.progressRunning' : 'results.progress', { done: done.length, total: runs.length })}
-        actions={
-          running ? undefined : (
-            <div className="row">
-              <button onClick={onRerun}>{t('results.rerun')}</button>
-              <button onClick={() => onExport('json')}>JSON</button>
-              <button className="primary" onClick={() => onExport('html')}>
-                {t('results.download')}
-              </button>
-            </div>
-          )
-        }
-      />
-
-      <div className="metrics">
-        <Metric label={t('report.passed')} value={count('passed')} tone="ok" />
-        <Metric label={t('report.failed')} value={count('failed')} tone={count('failed') ? 'err' : undefined} />
-        <Metric label={t('report.inconclusive')} value={count('inconclusive')} tone={count('inconclusive') ? 'warn' : undefined} />
-        <Metric label={t('results.pending')} value={runs.length - done.length} />
+    <div className="results-panel">
+      <div className="rp-head">
+        <h3>{t('ws.results.title')}</h3>
+        <span className="rp-count ok" title={t('report.passed')}>
+          ✓ {count('passed')}
+        </span>
+        {count('failed') > 0 && (
+          <span className="rp-count err" title={t('report.failed')}>
+            ✕ {count('failed')}
+          </span>
+        )}
+        {count('inconclusive') > 0 && (
+          <span className="rp-count warn" title={t('report.inconclusive')}>
+            ? {count('inconclusive')}
+          </span>
+        )}
+        <span className="muted small">{t(running ? 'results.progressRunning' : 'results.progress', { done: done.length, total: runs.length })}</span>
+        <span className="spacer" />
+        {!running && (
+          <>
+            <button className="small icon" onClick={onRerun} title={t('results.rerun')} aria-label={t('results.rerun')}>
+              <Icon d={RERUN_ICON} size={14} />
+            </button>
+            <button className="small" onClick={() => onExport('json')} title={t('ws.results.exportJson')}>
+              JSON
+            </button>
+            <button className="small" onClick={() => onExport('html')} title={t('ws.results.exportHtml')}>
+              {t('ws.results.report')}
+            </button>
+          </>
+        )}
       </div>
       {running && <RunProgress runs={runs} onCancel={onCancel} />}
 
       <ConnectionHelp requests={unreachable} caseCount={unreachableCases} onSimulate={onRunSimulated} onEditEnvironment={onEditEnvironment} />
 
-      <div className="results-layout">
-        <aside className="case-nav">
+      <div className="rp-cases">
+        {runs.length > 3 && (
           <div className="filters">
             <Pill active={filter === 'all'} onClick={() => setFilter('all')}>
               <span className="grow">{t('cases.all')}</span> <span className="count">{runs.length}</span>
@@ -397,92 +401,78 @@ export function ResultsScreen({ runs, running, onCancel, onRerun, onRunSimulated
               </Pill>
             ))}
           </div>
-          {groups.length === 0 && <Empty>{t('results.noMatches')}</Empty>}
-          {groups.map(([wf, list]) => (
-            <div className="case-nav-group" key={wf}>
-              <button className="case-nav-head" onClick={() => setCollapsed({ ...collapsed, [wf]: !collapsed[wf] })}>
-                <Chevron open={!collapsed[wf]} />
-                <span className="grow" title={wf}>
-                  {humanizeId(wf)}
-                </span>
-                <span className="muted small">{list.length}</span>
-              </button>
-              {!collapsed[wf] &&
-                list.map((r) => (
-                  <button key={r.tc.id} title={r.tc.title} className={`case-nav-item ${r === current ? 'active' : ''}`} onClick={() => select(r.tc.id)}>
-                    <span className={`status-dot sd-${r.state === 'done' ? r.verdict : r.state}`} />
-                    <span className="grow clamp-2">{r.tc.title}</span>
-                    {r.steps.some((s) => s.simulated) && <span className="badge b-sim tiny">{t('results.simShort')}</span>}
-                  </button>
-                ))}
-            </div>
-          ))}
-        </aside>
-
-        {current && (
-          <div className="case-detail" ref={detailRef}>
-            <div className="case-summary">
-              <div className="row">
-                <h2>{current.tc.title}</h2>
-                {current.verdict ? (
-                  <VerdictBadge verdict={current.verdict} />
-                ) : (
-                  <span className="badge b-skip">{current.state === 'running' ? `⋯ ${t('results.runningState')}` : t('results.pendingState')}</span>
-                )}
-              </div>
-              <div className="kv">
-                <span>{t('report.expected')}</span>
-                <span>{current.tc.expectation.text}</span>
-                {current.explanation && (
-                  <>
-                    <span>{t('report.result')}</span>
-                    <span>{current.explanation}</span>
-                  </>
-                )}
-                <span>{t('report.params')}</span>
-                <span>
-                  <code>{dataSummary(current.tc)}</code>
-                  {current.inputsUsed && (
-                    <details className="inputs-used">
-                      <summary>{t('results.sentValues', { n: Object.keys(current.inputsUsed).length })}</summary>
-                      <table>
-                        <tbody>
-                          {Object.entries(maskDeep(current.inputsUsed)).map(([k, v]) => (
-                            <tr key={k}>
-                              <td>
-                                <code>{k}</code>
-                              </td>
-                              <td>
-                                <code>{typeof v === 'string' ? v : JSON.stringify(v)}</code>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </details>
-                  )}
-                </span>
-                {current.result && Object.keys(current.result.outputs).length > 0 && (
-                  <>
-                    <span>Outputs</span>
-                    <code className="clamp" title={JSON.stringify(current.result.outputs)}>
-                      {JSON.stringify(current.result.outputs)}
-                    </code>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="steps">
-              {current.steps.length === 0 && <Empty>{current.state === 'pending' ? t('results.pendingRun') : current.state === 'running' ? t('cases.running') : t('report.noSteps')}</Empty>}
-              {current.steps.map((s, i) => (
-                <StepCard key={`${current.tc.id}-${i}`} s={s} index={i} />
-              ))}
-            </div>
-          </div>
         )}
+        {visible.length === 0 && <Empty>{t('results.noMatches')}</Empty>}
+        {visible.map((r) => (
+          <button key={r.tc.id} title={r.tc.title} className={`case-nav-item ${r === current ? 'active' : ''}`} onClick={() => select(r.tc.id)}>
+            <span className={`status-dot sd-${r.state === 'done' ? r.verdict : r.state}`} />
+            <span className="grow clamp-2">{r.tc.title}</span>
+            {r.steps.some((s) => s.simulated) && <span className="badge b-sim tiny">{t('results.simShort')}</span>}
+          </button>
+        ))}
       </div>
 
-      <ActionBar left={<button onClick={onBack}>{t('results.back')}</button>} />
-    </>
+      {current && (
+        <div className="case-detail">
+          <div className="case-summary">
+            <div className="row">
+              <h2>{current.tc.title}</h2>
+              {current.verdict ? (
+                <VerdictBadge verdict={current.verdict} />
+              ) : (
+                <span className="badge b-skip">{current.state === 'running' ? `⋯ ${t('results.runningState')}` : t('results.pendingState')}</span>
+              )}
+            </div>
+            <div className="kv">
+              <span>{t('report.expected')}</span>
+              <span>{current.tc.expectation.text}</span>
+              {current.explanation && (
+                <>
+                  <span>{t('report.result')}</span>
+                  <span>{current.explanation}</span>
+                </>
+              )}
+              <span>{t('report.params')}</span>
+              <span>
+                <code>{dataSummary(current.tc)}</code>
+                {current.inputsUsed && (
+                  <details className="inputs-used">
+                    <summary>{t('results.sentValues', { n: Object.keys(current.inputsUsed).length })}</summary>
+                    <table>
+                      <tbody>
+                        {Object.entries(maskDeep(current.inputsUsed)).map(([k, v]) => (
+                          <tr key={k}>
+                            <td>
+                              <code>{k}</code>
+                            </td>
+                            <td>
+                              <code>{typeof v === 'string' ? v : JSON.stringify(v)}</code>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                )}
+              </span>
+              {current.result && Object.keys(current.result.outputs).length > 0 && (
+                <>
+                  <span>Outputs</span>
+                  <code className="clamp" title={JSON.stringify(current.result.outputs)}>
+                    {JSON.stringify(current.result.outputs)}
+                  </code>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="steps">
+            {current.steps.length === 0 && <Empty>{current.state === 'pending' ? t('results.pendingRun') : current.state === 'running' ? t('cases.running') : t('report.noSteps')}</Empty>}
+            {current.steps.map((s, i) => (
+              <StepCard key={`${current.tc.id}-${i}`} s={s} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
