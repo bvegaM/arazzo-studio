@@ -14,6 +14,14 @@ type BridgeResponse =
   | { ok: true; status: number; statusText: string; headers: Record<string, string>; bodyText: string; durationMs: number }
   | { ok: false; aborted: boolean; error: string; durationMs: number }
 
+export interface AppMetrics {
+  cpu: number
+  memory: number
+  uptime: number
+  pid: number
+  processes: { type: string; pid: number; cpu: number; memory: number }[]
+}
+
 export interface DesktopBridge {
   platform: string
   request: (req: HttpRequest & { id: string }) => Promise<BridgeResponse>
@@ -43,6 +51,8 @@ export interface DesktopBridge {
   secretRemovePrefix: (prefix: string) => Promise<void>
   appSetTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
   appToggleDevTools: () => Promise<void>
+  /** CPU (%), memoria (bytes), tiempo encendida (s) y PID del proceso principal. */
+  appMetrics: () => Promise<AppMetrics>
 }
 
 /** El puente de la app de escritorio, o undefined en el navegador. */

@@ -35,6 +35,7 @@ function fakeBridge(reply: Awaited<ReturnType<DesktopBridge['request']>>) {
     secretRemovePrefix: async () => {},
     appSetTheme: async () => {},
     appToggleDevTools: async () => {},
+    appMetrics: async () => ({ cpu: 0, memory: 0, uptime: 0, pid: 1, processes: [] }),
   }
   return { bridge, calls }
 }

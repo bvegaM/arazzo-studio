@@ -20,6 +20,7 @@ import {
   type WorkspaceRef,
 } from '../lib/workspaceFs'
 import { secretStore } from '../lib/secrets'
+import { log } from '../lib/devlog'
 import { t } from '../i18n'
 import type { Studio } from './useStudio'
 import {
@@ -110,6 +111,7 @@ export function useWorkspace(studio: Studio) {
     } catch (e) {
       setStatus('error')
       setError((e as Error).message)
+      log('error', t('devlog.saveFailed'), { detail: (e as Error).message })
     }
   }
 
@@ -144,12 +146,14 @@ export function useWorkspace(studio: Studio) {
     baseline.current = true
     written.current = EMPTY
     studio.openCollectionData({ ...data, activeEnv: readLocal(activeEnvKey(o.manifest.id, folder)), selectFile })
+    log('info', t('devlog.collectionOpened', { folder, files: data.files.length, envs: data.environments.length }))
     setActive(folder)
     setStatus('idle')
   }
 
   async function attach(o: Open) {
     setOpen(o)
+    log('info', t('devlog.workspaceOpened', { name: o.manifest.name, place: o.ref.label }))
     const ref = { ...o.ref, name: o.manifest.name }
     setLast(ref)
     await rememberWorkspace(ref)

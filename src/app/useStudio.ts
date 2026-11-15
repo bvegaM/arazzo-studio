@@ -30,6 +30,9 @@ import { storeDelete, storeGet, storeSet } from '../lib/storage'
 import { setLocale, t, type Locale } from '../i18n'
 import { useLocale } from '../i18n/react'
 import { EXAMPLES, type ExampleId } from './example'
+import { log } from '../lib/devlog'
+import { humanizeId } from '../core/format'
+import { logCaseEnd, logCaseStart, logStep } from './runLog'
 
 type Inputs = Record<string, Record<string, any>>
 
@@ -151,6 +154,8 @@ export function useStudio() {
     const built = buildCollection(all)
     applyCollection(built.projects)
     setErrors(built.errors)
+    log('info', t('devlog.filesLoaded', { n: loaded.length }))
+    for (const e of built.errors) log('warn', e)
   }
 
   async function addFiles(fs: File[]) {
@@ -422,6 +427,8 @@ export function useStudio() {
     setRunning(true)
     const controller = new AbortController()
     abort.current = controller
+    const journeyName = humanizeId(journey.workflowId)
+    log('info', t('devlog.runStart', { journey: journeyName, n: selectedCases.length, env: activeEnv.name }), { source: 'run' })
 
     for (const tc of selectedCases) {
       if (controller.signal.aborted) break
@@ -432,6 +439,8 @@ export function useStudio() {
       const simulate = isSimulated(tc, runMode)
       const inputsUsed = applyCaseInputs(tc, inputs[key] ?? {}, variables)
       update({ inputsUsed: redactSecrets(inputsUsed, secrets), simulated: simulate })
+      const logCtx = { journey: journeyName, caseName: tc.title, simulated: simulate }
+      logCaseStart(logCtx)
       const result = await runWorkflow(project, analysis, tc.workflowId, {
         inputs: inputsUsed,
         credentials: runCredentials,
@@ -443,13 +452,16 @@ export function useStudio() {
         maxRetryWaitMs: simulate ? 0 : undefined,
         signal: controller.signal,
         onStep: (s) => {
+          logStep(s, logCtx)
           live.push(s)
           update({ steps: [...live] })
         },
       })
       const { verdict, explanation } = evaluateCase(tc, result)
       update({ state: 'done', steps: result.steps, result, verdict, explanation })
+      logCaseEnd(logCtx, verdict, explanation, result)
     }
+    if (controller.signal.aborted) log('warn', t('devlog.cancelled'), { source: 'run' })
     setRunning(false)
   }
 

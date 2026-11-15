@@ -4158,3 +4158,334 @@ body:has(.ws-shell) {
   border-top: 1px solid var(--border);
   font-size: 11.5px;
 }
+
+/* Panel de desarrollo: Console, Network, Performance */
+.dev-panel {
+  flex: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.dev-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 5;
+}
+.dev-resize:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.dev-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.dev-tabs {
+  display: flex;
+  align-self: stretch;
+}
+.dev-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.dev-tabs button:hover {
+  color: var(--text);
+}
+.dev-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.dev-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.dev-count.alert {
+  background: var(--err);
+  color: #fff;
+}
+.status-btn.on {
+  color: var(--accent);
+}
+.dev-select,
+.dev-filter {
+  flex: none;
+  width: auto;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.dev-filter {
+  width: 240px;
+}
+.dev-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.dev-content > * {
+  flex: 1;
+  min-width: 0;
+}
+.dev-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+.dev-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  text-align: center;
+  padding: 16px;
+}
+.dev-empty strong {
+  color: var(--text);
+  font-size: 13.5px;
+}
+.dev-console {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 0;
+}
+.dev-log {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.dev-log.lvl-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.dev-log.lvl-error {
+  background: var(--err-soft);
+  color: var(--err);
+}
+.dev-time {
+  flex: none;
+  color: var(--faint);
+}
+.dev-src {
+  flex: none;
+  min-width: 64px;
+  color: var(--faint);
+  font-size: 11px;
+}
+.dev-msg {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dev-msg .link {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+}
+.dev-msg pre {
+  margin: 4px 0 2px;
+  white-space: pre-wrap;
+  color: var(--muted);
+}
+.dev-network {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+.dev-network.with-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
+}
+.dev-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.dev-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.dev-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  white-space: nowrap;
+}
+.dev-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dev-network tbody tr {
+  cursor: pointer;
+}
+.dev-network tbody tr:hover {
+  background: var(--surface-2);
+}
+.dev-network tbody tr.active {
+  background: var(--accent-soft);
+}
+.dev-network tbody tr.failed td:first-child,
+.dev-network tbody tr.failed .dev-url {
+  color: var(--err);
+}
+.dev-table .ok {
+  color: var(--ok);
+}
+.dev-url {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+}
+.dev-sim {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--sim-soft);
+  color: var(--sim);
+  font-family: system-ui, sans-serif;
+  font-size: 10.5px;
+}
+.dev-detail {
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  padding: 8px 12px 12px;
+  font-size: 12.5px;
+}
+.dev-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dev-detail-head .dev-url {
+  max-width: none;
+  width: auto;
+}
+.dev-general {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 12px;
+  margin: 10px 0;
+}
+.dev-general dt,
+.dev-headers dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dev-general dd,
+.dev-headers dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dev-detail-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.dev-detail-tabs > button:not(.small) {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.dev-detail-tabs > button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.dev-detail h4,
+.dev-perf h4 {
+  margin: 10px 0 4px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.dev-headers {
+  margin: 0;
+  display: grid;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.dev-headers > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 35%) 1fr;
+  gap: 8px;
+}
+.dev-body-pre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dev-perf {
+  padding: 4px 14px 14px;
+}
+.dev-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.dev-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.dev-card strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.dev-web-note {
+  align-self: center;
+  margin: 0;
+}
+.dev-pad {
+  padding: 8px 12px;
+}

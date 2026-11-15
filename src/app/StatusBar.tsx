@@ -2,8 +2,8 @@
 // buscador, herramientas de desarrollo y versión a la derecha.
 import { useEffect, useState } from 'react'
 import { LOCALES, t, type Locale } from '../i18n'
-import { desktop } from '../lib/desktop'
 import { THEMES, useTheme, type Theme } from '../lib/theme'
+import { useDevLog } from '../lib/devlog'
 import { EnvDot, Icon, Segmented } from '../ui/components/kit'
 
 const ICONS = {
@@ -29,6 +29,9 @@ interface Props {
   env?: { name: string; color?: string }
   onOpenEnv?: () => void
   onSearch?: () => void
+  /** Panel de desarrollo (Console, Network, Performance). */
+  devOpen: boolean
+  onDevTools: () => void
 }
 
 function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pick<Props, 'locale' | 'onLocale' | 'privacy'> & { onClose: () => void; theme: Theme; onTheme: (t: Theme) => void }) {
@@ -81,8 +84,9 @@ function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pic
   )
 }
 
-export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch }: Props) {
+export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch, devOpen, onDevTools }: Props) {
   const [prefs, setPrefs] = useState(false)
+  const errors = useDevLog().logs.filter((l) => l.level === 'error').length
   const [theme, setTheme] = useTheme()
   const nextTheme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
   return (
@@ -112,11 +116,10 @@ export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch 
           <Icon d={ICONS.search} size={13} /> {t('status.search')} <kbd className="status-hide-sm">{MOD_KEY}K</kbd>
         </button>
       )}
-      {desktop && (
-        <button className="status-btn status-text" onClick={() => void desktop?.appToggleDevTools()} title={t('status.devTools')}>
-          <Icon d={ICONS.devtools} size={13} /> <span className="status-hide-sm">{t('status.devTools')}</span>
-        </button>
-      )}
+      <button className={`status-btn status-text ${devOpen ? 'on' : ''}`} onClick={onDevTools} title={t('status.devTools')} aria-pressed={devOpen}>
+        <Icon d={ICONS.devtools} size={13} /> <span className="status-hide-sm">{t('status.devTools')}</span>
+        {!devOpen && errors > 0 && <span className="dev-count alert">{errors}</span>}
+      </button>
       <span className="status-item muted status-version">v{__APP_VERSION__}</span>
       {prefs && <Preferences onClose={() => setPrefs(false)} locale={locale} onLocale={onLocale} theme={theme} onTheme={setTheme} privacy={privacy} />}
     </footer>

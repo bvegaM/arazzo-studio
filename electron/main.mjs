@@ -284,6 +284,18 @@ ipcMain.handle('app:setTheme', (_event, theme) => {
   nativeTheme.themeSource = theme === 'light' || theme === 'dark' ? theme : 'system'
 })
 
+/** Recursos de la app (todos sus procesos): CPU, memoria, tiempo encendida y PID del principal. */
+ipcMain.handle('app:metrics', () => {
+  const metrics = app.getAppMetrics()
+  return {
+    cpu: metrics.reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0),
+    memory: metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0) * 1024,
+    uptime: process.uptime(),
+    pid: process.pid,
+    processes: metrics.map((m) => ({ type: m.type, pid: m.pid, cpu: m.cpu.percentCPUUsage, memory: m.memory.workingSetSize * 1024 })),
+  }
+})
+
 /** Herramientas de desarrollo de la ventana (para inspeccionar peticiones y errores). */
 ipcMain.handle('app:toggleDevTools', (event) => {
   event.sender.toggleDevTools()

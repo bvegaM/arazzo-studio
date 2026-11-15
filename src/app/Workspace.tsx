@@ -21,6 +21,7 @@ import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/
 import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
 import { CollectionSidebar } from './CollectionSidebar'
 import { StatusBar } from './StatusBar'
+import { DevPanel, type DevTab } from '../ui/workspace/DevPanel'
 import type { Studio } from './useStudio'
 import type { WorkspaceState } from './useWorkspace'
 
@@ -71,6 +72,7 @@ export function Workspace({ studio, workspace }: { studio: Studio; workspace: Wo
   const [errorsHidden, setErrorsHidden] = useState(false)
   const [resultsWidth, setResultsWidth] = useState(savedWidth)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [devTab, setDevTab] = useState<DevTab>()
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
   const [welcomeClosed, setWelcomeClosed] = useState(false)
   if (projects.length && welcomeClosed) setWelcomeClosed(false)
@@ -227,7 +229,10 @@ export function Workspace({ studio, workspace }: { studio: Studio; workspace: Wo
   const hasCollection = projects.length > 0 || !!workspace.activeCollection
   const statusBar = (
     <>
+      {devTab && <DevPanel tab={devTab} onTab={setDevTab} onClose={() => setDevTab(undefined)} />}
       <StatusBar
+        devOpen={!!devTab}
+        onDevTools={() => setDevTab((d) => (d ? undefined : 'console'))}
         locale={studio.locale}
         onLocale={studio.changeLocale}
         privacy={t(workspace.isOpen ? 'studio.privacy' : studio.isDesktop ? 'sidebar.privacyDesktop' : 'sidebar.privacy')}

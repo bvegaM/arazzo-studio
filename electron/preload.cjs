@@ -25,4 +25,5 @@ contextBridge.exposeInMainWorld('arazzoDesktop', {
   secretRemovePrefix: (prefix) => ipcRenderer.invoke('secret:removePrefix', prefix),
   appSetTheme: (theme) => ipcRenderer.invoke('app:setTheme', theme),
   appToggleDevTools: () => ipcRenderer.invoke('app:toggleDevTools'),
+  appMetrics: () => ipcRenderer.invoke('app:metrics'),
 })
