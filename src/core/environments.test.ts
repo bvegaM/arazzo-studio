@@ -79,7 +79,9 @@ describe('variables dinámicas (como Postman y Bruno)', () => {
     expect(out.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     expect(out.guid).not.toBe(out.id)
     expect(out.email).toMatch(/^\S+@\S+\.\S+$/)
-    expect(out.ua.length).toBeGreaterThan(20)
+    // faker a veces da user agents cortos (p. ej. "Opera/9.80 …" recortado): basta con que haya uno.
+    expect(out.ua.length).toBeGreaterThan(5)
+    expect(out.ua).not.toContain('{{')
     expect(out.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
     expect(out.ts).toMatch(/^\d{10}$/)
     expect(out.name).toMatch(/^Hola \S+ \S+/)

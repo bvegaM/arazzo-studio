@@ -7,7 +7,7 @@ import { setLocale } from '../i18n'
 
 setLocale('es')
 
-const dir = new URL('../../examples/miles-transfer/', import.meta.url)
+const dir = new URL('../../test/fixtures/miles-transfer/', import.meta.url)
 const read = (name: string) => readFileSync(new URL(name, dir), 'utf8')
 const ARAZZO = read('miles-transfer.arazzo.yaml')
 const files = ['miles-transfer.arazzo.yaml', 'members.yaml', 'member-schemas.yaml', 'miles-events.asyncapi.yaml'].map((name) =>

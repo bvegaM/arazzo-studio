@@ -402,8 +402,8 @@ workflows:
   })
 })
 
-describe('ejemplo de traspaso de millas (examples/miles-transfer)', () => {
-  const dir = new URL('../../examples/miles-transfer/', import.meta.url)
+describe('ejemplo de traspaso de millas (test/fixtures/miles-transfer)', () => {
+  const dir = new URL('../../test/fixtures/miles-transfer/', import.meta.url)
   const example = ['miles-transfer.arazzo.yaml', 'members.yaml', 'member-schemas.yaml', 'miles-events.asyncapi.yaml'].map((name) =>
     parseFile({ name, text: readFileSync(new URL(name, dir), 'utf8') }),
   )
@@ -413,7 +413,7 @@ describe('ejemplo de traspaso de millas (examples/miles-transfer)', () => {
   let mock: ChildProcess
   beforeAll(async () => {
     mock = await new Promise<ChildProcess>((resolve) => {
-      const p = spawn('node', ['examples/mock-server.mjs'], { env: { ...process.env, PORT: '4513' } })
+      const p = spawn('node', ['test/fixtures/mock-server.mjs'], { env: { ...process.env, PORT: '4513' } })
       p.stdout.on('data', (d) => String(d).includes('http://localhost:4513') && resolve(p))
     })
   })

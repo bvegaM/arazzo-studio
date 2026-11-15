@@ -8,7 +8,7 @@ import { setLocale } from '../i18n'
 
 setLocale('es')
 
-const read = (path: string) => readFileSync(new URL(`../../examples/${path}`, import.meta.url), 'utf8')
+const read = (path: string) => readFileSync(new URL(`../../test/fixtures/${path}`, import.meta.url), 'utf8')
 const cards = ['credit-cards/card-onboarding.arazzo.yaml', 'credit-cards/credit-cards.yaml']
 const miles = ['miles-transfer/miles-transfer.arazzo.yaml', 'miles-transfer/members.yaml', 'miles-transfer/member-schemas.yaml', 'miles-transfer/miles-events.asyncapi.yaml']
 const parse = (paths: string[]) => paths.map((p) => parseFile({ name: p, text: read(p) }))

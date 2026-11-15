@@ -14,7 +14,7 @@ import { setLocale } from '../i18n'
 // Los textos esperados están en español; el idioma por defecto depende del entorno.
 setLocale('es')
 
-const dir = new URL('../../examples/credit-cards/', import.meta.url)
+const dir = new URL('../../test/fixtures/credit-cards/', import.meta.url)
 const files = ['card-onboarding.arazzo.yaml', 'credit-cards.yaml'].map((name) =>
   parseFile({ name, text: readFileSync(new URL(name, dir), 'utf8') }),
 )
@@ -107,7 +107,7 @@ describe('análisis del proyecto de ejemplo', () => {
 
 function startMock(bug: boolean, port: number): Promise<ChildProcess> {
   return new Promise((resolve) => {
-    const p = spawn('node', ['examples/mock-server.mjs'], { env: { ...process.env, PORT: String(port), MOCK_BUG: bug ? '1' : '0' } })
+    const p = spawn('node', ['test/fixtures/mock-server.mjs'], { env: { ...process.env, PORT: String(port), MOCK_BUG: bug ? '1' : '0' } })
     p.stdout.on('data', (d) => String(d).includes(`http://localhost:${port}`) && resolve(p))
   })
 }
