@@ -37,7 +37,7 @@ Carga un workflow [Arazzo](https://spec.openapis.org/arazzo/latest.html) y los c
 - [Por qué Arazzo Studio](#por-qué-arazzo-studio)
 - [Para quién es](#para-quién-es)
 - [Funciones](#funciones)
-- [Primeros pasos](#primeros-pasos)
+- [Primeros pasos](#primeros-pasos) · [Tour guiado](#tour-guiado-y-ejemplo)
 - [Cómo funciona](#cómo-funciona)
 - [Privacidad y seguridad](#privacidad-y-seguridad)
 - [Soporte de las especificaciones](#soporte-de-las-especificaciones)
@@ -82,13 +82,15 @@ La pestaña **Inicio** muestra las colecciones con sus carpetas, acciones rápid
 
 <img src="docs/screenshots/home.png" alt="Inicio del workspace con las cifras, acciones rápidas, las colecciones con sus carpetas y la documentación del workspace" width="100%">
 
+<img src="docs/screenshots/collection.png" alt="El resumen de la colección con su ubicación, versión, ambientes, journeys, contratos y documentación generada" width="100%">
+
 ```
 partner-journeys/
   studio.yaml              nombre y colecciones del workspace
   README.md                documentación del workspace
-  miles-transfer/          una colección
+  pokedex/                 una colección
     collection.yaml
-    miles-transfer.arazzo.yaml, members.yaml, …
+    pokemon.arazzo.yaml, pokeapi.openapi.yaml, …
     environments/*.yaml    URLs base, variables y color (de los secretos, solo el nombre)
     scenarios/<arazzo>     inputs base y casos propios de cada Arazzo
 ```
@@ -172,23 +174,20 @@ npm run desktop:build    # genera el instalador para tu sistema en release/
 > [!NOTE]
 > Los instaladores todavía **no están firmados**. En macOS, abre la app la primera vez con clic derecho → **Abrir**; en Windows, elige **Más información → Ejecutar de todas formas**.
 
-### Probar los ejemplos incluidos
+### Tour guiado y ejemplo
 
-Los ejemplos están a un clic en la bienvenida. La Pokédex corre contra la [PokéAPI](https://pokeapi.co) pública desde el primer momento; para los demás, levanta el mock incluido y ejecútalos contra una API real en vez de en simulación:
+La bienvenida ofrece un **tour guiado** (también en Preferencias): en unos cinco minutos recorre todas las funciones sobre una **Pokédex** que llama a la [PokéAPI](https://pokeapi.co) real, una API pública sin credenciales y con CORS permitido. Crea un workspace de prueba, ejecuta los journeys contra la API real y, al final, te deja quedártelo o eliminarlo. **Probar el ejemplo** abre la misma Pokédex sin workspace.
 
-```bash
-npm run mock         # APIs de ejemplo en http://localhost:4010
-npm run mock:bug     # las mismas APIs, con errores de contrato a propósito
-```
+<img src="docs/screenshots/tour.png" alt="El tour guiado iluminando los resultados de una ejecución contra la PokéAPI" width="100%">
 
-| Ejemplo | Qué muestra | Cómo ejecutarlo |
-|---|---|---|
-| **Pokédex** | Dos journeys contra la PokéAPI pública: cada paso usa los outputs del anterior, criterios JSONPath y una acción de fin ante un 404. | Nada que preparar: sin credenciales y con CORS permitido. |
-| **Colección** | Los ejemplos de tarjetas y de millas en una colección: dos archivos Arazzo, tres journeys y ambientes compartidos. | Como cada ejemplo. |
-| **Tarjetas de crédito** | Un onboarding de cuatro pasos sobre un contrato OpenAPI: casos generados, escenarios por respuesta y errores de contrato. | Cualquier token como credencial y `4321` como `last4Digits`. |
-| **Traspaso de millas** | Un journey Arazzo 1.1: un OpenAPI repartido en archivos con `$ref` externos, pasos AsyncAPI `send` / `receive`, `correlationId`, `timeout` y `dependsOn`. | Cualquier token como credencial. Los pasos de mensajería se simulan. |
+| Journey | Qué muestra |
+|---|---|
+| **Pokemon card** | Cuatro pasos que se encadenan con sus outputs (un Pokémon, su especie, su debilidad, su habilidad), criterios JSONPath y una acción de fin ante un 404. |
+| **Type explorer** | Un tipo, su primer Pokémon y su especie. |
+| **Battle matchup** | `dependsOn` de un workflow: corre después de *Type explorer* y usa sus outputs para buscar un rival. |
+| **Register sighting** | Una llamada HTTP real y pasos AsyncAPI `send` / `receive` con `correlationId` y `timeout`. Estos eventos son ficticios y siempre se simulan. |
 
-Los archivos de los ejemplos están en [examples/](examples/).
+Los archivos del ejemplo están en [examples/pokemon/](examples/pokemon/).
 
 ## Cómo funciona
 
@@ -299,7 +298,8 @@ src/
                 Dev Tools, terminal, inicio…)
 electron/       app de escritorio: proceso principal (HTTP sin CORS, archivos, secretos, terminal),
                 puente preload, lanzador de desarrollo
-examples/       ejemplos de tarjetas, millas y Pokédex, y la API mock
+examples/       el ejemplo de la Pokédex (PokéAPI)
+test/fixtures/  archivos Arazzo, contratos y la API mock que usan los tests
 e2e/            prueba de interfaz de punta a punta
 docs/           capturas
 ```
@@ -317,7 +317,7 @@ docs/           capturas
 | `npm run test:e2e` | Abre la app en el Chrome instalado y recorre los flujos principales (`CHROME_PATH` para cambiarlo) |
 | `npm run typecheck` | Revisa tipos de la app, la configuración y las pruebas |
 | `npm run lint` | Lint con oxlint |
-| `npm run mock` / `npm run mock:bug` | Levanta las APIs de ejemplo (correctas / con errores de contrato) |
+| `npm run mock` / `npm run mock:bug` | Levanta las APIs mock de los fixtures de prueba (correctas / con errores de contrato) |
 | `npm run desktop:dev` | Abre la app de escritorio contra el servidor de desarrollo |
 | `npm run desktop:build` | Genera el instalador de escritorio del sistema actual en `release/` |
 

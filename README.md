@@ -37,7 +37,7 @@ Load an [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflow and the 
 - [Why Arazzo Studio](#why-arazzo-studio)
 - [Who it is for](#who-it-is-for)
 - [Features](#features)
-- [Quick start](#quick-start)
+- [Quick start](#quick-start) · [Guided tour](#guided-tour-and-example)
 - [How it works](#how-it-works)
 - [Privacy and security](#privacy-and-security)
 - [Specification support](#specification-support)
@@ -82,13 +82,15 @@ The **Home** tab shows the collections with their folders, quick actions and the
 
 <img src="docs/screenshots/home.png" alt="Workspace home with collection counts, quick actions, the collections and their folders, and the workspace documentation" width="100%">
 
+<img src="docs/screenshots/collection.png" alt="The collection overview with its location, version, environments, journeys, contracts and generated documentation" width="100%">
+
 ```
 partner-journeys/
   studio.yaml              workspace name and collections
   README.md                workspace documentation
-  miles-transfer/          a collection
+  pokedex/                 a collection
     collection.yaml
-    miles-transfer.arazzo.yaml, members.yaml, …
+    pokemon.arazzo.yaml, pokeapi.openapi.yaml, …
     environments/*.yaml    base URLs, variables and color (secret names only)
     scenarios/<arazzo>     base inputs and custom cases of each Arazzo
 ```
@@ -172,23 +174,20 @@ npm run desktop:build    # build the installer for your OS into release/
 > [!NOTE]
 > Installers are **not signed** yet. On macOS, open the app the first time with right click → **Open**; on Windows, choose **More info → Run anyway**.
 
-### Try the built-in examples
+### Guided tour and example
 
-The examples are one click away on the welcome screen. The Pokédex runs against the public [PokéAPI](https://pokeapi.co) right away; for the others, start the bundled mock to run them against a real API instead of the simulation:
+The welcome screen offers a **guided tour** (also in Preferences): in about five minutes it walks through every feature on a **Pokédex** that calls the real [PokéAPI](https://pokeapi.co), a public API with no credentials and CORS allowed. It creates a test workspace, runs the journeys against the real API and, at the end, lets you keep or delete it. **Try the example** opens the same Pokédex without a workspace.
 
-```bash
-npm run mock         # example APIs at http://localhost:4010
-npm run mock:bug     # same APIs, with contract violations on purpose
-```
+<img src="docs/screenshots/tour.png" alt="The guided tour highlighting the results of a run against the PokéAPI" width="100%">
 
-| Example | What it shows | How to run it |
-|---|---|---|
-| **Pokédex** | Two journeys against the public PokéAPI: each step uses the previous step's outputs, JSONPath criteria and a 404 end action. | Nothing to set up: no credentials and CORS allowed. |
-| **Collection** | The credit cards and miles examples in one collection: two Arazzo files, three journeys, shared environments. | As each example. |
-| **Credit cards** | A four-step onboarding over one OpenAPI contract: generated cases, response scenarios, contract violations. | Any token as the credential and `4321` as `last4Digits`. |
-| **Miles transfer** | An Arazzo 1.1 journey: an OpenAPI contract split with external `$ref`s, AsyncAPI `send` / `receive` steps, `correlationId`, `timeout` and `dependsOn`. | Any token as the credential. The messaging steps are simulated. |
+| Journey | What it shows |
+|---|---|
+| **Pokemon card** | Four steps that chain each other's outputs (a Pokémon, its species, its weakness, its ability), JSONPath criteria and a 404 end action. |
+| **Type explorer** | A type, its first Pokémon and its species. |
+| **Battle matchup** | Workflow `dependsOn`: runs after *Type explorer* and uses its outputs to find a rival. |
+| **Register sighting** | A real HTTP call plus AsyncAPI `send` / `receive` steps with a `correlationId` and a `timeout`. These events are fictional and always simulated. |
 
-The example files live in [examples/](examples/).
+The example files live in [examples/pokemon/](examples/pokemon/).
 
 ## How it works
 
@@ -299,7 +298,8 @@ src/
                 Dev Tools, terminal, home…)
 electron/       desktop app: main process (HTTP without CORS, files, secrets, terminal),
                 preload bridge, dev launcher
-examples/       credit cards, miles transfer and Pokédex examples, and the mock API
+examples/       the Pokédex example (PokéAPI)
+test/fixtures/  Arazzo files, contracts and the mock API used by the tests
 e2e/            end-to-end smoke test of the UI
 docs/           screenshots
 ```
@@ -317,7 +317,7 @@ docs/           screenshots
 | `npm run test:e2e` | Open the app in the installed Chrome and walk through the main flows (`CHROME_PATH` to override) |
 | `npm run typecheck` | Type-check the app, the config and the tests |
 | `npm run lint` | Lint with oxlint |
-| `npm run mock` / `npm run mock:bug` | Start the example APIs (correct / with contract errors) |
+| `npm run mock` / `npm run mock:bug` | Start the mock APIs of the test fixtures (correct / with contract errors) |
 | `npm run desktop:dev` | Run the desktop app against the dev server |
 | `npm run desktop:build` | Build the desktop installer for the current OS into `release/` |
 

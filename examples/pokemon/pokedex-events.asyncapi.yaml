@@ -1,0 +1,62 @@
+asyncapi: 3.0.0
+info:
+  title: Pokédex Events
+  version: 1.0.0
+  description: >-
+    Eventos ficticios de una Pokédex (no son de la PokéAPI): sirven para ver cómo un journey mezcla
+    llamadas HTTP reales con mensajes. Arazzo Studio los simula a partir de este contrato.
+channels:
+  sightingRegistered:
+    address: pokedex.sighting.registered
+    messages:
+      sightingRegistered:
+        $ref: '#/components/messages/SightingRegistered'
+  sightingConfirmed:
+    address: pokedex.sighting.confirmed
+    messages:
+      sightingConfirmed:
+        $ref: '#/components/messages/SightingConfirmed'
+operations:
+  registerSighting:
+    action: send
+    summary: Registra que un entrenador vio un Pokémon
+    channel:
+      $ref: '#/channels/sightingRegistered'
+  onSightingConfirmed:
+    action: receive
+    summary: La Pokédex confirma (o rechaza) el registro
+    channel:
+      $ref: '#/channels/sightingConfirmed'
+components:
+  messages:
+    SightingRegistered:
+      headers:
+        type: object
+        properties:
+          correlationId: { type: string }
+      payload:
+        type: object
+        required: [trainer, pokemonId, pokemon]
+        properties:
+          trainer: { type: string }
+          pokemonId: { type: integer }
+          pokemon: { type: string }
+    SightingConfirmed:
+      correlationId:
+        location: '$message.header#/correlationId'
+      headers:
+        type: object
+        properties:
+          correlationId: { type: string }
+      payload:
+        type: object
+        required: [status]
+        properties:
+          status: { type: string, enum: [CONFIRMED, REJECTED] }
+          entryNumber: { type: integer }
+          reason: { type: string }
+      examples:
+        - name: confirmed
+          payload: { status: CONFIRMED, entryNumber: 151 }
+        - name: rejected
+          payload: { status: REJECTED, reason: ALREADY_REGISTERED }

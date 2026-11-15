@@ -87,6 +87,7 @@ export function Workspace({
   dev,
   homeRequest = 0,
   onOpenTerminal,
+  onTour,
 }: {
   studio: Studio
   workspace: WorkspaceState
@@ -95,6 +96,8 @@ export function Workspace({
   homeRequest?: number
   /** Escritorio: abre la terminal de Dev Tools en una carpeta. */
   onOpenTerminal?: (cwd?: string) => void
+  /** Empieza el tour guiado. */
+  onTour: () => void
 }) {
   const { journeys, projects } = studio
   // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
@@ -355,6 +358,7 @@ export function Workspace({
     <>
       <StatusBar
         devOpen={dev.open}
+        onTour={onTour}
         onDevTools={dev.toggle}
         locale={studio.locale}
         onLocale={studio.changeLocale}
@@ -410,6 +414,7 @@ export function Workspace({
       errors: studio.errors,
       onFiles: studio.addFiles,
       onExample: studio.loadExample,
+      onTour,
       onOpenFolder: studio.isDesktop ? studio.openFolder : undefined,
       onCreate: () => openJourney(studio.createArazzo(), 'yaml'),
       savedSession: studio.savedSession,

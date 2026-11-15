@@ -5,7 +5,7 @@ import YAML from 'yaml'
 import { analyzeProject } from './analyze'
 import { lintContract } from './contractLint'
 import { buildCollection, parseFile } from './loader'
-import { runWorkflow } from './runner'
+import { runDependencies, runWorkflow } from './runner'
 import { createSimulatedExecutor } from './simulator'
 import { generateTestCases } from './testcases'
 import { collectionDocsMarkdown } from './collectionDocs'
@@ -16,7 +16,7 @@ import { setLocale } from '../i18n'
 setLocale('es')
 
 const read = (name: string) => readFileSync(new URL(`../../examples/pokemon/${name}`, import.meta.url), 'utf8')
-const files = ['pokemon.arazzo.yaml', 'pokeapi.openapi.yaml'].map((name) => parseFile({ name, text: read(name) }))
+const files = ['pokemon.arazzo.yaml', 'pokeapi.openapi.yaml', 'pokedex-events.asyncapi.yaml'].map((name) => parseFile({ name, text: read(name) }))
 
 describe('ejemplo de la PokéAPI', () => {
   const { projects, errors } = buildCollection(files)
@@ -31,11 +31,26 @@ describe('ejemplo de la PokéAPI', () => {
     expect(lintContract(YAML.parse(read('pokeapi.openapi.yaml'))).filter((i) => i.level === 'error')).toEqual([])
   })
 
-  it.each(['pokemonCard', 'typeExplorer'])('el journey %s pasa en simulación', async (workflowId) => {
+  it.each(['pokemonCard', 'typeExplorer', 'battleMatchup', 'registerSighting'])('el journey %s pasa en simulación', async (workflowId) => {
     const steps = project.arazzo.workflows.find((w) => w.workflowId === workflowId)!.steps
-    const inputs = workflowId === 'pokemonCard' ? { pokemon: 'pikachu' } : { type: 'fire' }
-    const run = await runWorkflow(project, analysis, workflowId, { inputs, credentials: {}, servers: {}, executor: createSimulatedExecutor(project, steps) })
-    expect(run.steps.map((s) => [s.stepId, s.status])).toEqual(steps.map((s) => [s.stepId, 'success']))
+    const inputs: Record<string, Record<string, unknown>> = {
+      pokemonCard: { pokemon: 'pikachu' },
+      typeExplorer: { type: 'fire' },
+      battleMatchup: {},
+      registerSighting: { pokemon: 'pikachu', trainer: 'Ash', correlationId: 'c-1' },
+    }
+    // battleMatchup depende de typeExplorer: corre antes y deja sus outputs en $workflows.
+    const deps = await runDependencies(project, analysis, workflowId, {
+      credentials: {},
+      servers: {},
+      executor: createSimulatedExecutor(project, []),
+      executorFor: (id) => createSimulatedExecutor(project, project.arazzo.workflows.find((w) => w.workflowId === id)!.steps),
+      inputsFor: (id) => inputs[id] ?? {},
+    })
+    expect(deps.error).toBeUndefined()
+    const run = await runWorkflow(project, analysis, workflowId, { inputs: inputs[workflowId], credentials: {}, servers: {}, executor: createSimulatedExecutor(project, steps), workflowOutputs: deps.outputs })
+    // Los pasos de mensajería quedan 'warning' (simulados) también con la API real; aquí todo es simulación.
+    expect(run.steps.map((s) => [s.stepId, s.status === 'warning' ? 'success' : s.status])).toEqual(steps.map((s) => [s.stepId, 'success']))
   })
 
   it('si falta un input que va en la ruta, espera 400 o 404 y explica la URL que queda', async () => {

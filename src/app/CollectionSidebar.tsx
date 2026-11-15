@@ -223,7 +223,7 @@ export function CollectionSidebar({ studio, workspace, selection, onOpenJourney,
                       <button className="tree-twisty" onClick={() => toggle(key, key !== selection.journey)} aria-label={t('ws.tree.toggleSteps')} aria-expanded={open}>
                         <Chevron open={open} />
                       </button>
-                      <button className="tree-main" onClick={() => onOpenJourney(key)} title={wa.workflow.summary ?? wa.workflow.workflowId}>
+                      <button className="tree-main" data-journey={wa.workflow.workflowId} onClick={() => onOpenJourney(key)} title={wa.workflow.summary ?? wa.workflow.workflowId}>
                         <span className={`status-dot ${tone.cls}`} title={tone.title} />
                         <span className="grow clamp-1">{humanizeId(wa.workflow.workflowId)}</span>
                       </button>

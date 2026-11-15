@@ -262,7 +262,7 @@ export function useStudio() {
     return name
   }
 
-  function loadExample(id: ExampleId = 'cards') {
+  function loadExample(id: ExampleId = 'pokemon') {
     loadFiles(EXAMPLES[id], true)
   }
 

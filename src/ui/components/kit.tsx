@@ -56,7 +56,7 @@ export function Tabs<T extends string>({
   return (
     <div className="tabs" role="tablist">
       {tabs.map((t) => (
-        <button key={t.id} role="tab" aria-selected={t.id === value} className={t.id === value ? 'active' : ''} onClick={() => onChange(t.id)}>
+        <button key={t.id} role="tab" data-tab={t.id} aria-selected={t.id === value} className={t.id === value ? 'active' : ''} onClick={() => onChange(t.id)}>
           {t.label}
           {t.count !== undefined && <span className={`count ${t.tone ? `c-${t.tone}` : ''}`}>{t.count}</span>}
         </button>

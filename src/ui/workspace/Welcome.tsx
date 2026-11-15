@@ -17,12 +17,15 @@ const ICON = {
   workspace: 'M4 5h6l2 2h8v12H4zM4 9h16',
   open: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1M3 7v10a2 2 0 0 0 2 2h12l4-8H7l-4 8',
   back: 'M15 18l-6-6 6-6',
+  tour: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
 }
 
 interface Actions {
   errors: string[]
   onFiles: (files: File[]) => void
   onExample: (id: ExampleId) => void
+  /** Empieza el tour guiado con la Pokédex. */
+  onTour: () => void
   /** Solo en la app de escritorio: abrir una carpeta con el Arazzo y sus contratos. */
   onOpenFolder?: () => void
   onCreate: () => void
@@ -31,12 +34,6 @@ interface Actions {
   onDiscard: () => void
 }
 
-const EXAMPLES: { id: ExampleId; title: string; hint: string }[] = [
-  { id: 'cards', title: 'load.example', hint: 'ws.welcome.cardsHint' },
-  { id: 'miles', title: 'load.exampleMiles', hint: 'load.exampleMilesHint' },
-  { id: 'pokemon', title: 'ws.welcome.pokemon', hint: 'ws.welcome.pokemonHint' },
-  { id: 'collection', title: 'ws.welcome.collection', hint: 'ws.welcome.collectionHint' },
-]
 
 /** Recibe archivos soltados encima. */
 function useDrop(onFiles: (files: File[]) => void) {
@@ -236,7 +233,7 @@ function OpenWorkspace({ workspace }: { workspace: WorkspaceState }) {
 export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: WorkspaceState }) {
   const input = useRef<HTMLInputElement>(null)
   const featuredRef = useRef<HTMLButtonElement>(null)
-  const [view, setView] = useState<'main' | 'examples' | 'create' | 'open'>('main')
+  const [view, setView] = useState<'main' | 'create' | 'open'>('main')
   const ws = p.workspace
   // En escritorio "Abrir workspace" va directo al diálogo de carpetas.
   const openWorkspace = () => (ws.locations.includes('desktop') ? void ws.openWorkspace('desktop') : setView('open'))
@@ -282,21 +279,6 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
         <OpenWorkspace workspace={ws} />
       </>
     )
-  } else if (view === 'examples') {
-    body = (
-      <>
-        {back}
-        <h3>{t('ws.welcome.examplesTitle')}</h3>
-        <div className="wd-examples">
-          {EXAMPLES.map((ex) => (
-            <button key={ex.id} className="wd-example" onClick={() => p.onExample(ex.id)}>
-              <strong>{t(ex.title as Parameters<typeof t>[0])}</strong>
-              <span className="muted small">{t(ex.hint as Parameters<typeof t>[0])}</span>
-            </button>
-          ))}
-        </div>
-      </>
-    )
   } else {
     body = (
       <>
@@ -328,7 +310,8 @@ export function WelcomeDialog(p: Actions & { onClose: () => void; workspace: Wor
         <div className="wd-cards">
           {ws.last && <Card icon={ICON.plus} title={t('studio.createTitle')} text={t('studio.createShort')} onClick={() => setView('create')} />}
           <Card icon={ICON.open} title={t('studio.openTitle')} text={t('studio.openText')} onClick={openWorkspace} />
-          <Card icon={ICON.example} title={t('ws.welcome.tryExample')} text={t('ws.welcome.tryExampleText')} onClick={() => setView('examples')} />
+          <Card icon={ICON.tour} title={t('tour.card')} text={t('tour.cardText')} onClick={p.onTour} />
+          <Card icon={ICON.example} title={t('ws.welcome.tryExample')} text={t('ws.welcome.tryExampleText')} onClick={() => p.onExample('pokemon')} />
           {session && <Card icon={ICON.resume} title={t('ws.welcome.resume')} text={session.title ?? session.files[0].name} onClick={p.onRestore} />}
         </div>
       </>

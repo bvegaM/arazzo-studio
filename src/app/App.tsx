@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Tour, type TourStep } from '../ui/tour/Tour'
+import { buildTourSteps } from './tour'
+import { t } from '../i18n'
 import { desktop } from '../lib/desktop'
 import { useUiMode } from '../lib/uiMode'
 import { DevPanel, type DevTab } from '../ui/workspace/DevPanel'
@@ -16,6 +19,38 @@ export default function App() {
   const [devOpen, setDevOpen] = useState(false)
   const [devMounted, setDevMounted] = useState(false)
   const [homeRequest, setHomeRequest] = useState(0)
+  // Tour guiado: sus pasos leen lo más reciente de la app (corre a lo largo de muchos renders).
+  const latest = useRef({ studio, workspace })
+  useLayoutEffect(() => {
+    latest.current = { studio, workspace }
+  })
+  const [tour, setTour] = useState<TourStep[]>()
+  const startTour = () =>
+    setTour([
+      ...buildTourSteps({ latest }),
+      {
+        id: 'end',
+        title: t('tour.end.title'),
+        body: t('tour.end.body'),
+        actions: (
+          <>
+            <button
+              className="danger"
+              onClick={async () => {
+                setTour(undefined)
+                await latest.current.workspace.deleteWorkspace()
+              }}
+            >
+              {t('tour.end.delete')}
+            </button>
+            <span className="spacer" />
+            <button className="primary" onClick={() => setTour(undefined)}>
+              {t('tour.end.keep')}
+            </button>
+          </>
+        ),
+      },
+    ])
   // Interfaz simple: sin Dev Tools ni terminal (el panel no se muestra aunque estuviera abierto).
   const simple = useUiMode() === 'simple'
   const [terminalRequest, setTerminalRequest] = useState<TerminalRequest>()
@@ -33,7 +68,7 @@ export default function App() {
   return (
     <div className="app-frame">
       <AppBar workspace={workspace} onHome={() => setHomeRequest((n) => n + 1)} />
-      <Workspace studio={studio} workspace={workspace} dev={{ open: devOpen, toggle }} homeRequest={homeRequest} onOpenTerminal={desktop && !simple ? openTerminal : undefined} />
+      <Workspace studio={studio} workspace={workspace} dev={{ open: devOpen, toggle }} homeRequest={homeRequest} onOpenTerminal={desktop && !simple ? openTerminal : undefined} onTour={startTour} />
       {devMounted && (
         <DevPanel
           tab={devTab}
@@ -44,6 +79,7 @@ export default function App() {
           terminalRequest={terminalRequest}
         />
       )}
+      {tour && <Tour steps={tour} onClose={() => setTour(undefined)} />}
     </div>
   )
 }

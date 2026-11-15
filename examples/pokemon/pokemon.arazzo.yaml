@@ -9,6 +9,9 @@ sourceDescriptions:
   - name: pokeapi
     url: ./pokeapi.openapi.yaml
     type: openapi
+  - name: pokedexEvents
+    url: ./pokedex-events.asyncapi.yaml
+    type: asyncapi
 workflows:
   - workflowId: pokemonCard
     summary: Ficha de un Pokémon
@@ -160,3 +163,97 @@ workflows:
       pokemon: $steps.getType.outputs.firstPokemon
       strongAgainst: $steps.getType.outputs.strongAgainst
       isLegendary: $steps.getFirstSpecies.outputs.isLegendary
+
+  - workflowId: battleMatchup
+    summary: Preparar un combate
+    description: >-
+      Depende de "Explorar un tipo" (dependsOn): usa el tipo al que ese journey hace doble daño
+      para buscar un rival y consultar su ficha.
+    dependsOn: [typeExplorer]
+    steps:
+      - stepId: getRivalType
+        description: Consulta el tipo al que el primero le hace doble daño.
+        operationId: $sourceDescriptions.pokeapi.getType
+        parameters:
+          - name: idOrName
+            in: path
+            value: $workflows.typeExplorer.outputs.strongAgainst
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            condition: $.pokemon[0].pokemon.name
+            type: jsonpath
+        outputs:
+          rival: $response.body#/pokemon/0/pokemon/name
+      - stepId: getRival
+        description: Consulta la ficha del rival.
+        operationId: $sourceDescriptions.pokeapi.getPokemon
+        parameters:
+          - name: idOrName
+            in: path
+            value: $steps.getRivalType.outputs.rival
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          rivalType: $response.body#/types/0/type/name
+    outputs:
+      challenger: $workflows.typeExplorer.outputs.pokemon
+      rival: $steps.getRivalType.outputs.rival
+      rivalType: $steps.getRival.outputs.rivalType
+
+  - workflowId: registerSighting
+    summary: Registrar un avistamiento
+    description: >-
+      Mezcla una llamada HTTP real con eventos (AsyncAPI): consulta el Pokémon, publica el
+      avistamiento y espera la confirmación de la Pokédex. Los eventos son ficticios y se simulan.
+    inputs:
+      type: object
+      required: [pokemon, trainer, correlationId]
+      properties:
+        pokemon: { type: string, example: pikachu }
+        trainer: { type: string, example: '{{$randomFirstName}}' }
+        correlationId: { type: string, example: '{{$guid}}' }
+    steps:
+      - stepId: getPokemon
+        description: Consulta el Pokémon (API real).
+        operationId: $sourceDescriptions.pokeapi.getPokemon
+        parameters:
+          - name: idOrName
+            in: path
+            value: $inputs.pokemon
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          id: $response.body#/id
+          name: $response.body#/name
+      - stepId: publishSighting
+        description: Publica el avistamiento.
+        operationId: $sourceDescriptions.pokedexEvents.registerSighting
+        action: send
+        parameters:
+          - name: correlationId
+            in: header
+            value: $inputs.correlationId
+        requestBody:
+          payload:
+            trainer: $inputs.trainer
+            pokemonId: $steps.getPokemon.outputs.id
+            pokemon: $steps.getPokemon.outputs.name
+      - stepId: awaitConfirmation
+        description: Espera que la Pokédex confirme el registro.
+        channelPath: '{$sourceDescriptions.pokedexEvents.url}#/channels/sightingConfirmed'
+        action: receive
+        correlationId: $inputs.correlationId
+        timeout: 5000
+        dependsOn: [publishSighting]
+        successCriteria:
+          - condition: $message.payload#/status == 'CONFIRMED'
+        onFailure:
+          - name: sightingRejected
+            type: end
+            criteria:
+              - condition: $message.payload#/status == 'REJECTED'
+        outputs:
+          entryNumber: $message.payload#/entryNumber
+    outputs:
+      entryNumber: $steps.awaitConfirmation.outputs.entryNumber

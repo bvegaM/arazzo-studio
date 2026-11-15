@@ -33,9 +33,18 @@ interface Props {
   /** Panel de desarrollo (Console, Network, Performance). */
   devOpen: boolean
   onDevTools: () => void
+  onTour: () => void
 }
 
-function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pick<Props, 'locale' | 'onLocale' | 'privacy'> & { onClose: () => void; theme: Theme; onTheme: (t: Theme) => void }) {
+function Preferences({
+  onClose,
+  locale,
+  onLocale,
+  theme,
+  onTheme,
+  privacy,
+  onTour,
+}: Pick<Props, 'locale' | 'onLocale' | 'privacy' | 'onTour'> & { onClose: () => void; theme: Theme; onTheme: (t: Theme) => void }) {
   const mode = useUiMode()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -94,13 +103,27 @@ function Preferences({ onClose, locale, onLocale, theme, onTheme, privacy }: Pic
             <dd>{t('prefs.key.close')}</dd>
           </dl>
         </div>
+        <div className="prefs-row">
+          <span>
+            {t('tour.card')}
+            <span className="muted small prefs-hint">{t('tour.cardText')}</span>
+          </span>
+          <button
+            onClick={() => {
+              onClose()
+              onTour()
+            }}
+          >
+            {t('tour.start')}
+          </button>
+        </div>
         <p className="muted small prefs-version">Arazzo Studio v{__APP_VERSION__}</p>
       </div>
     </div>
   )
 }
 
-export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch, devOpen, onDevTools }: Props) {
+export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch, devOpen, onDevTools, onTour }: Props) {
   const [prefs, setPrefs] = useState(false)
   const errors = useDevLog().logs.filter((l) => l.level === 'error').length
   const simple = useUiMode() === 'simple'
@@ -108,7 +131,7 @@ export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch,
   const nextTheme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
   return (
     <footer className="status-bar">
-      <button className="status-btn" onClick={() => setPrefs(true)} title={t('prefs.title')} aria-label={t('prefs.title')}>
+      <button className="status-btn" data-tour="prefs" onClick={() => setPrefs(true)} title={t('prefs.title')} aria-label={t('prefs.title')}>
         <Icon d={ICONS.settings} size={14} />
       </button>
       <button
@@ -129,18 +152,18 @@ export function StatusBar({ locale, onLocale, privacy, env, onOpenEnv, onSearch,
         </button>
       )}
       {onSearch && (
-        <button className="status-btn status-text" onClick={onSearch} title={`${t('status.search')} (${MOD_KEY}K)`}>
+        <button className="status-btn status-text" data-tour="search" onClick={onSearch} title={`${t('status.search')} (${MOD_KEY}K)`}>
           <Icon d={ICONS.search} size={13} /> {t('status.search')} <kbd className="status-hide-sm">{MOD_KEY}K</kbd>
         </button>
       )}
       {!simple && (
-        <button className={`status-btn status-text ${devOpen ? 'on' : ''}`} onClick={onDevTools} title={t('status.devTools')} aria-pressed={devOpen}>
+        <button className={`status-btn status-text ${devOpen ? 'on' : ''}`} data-tour="devtools" onClick={onDevTools} title={t('status.devTools')} aria-pressed={devOpen}>
           <Icon d={ICONS.devtools} size={13} /> <span className="status-hide-sm">{t('status.devTools')}</span>
           {!devOpen && errors > 0 && <span className="dev-count alert">{errors}</span>}
         </button>
       )}
       <span className="status-item muted status-version">v{__APP_VERSION__}</span>
-      {prefs && <Preferences onClose={() => setPrefs(false)} locale={locale} onLocale={onLocale} theme={theme} onTheme={setTheme} privacy={privacy} />}
+      {prefs && <Preferences onClose={() => setPrefs(false)} locale={locale} onLocale={onLocale} theme={theme} onTheme={setTheme} privacy={privacy} onTour={onTour} />}
     </footer>
   )
 }
