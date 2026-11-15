@@ -34,6 +34,7 @@ interface Actions {
 const EXAMPLES: { id: ExampleId; title: string; hint: string }[] = [
   { id: 'cards', title: 'load.example', hint: 'ws.welcome.cardsHint' },
   { id: 'miles', title: 'load.exampleMiles', hint: 'load.exampleMilesHint' },
+  { id: 'pokemon', title: 'ws.welcome.pokemon', hint: 'ws.welcome.pokemonHint' },
   { id: 'collection', title: 'ws.welcome.collection', hint: 'ws.welcome.collectionHint' },
 ]
 

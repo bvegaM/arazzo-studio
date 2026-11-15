@@ -45,6 +45,8 @@ export function exampleFromSchema(schema: any, depth = 0): any {
     if (schema.format === 'date-time') return '2026-01-01T00:00:00Z'
     if (schema.format === 'date') return '2026-01-01'
     if (schema.format === 'email') return 'demo@example.com'
+    if (schema.format === 'uri' || schema.format === 'url') return 'https://example.com/'
+    if (schema.format === 'uuid') return '00000000-0000-4000-8000-000000000000'
     return 'ejemplo'
   }
   return undefined

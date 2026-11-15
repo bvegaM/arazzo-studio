@@ -673,4 +673,6 @@ export const ui = {
   'contract.newProblems': '{n} problema(s) nuevo(s)',
   'contract.noChange': 'sin cambios',
   'contract.related': 'Archivos referenciados ($ref)',
+  'ws.welcome.pokemon': 'Pokédex con la PokéAPI real',
+  'ws.welcome.pokemonHint': 'Dos journeys contra una API pública de verdad, sin credenciales: ficha de un Pokémon y explorar un tipo.',
 }

@@ -674,4 +674,6 @@ export const ui: Record<keyof typeof es, string> = {
   'contract.newProblems': '{n} new problem(s)',
   'contract.noChange': 'no change',
   'contract.related': 'Referenced files ($ref)',
+  'ws.welcome.pokemon': 'Pokédex with the real PokéAPI',
+  'ws.welcome.pokemonHint': 'Two journeys against a real public API, no credentials needed: a Pokémon card and exploring a type.',
 }
