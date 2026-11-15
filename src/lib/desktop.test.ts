@@ -18,6 +18,23 @@ function fakeBridge(reply: Awaited<ReturnType<DesktopBridge['request']>>) {
     openFolder: async () => undefined,
     writeFile: async (path) => path,
     saveAs: async () => undefined,
+    wsPickFolder: async () => undefined,
+    wsList: async () => [],
+    wsRead: async () => undefined,
+    wsWrite: async () => {},
+    wsRemove: async () => {},
+    wsRemoveDir: async () => {},
+    wsDefaultLocation: async () => '/tmp',
+    wsPickLocation: async () => undefined,
+    wsCreateAt: async (parent, folder) => `${parent}/${folder}`,
+    wsReveal: async () => {},
+    wsTrash: async () => {},
+    secretGet: async () => undefined,
+    secretSet: async () => {},
+    secretRemove: async () => {},
+    secretRemovePrefix: async () => {},
+    appSetTheme: async () => {},
+    appToggleDevTools: async () => {},
   }
   return { bridge, calls }
 }

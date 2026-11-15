@@ -1,7 +1,7 @@
 // Proceso principal de la app de escritorio: la ventana, las peticiones HTTP (sin CORS, desde Node)
 // y el acceso a archivos. La interfaz es la misma app web; habla con este proceso por preload.cjs.
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
+import { access, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,6 +26,8 @@ function createWindow() {
     minHeight: 640,
     title: 'Arazzo Studio',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1216' : '#f5f6f8',
+    // En macOS los semáforos de la ventana van dentro de la barra superior de la app (como Bruno).
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 15 } } : {}),
     webPreferences: {
       preload: path.join(here, 'preload.cjs'),
       contextIsolation: true,
@@ -123,7 +125,173 @@ ipcMain.handle('fs:saveAs', async (event, { suggestedName, text }) => {
   return picked.filePath
 })
 
-app.whenReady().then(() => {
+// --- Workspaces: solo se lee y escribe dentro de carpetas que el usuario eligió en un diálogo ---
+
+const configFile = () => path.join(app.getPath('userData'), 'workspaces.json')
+const secretsFile = () => path.join(app.getPath('userData'), 'secrets.json')
+const workspaceRoots = new Set()
+
+async function readJson(file, fallback) {
+  try {
+    return JSON.parse(await readFile(file, 'utf8'))
+  } catch {
+    return fallback
+  }
+}
+
+async function allowRoot(root) {
+  workspaceRoots.add(path.resolve(root))
+  await writeFile(configFile(), JSON.stringify({ roots: [...workspaceRoots] }, null, 2))
+}
+
+/** Ruta absoluta dentro del workspace; rechaza rutas que salgan de él (../, rutas absolutas). */
+function inside(root, rel) {
+  const base = path.resolve(root)
+  if (!workspaceRoots.has(base)) throw new Error('Workspace no autorizado.')
+  const full = path.resolve(base, rel || '.')
+  if (full !== base && !full.startsWith(base + path.sep)) throw new Error('Ruta fuera del workspace.')
+  return full
+}
+
+ipcMain.handle('ws:pickFolder', async (event, mode) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  const picked = await dialog.showOpenDialog(win, {
+    title: mode === 'create' ? 'Carpeta del nuevo workspace' : 'Abrir workspace',
+    buttonLabel: mode === 'create' ? 'Crear aquí' : 'Abrir',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  const root = picked.filePaths[0]
+  if (picked.canceled || !root) return undefined
+  await allowRoot(root)
+  return root
+})
+
+ipcMain.handle('ws:list', async (_event, { root, path: rel }) => {
+  try {
+    const entries = await readdir(inside(root, rel), { withFileTypes: true })
+    return entries.map((e) => ({ name: e.name, dir: e.isDirectory() }))
+  } catch {
+    return []
+  }
+})
+
+ipcMain.handle('ws:read', async (_event, { root, path: rel }) => {
+  try {
+    const full = inside(root, rel)
+    if ((await stat(full)).size > MAX_FILE_BYTES) return undefined
+    return await readFile(full, 'utf8')
+  } catch {
+    return undefined
+  }
+})
+
+ipcMain.handle('ws:write', async (_event, { root, path: rel, text }) => {
+  const full = inside(root, rel)
+  await mkdir(path.dirname(full), { recursive: true })
+  await writeFile(full, text, 'utf8')
+})
+
+ipcMain.handle('ws:remove', async (_event, { root, path: rel }) => {
+  const full = inside(root, rel)
+  if (full === path.resolve(root)) throw new Error('No se puede borrar el workspace.')
+  await rm(full, { force: true })
+})
+
+/** Borra una carpeta del workspace con todo su contenido (p. ej. una colección). */
+ipcMain.handle('ws:removeDir', async (_event, { root, path: rel }) => {
+  const full = inside(root, rel)
+  if (full === path.resolve(root)) throw new Error('No se puede borrar el workspace.')
+  await rm(full, { recursive: true, force: true })
+})
+
+/** Dónde se proponen los workspaces nuevos: Documentos/Arazzo Studio. */
+ipcMain.handle('ws:defaultLocation', () => path.join(app.getPath('documents'), 'Arazzo Studio'))
+
+/** Elige la carpeta donde se creará un workspace (no se autoriza hasta crearlo). */
+ipcMain.handle('ws:pickLocation', async (event, current) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  const picked = await dialog.showOpenDialog(win, {
+    title: 'Ubicación del workspace',
+    buttonLabel: 'Elegir',
+    defaultPath: current || undefined,
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  return picked.canceled ? undefined : picked.filePaths[0]
+})
+
+/** Crea la carpeta del workspace dentro de la ubicación elegida y la autoriza. */
+ipcMain.handle('ws:createAt', async (_event, { parent, folder }) => {
+  const name = String(folder).replace(/[\\/:*?"<>|]/g, '').trim()
+  if (!name || name === '.' || name === '..') throw new Error('Nombre de carpeta no válido.')
+  const root = path.join(path.resolve(parent), name)
+  await mkdir(root, { recursive: true })
+  await allowRoot(root)
+  return root
+})
+
+/**
+ * Elimina un workspace: su carpeta va a la papelera (se puede recuperar). Solo carpetas
+ * autorizadas que tengan studio.yaml, para no borrar nunca otra cosa.
+ */
+ipcMain.handle('ws:trash', async (_event, root) => {
+  const base = path.resolve(root)
+  if (!workspaceRoots.has(base)) throw new Error('Workspace no autorizado.')
+  await access(path.join(base, 'studio.yaml'))
+  await shell.trashItem(base)
+  workspaceRoots.delete(base)
+  await writeFile(configFile(), JSON.stringify({ roots: [...workspaceRoots] }, null, 2))
+})
+
+/** Muestra una carpeta o archivo del workspace en Finder / el explorador. */
+ipcMain.handle('ws:reveal', async (_event, { root, path: rel }) => {
+  shell.showItemInFolder(inside(root, rel))
+})
+
+// Secretos: cifrados con el llavero del sistema (safeStorage); si no está disponible, no se guardan.
+ipcMain.handle('secret:get', async (_event, key) => {
+  const all = await readJson(secretsFile(), {})
+  if (!all[key] || !safeStorage.isEncryptionAvailable()) return undefined
+  try {
+    return safeStorage.decryptString(Buffer.from(all[key], 'base64'))
+  } catch {
+    return undefined
+  }
+})
+
+ipcMain.handle('secret:set', async (_event, { key, value }) => {
+  if (!safeStorage.isEncryptionAvailable()) return
+  const all = await readJson(secretsFile(), {})
+  all[key] = safeStorage.encryptString(value).toString('base64')
+  await writeFile(secretsFile(), JSON.stringify(all), { mode: 0o600 })
+})
+
+ipcMain.handle('secret:remove', async (_event, key) => {
+  const all = await readJson(secretsFile(), {})
+  delete all[key]
+  await writeFile(secretsFile(), JSON.stringify(all), { mode: 0o600 })
+})
+
+/** Borra todos los secretos cuya clave empieza con `prefix` (p. ej. los de un workspace). */
+ipcMain.handle('secret:removePrefix', async (_event, prefix) => {
+  if (!prefix) return
+  const all = await readJson(secretsFile(), {})
+  for (const key of Object.keys(all)) if (key.startsWith(prefix)) delete all[key]
+  await writeFile(secretsFile(), JSON.stringify(all), { mode: 0o600 })
+})
+
+/** Tema elegido en la app: también lo usan la ventana y los diálogos del sistema. */
+ipcMain.handle('app:setTheme', (_event, theme) => {
+  nativeTheme.themeSource = theme === 'light' || theme === 'dark' ? theme : 'system'
+})
+
+/** Herramientas de desarrollo de la ventana (para inspeccionar peticiones y errores). */
+ipcMain.handle('app:toggleDevTools', (event) => {
+  event.sender.toggleDevTools()
+})
+
+app.whenReady().then(async () => {
+  // Las carpetas de workspace elegidas antes siguen autorizadas.
+  for (const root of (await readJson(configFile(), {})).roots ?? []) workspaceRoots.add(root)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

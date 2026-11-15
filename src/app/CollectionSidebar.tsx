@@ -5,10 +5,13 @@ import { caseJourney } from '../core/collection'
 import { humanizeId } from '../core/format'
 import { isRemote } from '../core/loader'
 import type { CaseRun } from '../core/testcases'
-import { LOCALES, t } from '../i18n'
+import { t } from '../i18n'
 import { MethodBadge } from '../ui/components/badges'
-import { Chevron, Icon, Segmented } from '../ui/components/kit'
+import { Chevron, Icon } from '../ui/components/kit'
+import { RowMenu, type RowAction } from '../ui/components/RowMenu'
+import { desktop } from '../lib/desktop'
 import type { Studio } from './useStudio'
+import type { WorkspaceState } from './useWorkspace'
 
 export interface Selection {
   /** Journey activo (workflowId). */
@@ -21,6 +24,7 @@ export interface Selection {
 
 interface Props {
   studio: Studio
+  workspace: WorkspaceState
   selection: Selection
   onOpenJourney: (workflowId: string) => void
   onOpenStep: (workflowId: string, stepId: string) => void
@@ -39,12 +43,56 @@ function journeyTone(key: string, wa: WorkflowAnalysis, runs: CaseRun[]): { cls:
   return { cls: 'sd-idle', title: t('ws.tree.notRun') }
 }
 
+
+
+ /** Nombre nuevo de un archivo: si no trae extensión, conserva la del original (.arazzo.yaml…). */
+function withExtension(value: string, original: string): string {
+  const v = value.trim().replace(/[\\/]/g, '')
+  if (/\.(ya?ml|json)$/i.test(v)) return v
+  return v + (original.match(/(\.arazzo)?\.(ya?ml|json)$/i)?.[0] ?? '.yaml')
+}
+
+/** Campo para renombrar en línea: Enter guarda, Esc cancela. */
+function RenameForm({ value, onSubmit, onCancel }: { value: string; onSubmit: (v: string) => void; onCancel: () => void }) {
+  const [text, setText] = useState(value)
+  return (
+    <form
+      className="tree-form tree-rename"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (text.trim() && text.trim() !== value) onSubmit(text.trim())
+        else onCancel()
+      }}
+    >
+      <input
+        autoFocus
+        value={text}
+        onFocus={(e) => {
+          // Selecciona el nombre sin la extensión, como en Finder.
+          const dot = value.search(/(\.arazzo)?\.(ya?ml|json)$/i)
+          e.target.setSelectionRange(0, dot > 0 ? dot : value.length)
+        }}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+        spellCheck={false}
+      />
+      <button className="small primary" type="submit" disabled={!text.trim()}>
+        {t('studio.rename')}
+      </button>
+      <button className="small" type="button" onClick={onCancel}>
+        {t('common.cancel')}
+      </button>
+    </form>
+  )
+}
+
+const COLLECTIONS_ICON = 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8'
 const FOLDER_ICON = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'
 const PLUS_ICON = 'M12 5v14M5 12h14'
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18'
 
-export function CollectionSidebar({ studio, selection, onOpenJourney, onOpenStep, onOpenEnv }: Props) {
-  const { projects, journeys, runs, locale, changeLocale, environments, activeEnv, envActions } = studio
+export function CollectionSidebar({ studio, workspace, selection, onOpenJourney, onOpenStep, onOpenEnv }: Props) {
+  const { projects, journeys, runs, environments, activeEnv, envActions } = studio
   const sources = studio.collectionSources
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [closing, setClosing] = useState(false)
@@ -53,19 +101,175 @@ export function CollectionSidebar({ studio, selection, onOpenJourney, onOpenStep
   const [attachTo, setAttachTo] = useState<string>()
   const toggle = (key: string, def = false) => setCollapsed((c) => ({ ...c, [key]: !(c[key] ?? def) }))
   const isCollapsed = (key: string, def = false) => collapsed[key] ?? def
+  const [newCollection, setNewCollection] = useState<string>()
+  // Renombrar en línea y confirmar antes de quitar o borrar (colección o archivo).
+  const [editing, setEditing] = useState<{ kind: 'collection' | 'file'; id: string }>()
+  const [confirm, setConfirm] = useState<{ kind: 'removeCollection' | 'deleteCollection' | 'deleteFile'; id: string }>()
+  const [actionError, setActionError] = useState<string>()
+  const revealLabel = t(desktop?.platform === 'darwin' ? 'studio.reveal' : 'studio.revealOther')
+  const act = (task: Promise<unknown>) =>
+    task.then(
+      () => setActionError(undefined),
+      (e: Error) => setActionError(e.message),
+    )
+  const activeFolder = workspace.activeCollection?.folder
+  const fileActions = (file: string): RowAction[] => [
+    { label: t('studio.rename'), onSelect: () => setEditing({ kind: 'file', id: file }) },
+    ...(workspace.reveal && activeFolder ? [{ label: revealLabel, onSelect: () => workspace.reveal!(activeFolder, file) }] : []),
+    { label: t('studio.deleteFile'), danger: true, onSelect: () => setConfirm({ kind: 'deleteFile', id: file }) },
+  ]
+  const collectionActions = (folder: string): RowAction[] => [
+    { label: t('studio.rename'), onSelect: () => setEditing({ kind: 'collection', id: folder }) },
+    ...(workspace.reveal ? [{ label: revealLabel, onSelect: () => workspace.reveal!(folder) }] : []),
+    { label: t('studio.removeCollection'), onSelect: () => setConfirm({ kind: 'removeCollection', id: folder }) },
+    ...(folder !== '.' ? [{ label: t('studio.deleteCollection'), danger: true, onSelect: () => setConfirm({ kind: 'deleteCollection', id: folder }) }] : []),
+  ]
+  const confirmStrip = (kind: NonNullable<typeof confirm>['kind'], id: string, text: string, yes: string, run: () => Promise<unknown>) =>
+    confirm?.kind === kind && confirm.id === id ? (
+      <div className="tree-confirm">
+        <span>{text}</span>
+        <button
+          className="small danger"
+          onClick={() => {
+            setConfirm(undefined)
+            void act(run())
+          }}
+        >
+          {yes}
+        </button>
+        <button className="small" onClick={() => setConfirm(undefined)}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    ) : null
+
+  const fileTree = (
+    <>
+            {projects.map((project) => {
+        const file = project.arazzoFileName
+        const fileKey = `file:${file}`
+        const fileJourneys = journeys.filter((j) => j.file === file)
+        const fileErrors = (studio.analysisOf(file)?.issues ?? []).filter((i) => i.level === 'error').length
+        return (
+          <div key={file} className="tree-group">
+            {editing?.kind === 'file' && editing.id === file ? (
+              <RenameForm
+                value={file.split('/').pop() ?? file}
+                onCancel={() => setEditing(undefined)}
+                onSubmit={(v) => {
+                  setEditing(undefined)
+                  void act(workspace.renameArazzo(file, withExtension(v, file)))
+                }}
+              />
+            ) : (
+              <div className="tree-row-wrap">
+                <button className="tree-row tree-file" onClick={() => toggle(fileKey)} aria-expanded={!isCollapsed(fileKey)} title={file}>
+                  <Chevron open={!isCollapsed(fileKey)} />
+                  <span className="tree-icon">⧉</span>
+                  <span className="grow clamp-1">
+                    {projects.length > 1 ? (project.arazzo.info?.title ?? file) : file}
+                    {projects.length > 1 && <span className="tree-file-name">{file.split(/[\\/]/).pop()}</span>}
+                  </span>
+                  {fileErrors > 0 && <span className="err small">!</span>}
+                </button>
+                {workspace.isOpen && <RowMenu actions={fileActions(file)} />}
+              </div>
+            )}
+            {confirmStrip('deleteFile', file, t('studio.deleteFileConfirm', { name: file }), t('studio.delete'), () => workspace.deleteArazzo(file))}
+            {!isCollapsed(fileKey) &&
+              fileJourneys.map(({ key, wa }) => {
+                const tone = journeyTone(key, wa, runs)
+                const open = !isCollapsed(key, key !== selection.journey)
+                const active = selection.journey === key && !selection.step && !selection.env
+                return (
+                  <div key={key} className="tree-group">
+                    <div className={`tree-row tree-journey ${active ? 'active' : ''}`}>
+                      <button className="tree-twisty" onClick={() => toggle(key, key !== selection.journey)} aria-label={t('ws.tree.toggleSteps')} aria-expanded={open}>
+                        <Chevron open={open} />
+                      </button>
+                      <button className="tree-main" onClick={() => onOpenJourney(key)} title={wa.workflow.summary ?? wa.workflow.workflowId}>
+                        <span className={`status-dot ${tone.cls}`} title={tone.title} />
+                        <span className="grow clamp-1">{humanizeId(wa.workflow.workflowId)}</span>
+                      </button>
+                    </div>
+                    {open &&
+                      wa.steps.map((rs) => {
+                        const stepActive = selection.journey === key && selection.step === rs.step.stepId && !selection.env
+                        const hasError = wa.issues.some((i) => i.stepId === rs.step.stepId && i.level === 'error')
+                        return (
+                          <button
+                            key={rs.step.stepId}
+                            className={`tree-row tree-step ${stepActive ? 'active' : ''}`}
+                            onClick={() => onOpenStep(key, rs.step.stepId)}
+                            title={rs.step.description ?? rs.label}
+                          >
+                            {rs.op ? <MethodBadge method={rs.op.method} /> : <span className="method m-flow">{rs.kind === 'workflow' ? 'FLOW' : '?'}</span>}
+                            <span className={`grow clamp-1 ${hasError ? 'err' : ''}`}>{rs.step.stepId}</span>
+                          </button>
+                        )
+                      })}
+                  </div>
+                )
+              })}
+          </div>
+        )
+      })}
+    </>
+  )
 
   return (
     <aside className="ws-sidebar">
-      <div className="brand">
-        <div className="brand-mark">A</div>
-        <div>
-          <div>Arazzo Studio</div>
-          <div className="brand-sub">{t('brand.sub')}</div>
-        </div>
-      </div>
-
-      {projects.length > 0 && (
+      {workspace.isOpen && (
         <>
+          <div className="tree-head tree-head-top">
+            <Icon d={COLLECTIONS_ICON} size={15} />
+            <strong className="tree-title">{t('studio.collections')}</strong>
+            <span className="spacer" />
+            <button className="icon-btn" onClick={() => setNewCollection('')} title={t('studio.newCollection')} aria-label={t('studio.newCollection')}>
+              <Icon d={PLUS_ICON} size={14} />
+            </button>
+          </div>
+          {newCollection !== undefined && (
+            <form
+              className="tree-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!newCollection.trim()) return
+                void workspace.createCollection(newCollection.trim())
+                setNewCollection(undefined)
+              }}
+            >
+              <input autoFocus value={newCollection} placeholder={t('studio.collectionName')} onChange={(e) => setNewCollection(e.target.value)} />
+              {newCollection.trim() && (
+                <span className="muted small tree-form-hint clamp-1">
+                  {t('studio.collectionWhere', {
+                    path: workspace.kind === 'browser' ? workspace.collectionFolderFor(newCollection) : `${workspace.location}/${workspace.collectionFolderFor(newCollection)}`,
+                  })}
+                </span>
+              )}
+              <button className="small primary" type="submit" disabled={!newCollection.trim()}>
+                {t('studio.create')}
+              </button>
+              <button className="small" type="button" onClick={() => setNewCollection(undefined)}>
+                {t('common.cancel')}
+              </button>
+            </form>
+          )}
+          {!workspace.collections.length && newCollection === undefined && <p className="muted small tree-empty">{t('studio.noCollections')}</p>}
+          {actionError && (
+            <div className="tree-confirm">
+              <span className="grow">{actionError}</span>
+              <button className="small" onClick={() => setActionError(undefined)}>
+                {t('common.close')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {(projects.length > 0 || workspace.isOpen) && (
+        <>
+          {!workspace.isOpen && (
           <div className="tree-head">
             <span className="tree-label">{t('ws.tree.collection')}</span>
             <span className="spacer" />
@@ -80,19 +284,9 @@ export function CollectionSidebar({ studio, selection, onOpenJourney, onOpenStep
             <button className="icon-btn" onClick={() => setClosing(true)} title={t('ws.tree.close')} aria-label={t('ws.tree.close')}>
               <Icon d={CLOSE_ICON} size={14} />
             </button>
-            <input
-              ref={files}
-              type="file"
-              multiple
-              accept=".yaml,.yml,.json"
-              hidden
-              onChange={(e) => {
-                void studio.addFiles([...(e.target.files ?? [])])
-                e.target.value = ''
-              }}
-            />
           </div>
-          {closing && (
+          )}
+          {closing && !workspace.isOpen && (
             <div className="tree-confirm">
               <span>{t('ws.tree.closeConfirm')}</span>
               <button className="small danger" onClick={studio.reset}>
@@ -105,64 +299,61 @@ export function CollectionSidebar({ studio, selection, onOpenJourney, onOpenStep
           )}
 
           <nav className="tree" aria-label={t('ws.tree.collection')}>
-            <div className="tree-root" title={studio.folder ?? studio.collectionTitle}>
-              <strong className="clamp-1">{studio.collectionTitle}</strong>
-              {studio.folder && <span className="muted small clamp-1">{studio.folder}</span>}
-            </div>
-            {projects.map((project) => {
-              const file = project.arazzoFileName
-              const fileKey = `file:${file}`
-              const fileJourneys = journeys.filter((j) => j.file === file)
-              const fileErrors = (studio.analysisOf(file)?.issues ?? []).filter((i) => i.level === 'error').length
-              return (
-                <div key={file} className="tree-group">
-                  <button className="tree-row tree-file" onClick={() => toggle(fileKey)} aria-expanded={!isCollapsed(fileKey)} title={file}>
-                    <Chevron open={!isCollapsed(fileKey)} />
-                    <span className="tree-icon">⧉</span>
-                    <span className="grow clamp-1">
-                      {projects.length > 1 ? (project.arazzo.info?.title ?? file) : file}
-                      {projects.length > 1 && <span className="tree-file-name">{file.split(/[\\/]/).pop()}</span>}
-                    </span>
-                    {fileErrors > 0 && <span className="err small">!</span>}
-                  </button>
-                  {!isCollapsed(fileKey) &&
-                    fileJourneys.map(({ key, wa }) => {
-                      const tone = journeyTone(key, wa, runs)
-                      const open = !isCollapsed(key, key !== selection.journey)
-                      const active = selection.journey === key && !selection.step && !selection.env
-                      return (
-                        <div key={key} className="tree-group">
-                          <div className={`tree-row tree-journey ${active ? 'active' : ''}`}>
-                            <button className="tree-twisty" onClick={() => toggle(key, key !== selection.journey)} aria-label={t('ws.tree.toggleSteps')} aria-expanded={open}>
-                              <Chevron open={open} />
-                            </button>
-                            <button className="tree-main" onClick={() => onOpenJourney(key)} title={wa.workflow.summary ?? wa.workflow.workflowId}>
-                              <span className={`status-dot ${tone.cls}`} title={tone.title} />
-                              <span className="grow clamp-1">{humanizeId(wa.workflow.workflowId)}</span>
-                            </button>
-                          </div>
-                          {open &&
-                            wa.steps.map((rs) => {
-                              const stepActive = selection.journey === key && selection.step === rs.step.stepId && !selection.env
-                              const hasError = wa.issues.some((i) => i.stepId === rs.step.stepId && i.level === 'error')
-                              return (
-                                <button
-                                  key={rs.step.stepId}
-                                  className={`tree-row tree-step ${stepActive ? 'active' : ''}`}
-                                  onClick={() => onOpenStep(key, rs.step.stepId)}
-                                  title={rs.step.description ?? rs.label}
-                                >
-                                  {rs.op ? <MethodBadge method={rs.op.method} /> : <span className="method m-flow">{rs.kind === 'workflow' ? 'FLOW' : '?'}</span>}
-                                  <span className={`grow clamp-1 ${hasError ? 'err' : ''}`}>{rs.step.stepId}</span>
-                                </button>
-                              )
-                            })}
-                        </div>
-                      )
-                    })}
+            {workspace.isOpen ? (
+              workspace.collections.map((c) => {
+                const isActive = c.folder === workspace.activeCollection?.folder
+                return (
+                  <div key={c.folder} className="tree-group">
+                    {editing?.kind === 'collection' && editing.id === c.folder ? (
+                      <RenameForm
+                        value={c.name}
+                        onCancel={() => setEditing(undefined)}
+                        onSubmit={(v) => {
+                          setEditing(undefined)
+                          void act(workspace.renameCollection(c.folder, v))
+                        }}
+                      />
+                    ) : (
+                      <div className="tree-row-wrap">
+                        <button
+                          className={`tree-row tree-collection ${isActive ? 'current' : ''}`}
+                          onClick={() => (isActive ? toggle(`col:${c.folder}`) : void workspace.openCollection(c.folder))}
+                          aria-expanded={isActive && !isCollapsed(`col:${c.folder}`)}
+                          title={t('studio.inFolder', { folder: c.folder === '.' ? (workspace.location ?? '.') : c.folder })}
+                        >
+                          <Chevron open={isActive && !isCollapsed(`col:${c.folder}`)} />
+                          <Icon d={FOLDER_ICON} size={14} />
+                          <span className="grow clamp-1">{c.name}</span>
+                        </button>
+                        <RowMenu actions={collectionActions(c.folder)} />
+                      </div>
+                    )}
+                    {confirmStrip('removeCollection', c.folder, t('studio.removeCollectionConfirm', { name: c.name }), t('studio.remove'), () =>
+                      workspace.removeCollection(c.folder, false),
+                    )}
+                    {confirmStrip('deleteCollection', c.folder, t('studio.deleteCollectionConfirm', { name: c.name, folder: c.folder }), t('studio.delete'), () =>
+                      workspace.removeCollection(c.folder, true),
+                    )}
+                    {isActive && !isCollapsed(`col:${c.folder}`) && (
+                      <div className="tree-nested">
+                        {fileTree}
+                        <button className="tree-row tree-add" onClick={() => files.current?.click()}>
+                          <Icon d={PLUS_ICON} size={13} /> {t('studio.addToCollection')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            ) : (
+              <>
+                <div className="tree-root" title={studio.folder ?? studio.collectionTitle}>
+                  <strong className="clamp-1">{studio.collectionTitle}</strong>
+                  {studio.folder && <span className="muted small clamp-1">{studio.folder}</span>}
                 </div>
-              )
-            })}
+                {fileTree}
+              </>
+            )}
           </nav>
 
           <div className="tree-section">
@@ -256,10 +447,18 @@ export function CollectionSidebar({ studio, selection, onOpenJourney, onOpenStep
         </>
       )}
 
-      <div className="sidebar-foot">{t(studio.isDesktop ? 'sidebar.privacyDesktop' : 'sidebar.privacy')}</div>
-      <div className="sidebar-lang" aria-label={t('sidebar.language')}>
-        <Segmented options={LOCALES.map((l) => ({ id: l.id, label: l.label }))} value={locale} onChange={changeLocale} />
-      </div>
+      {/* Selector de archivos compartido: cabecera sin workspace y "Agregar archivos a la colección". */}
+      <input
+        ref={files}
+        type="file"
+        multiple
+        accept=".yaml,.yml,.json"
+        hidden
+        onChange={(e) => {
+          void studio.addFiles([...(e.target.files ?? [])])
+          e.target.value = ''
+        }}
+      />
     </aside>
   )
 }

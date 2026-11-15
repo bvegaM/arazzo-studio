@@ -17,9 +17,12 @@ import { InputsView } from '../ui/workspace/InputsView'
 import { OverviewView } from '../ui/workspace/OverviewView'
 import { ResultsPanel } from '../ui/workspace/ResultsPanel'
 import { StepView } from '../ui/workspace/StepView'
-import { EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
+import { EmptyCollection, EmptyWorkspace, WelcomeDialog } from '../ui/workspace/Welcome'
+import { CommandPalette, type PaletteItem } from '../ui/workspace/CommandPalette'
 import { CollectionSidebar } from './CollectionSidebar'
+import { StatusBar } from './StatusBar'
 import type { Studio } from './useStudio'
+import type { WorkspaceState } from './useWorkspace'
 
 // El editor (CodeMirror) pesa bastante: se carga solo al abrir la pestaña YAML.
 const ArazzoEditor = lazy(() => import('../ui/components/ArazzoEditor').then((m) => ({ default: m.ArazzoEditor })))
@@ -56,7 +59,7 @@ function Splitter({ width, onChange }: { width: number; onChange: (w: number) =>
   return <div className="ws-splitter" role="separator" aria-orientation="vertical" aria-label={t('ws.resize')} onPointerDown={start} />
 }
 
-export function Workspace({ studio }: { studio: Studio }) {
+export function Workspace({ studio, workspace }: { studio: Studio; workspace: WorkspaceState }) {
   const { journeys, projects } = studio
   // Journeys abiertos como pestañas (además del activo) y si la pestaña de ambiente está abierta.
   const [openTabs, setOpenTabs] = useState<string[]>([])
@@ -67,6 +70,7 @@ export function Workspace({ studio }: { studio: Studio }) {
   const [askConfirm, setAskConfirm] = useState(false)
   const [errorsHidden, setErrorsHidden] = useState(false)
   const [resultsWidth, setResultsWidth] = useState(savedWidth)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   // La bienvenida se muestra mientras no haya colección, salvo que se haya cerrado.
   const [welcomeClosed, setWelcomeClosed] = useState(false)
   if (projects.length && welcomeClosed) setWelcomeClosed(false)
@@ -144,6 +148,11 @@ export function Workspace({ studio }: { studio: Studio }) {
         e.preventDefault()
         runRef.current()
       }
+      // ⌘/Ctrl + K abre el buscador.
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -169,11 +178,65 @@ export function Workspace({ studio }: { studio: Studio }) {
   const sidebar = (
     <CollectionSidebar
       studio={studio}
+      workspace={workspace}
       selection={{ journey: activeId, step: shownView === 'step' ? stepId : undefined, env: envActive }}
       onOpenJourney={(id) => openJourney(id, views[id] === 'step' ? 'overview' : undefined)}
       onOpenStep={openStep}
       onOpenEnv={openEnv}
     />
+  )
+
+  // Lo que se puede buscar con ⌘K: journeys, pasos, ambientes y colecciones.
+  const paletteItems = (): PaletteItem[] => [
+    ...journeys.map((j) => ({
+      id: `j:${j.key}`,
+      group: t('palette.journeys'),
+      label: humanizeId(j.workflowId),
+      detail: multiFile ? j.file.split(/[\\/]/).pop() : j.wa.workflow.summary,
+      run: () => openJourney(j.key),
+    })),
+    ...journeys.flatMap((j) =>
+      j.wa.steps.map((s) => ({
+        id: `s:${j.key}:${s.step.stepId}`,
+        group: t('palette.steps'),
+        label: s.step.stepId,
+        detail: humanizeId(j.workflowId),
+        badge: s.op ? { text: s.op.method.toUpperCase(), cls: `m-${s.op.method.toLowerCase()}` } : { text: 'FLOW', cls: 'm-flow' },
+        run: () => openStep(j.key, s.step.stepId),
+      })),
+    ),
+    ...studio.environments.map((e) => ({
+      id: `e:${e.id}`,
+      group: t('palette.environments'),
+      label: e.name,
+      detail: e.id === studio.activeEnv.id ? t('palette.active') : undefined,
+      envColor: e.color ?? '',
+      run: () => {
+        studio.envActions.select(e.id)
+        openEnv()
+      },
+    })),
+    ...workspace.collections.map((c) => ({
+      id: `c:${c.folder}`,
+      group: t('palette.collections'),
+      label: c.name,
+      detail: c.folder,
+      run: () => void workspace.openCollection(c.folder),
+    })),
+  ]
+  const hasCollection = projects.length > 0 || !!workspace.activeCollection
+  const statusBar = (
+    <>
+      <StatusBar
+        locale={studio.locale}
+        onLocale={studio.changeLocale}
+        privacy={t(workspace.isOpen ? 'studio.privacy' : studio.isDesktop ? 'sidebar.privacyDesktop' : 'sidebar.privacy')}
+        env={hasCollection ? { name: studio.activeEnv.name, color: studio.activeEnv.color } : undefined}
+        onOpenEnv={openEnv}
+        onSearch={() => setPaletteOpen(true)}
+      />
+      {paletteOpen && <CommandPalette items={paletteItems()} onClose={() => setPaletteOpen(false)} />}
+    </>
   )
 
   if (!projects.length) {
@@ -188,13 +251,20 @@ export function Workspace({ studio }: { studio: Studio }) {
       onDiscard: studio.discardSession,
     }
     return (
+      <>
       <div className="ws-shell">
         {sidebar}
         <main className="ws-welcome">
-          <EmptyWorkspace {...actions} onShowWelcome={() => setWelcomeClosed(false)} />
+          {workspace.isOpen ? (
+            <EmptyCollection workspace={workspace} onFiles={studio.addFiles} onCreateArazzo={actions.onCreate} />
+          ) : (
+            <EmptyWorkspace {...actions} onShowWelcome={() => setWelcomeClosed(false)} />
+          )}
         </main>
-        {!welcomeClosed && <WelcomeDialog {...actions} onClose={() => setWelcomeClosed(true)} />}
+        {!welcomeClosed && !workspace.isOpen && <WelcomeDialog {...actions} workspace={workspace} onClose={() => setWelcomeClosed(true)} />}
       </div>
+      {statusBar}
+      </>
     )
   }
 
@@ -411,7 +481,10 @@ export function Workspace({ studio }: { studio: Studio }) {
                           analysis={journey.analysis}
                           selected={wa.workflow.workflowId}
                           onChange={(text) => studio.editArazzo(journey.file, text)}
-                          onSave={(text) => studio.saveArazzo(journey.file, text)}
+                          onSave={(text) =>
+                            // En un workspace todo se guarda solo; "Guardar" solo adelanta el guardado.
+                            workspace.isOpen ? workspace.saveNow().then(() => 'saved' as const) : studio.saveArazzo(journey.file, text)
+                          }
                           showDiagram={false}
                         />
                       </Suspense>
@@ -443,6 +516,7 @@ export function Workspace({ studio }: { studio: Studio }) {
           )}
         </main>
       </div>
+      {statusBar}
     </TemplateVarsProvider>
   )
 }

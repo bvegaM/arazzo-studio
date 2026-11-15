@@ -61,6 +61,8 @@ export function useStudio() {
     return { list: [first], active: first.id }
   })
   const [cases, setCases] = useState<TestCase[]>([])
+  // Con un workspace abierto, lo guardado en disco manda: la sesión del navegador no se usa.
+  const [sessionPaused, setSessionPaused] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [mode, setMode] = useState<RunMode>('real')
   const [runs, setRuns] = useState<CaseRun[]>([])
@@ -219,6 +221,69 @@ export function useStudio() {
     applyCollection(projects.map((p) => (p === project ? replaceArazzo(project, parsed) : p)))
   }
 
+  /**
+   * Abre una colección de un workspace: sus archivos, ambientes (con secretos) y escenarios.
+   * Reemplaza todo lo abierto; los escenarios dan los inputs base y los casos propios.
+   */
+  function openCollectionData(data: {
+    files: LoadedFile[]
+    environments: Environment[]
+    scenarios: Record<string, string>
+    activeEnv?: string
+    /** Archivo cuyo primer journey queda seleccionado. */
+    selectFile?: string
+  }) {
+    setSavedSession(undefined)
+    const parsed = data.files.map(parseFile)
+    setFiles(parsed)
+    setTexts(data.files)
+    setOriginals(Object.fromEntries(data.files.map((f) => [f.name, f.text])))
+    setAttachments([])
+    setRemotes([])
+    setFolder(undefined)
+    setRuns([])
+    setRunEnv(undefined)
+    setConfirmed(false)
+    const built = buildCollection(parsed)
+    const nextAnalyses = Object.fromEntries(built.projects.map((p) => [p.arazzoFileName, analyzeProject(p)]))
+    const all = listJourneys(built.projects, nextAnalyses)
+    let nextCases = collectionCases(all, [])
+    const nextInputs: Record<string, Record<string, any>> = {}
+    for (const j of all) nextInputs[j.key] = defaultInputs(j.wa.inputsSchema)
+    for (const [file, text] of Object.entries(data.scenarios)) {
+      const workflowIds = all.filter((j) => j.file === file).map((j) => j.workflowId)
+      if (!workflowIds.length) continue
+      const own = nextCases.filter((c) => c.arazzo === file).map(unscopeCase)
+      const result = importScenarios(text, own, workflowIds)
+      nextCases = [...nextCases.filter((c) => c.arazzo !== file), ...result.cases.map((c) => scopeCase(file, c))]
+      for (const [wf, values] of Object.entries(result.bases)) nextInputs[journeyKey(file, wf)] = { ...nextInputs[journeyKey(file, wf)], ...values }
+    }
+    setCases(nextCases)
+    setInputs(nextInputs)
+    setSelected((all.find((j) => j.file === data.selectFile) ?? all[0])?.key ?? '')
+    const list = data.environments.length ? data.environments : [newEnvironment(t('env.defaultName'))]
+    const active = list.find((e) => e.name === data.activeEnv) ?? list[0]
+    setEnvs({ list, active: active.id })
+    applyCollection(built.projects)
+    // Una colección recién creada no tiene Arazzo todavía: no es un error.
+    setErrors(data.files.length ? built.errors : [])
+  }
+
+  /** Archivo de escenarios de cada Arazzo (inputs base y casos propios), para guardarlos en el workspace. */
+  function scenarioFiles(): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const project of projects) {
+      const file = project.arazzoFileName
+      const bases = Object.fromEntries(
+        Object.entries(inputs)
+          .filter(([k]) => splitJourneyKey(k).file === file)
+          .map(([k, v]) => [splitJourneyKey(k).workflowId, v]),
+      )
+      out[file] = exportScenarios({ title: project.arazzo.info?.title, bases, cases: cases.filter((c) => c.arazzo === file).map(unscopeCase) })
+    }
+    return out
+  }
+
   /** Escritorio: carga todos los YAML/JSON de una carpeta, como una colección de Bruno. */
   async function openFolder() {
     const opened = await desktop?.openFolder()
@@ -260,7 +325,7 @@ export function useStudio() {
 
   // Guarda la sesión poco después de cada cambio (sin credenciales ni valores sensibles).
   useEffect(() => {
-    if (!projects.length || savedSession) return
+    if (!projects.length || savedSession || sessionPaused) return
     const timer = setTimeout(() => {
       const session = toSavedSession({
         title: collectionTitle,
@@ -280,7 +345,7 @@ export function useStudio() {
       void storeSet(SESSION_KEY, session)
     }, 500)
     return () => clearTimeout(timer)
-  }, [projects, collectionTitle, savedSession, texts, attachments, remotes, inputs, cases, selected, mode, envs])
+  }, [projects, collectionTitle, savedSession, sessionPaused, texts, attachments, remotes, inputs, cases, selected, mode, envs])
 
   /** Continúa la sesión guardada: vuelve a armar el proyecto y recupera las elecciones del usuario. */
   async function restoreSession() {
@@ -500,6 +565,10 @@ export function useStudio() {
     fetchRemote,
     loadExample,
     createArazzo,
+    openCollectionData,
+    scenarioFiles,
+    texts,
+    setSessionPaused,
     reset,
     runJourney,
     cancelRun,

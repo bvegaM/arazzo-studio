@@ -21,6 +21,28 @@ export interface DesktopBridge {
   openFolder: () => Promise<{ root: string; truncated: boolean; files: DesktopFile[] } | undefined>
   writeFile: (path: string, text: string) => Promise<string>
   saveAs: (suggestedName: string, text: string) => Promise<string | undefined>
+  /** Workspaces en disco: elegir una carpeta y leer o escribir dentro de ella. */
+  wsPickFolder: (mode: 'open' | 'create') => Promise<string | undefined>
+  wsList: (root: string, dir: string) => Promise<{ name: string; dir: boolean }[]>
+  wsRead: (root: string, path: string) => Promise<string | undefined>
+  wsWrite: (root: string, path: string, text: string) => Promise<void>
+  wsRemove: (root: string, path: string) => Promise<void>
+  wsRemoveDir: (root: string, path: string) => Promise<void>
+  /** Ubicación propuesta para workspaces nuevos (Documentos/Arazzo Studio). */
+  wsDefaultLocation: () => Promise<string>
+  wsPickLocation: (current?: string) => Promise<string | undefined>
+  /** Crea la carpeta `folder` dentro de `parent` y devuelve su ruta. */
+  wsCreateAt: (parent: string, folder: string) => Promise<string>
+  wsReveal: (root: string, path: string) => Promise<void>
+  /** Manda la carpeta del workspace a la papelera. */
+  wsTrash: (root: string) => Promise<void>
+  /** Secretos cifrados por el sistema operativo. */
+  secretGet: (key: string) => Promise<string | undefined>
+  secretSet: (key: string, value: string) => Promise<void>
+  secretRemove: (key: string) => Promise<void>
+  secretRemovePrefix: (prefix: string) => Promise<void>
+  appSetTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
+  appToggleDevTools: () => Promise<void>
 }
 
 /** El puente de la app de escritorio, o undefined en el navegador. */

@@ -29,3 +29,9 @@ async function run<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) 
 export const storeGet = <T>(key: string) => run<T>('readonly', (s) => s.get(key))
 export const storeSet = (key: string, value: unknown) => run<void>('readwrite', (s) => s.put(value, key))
 export const storeDelete = (key: string) => run<void>('readwrite', (s) => s.delete(key))
+
+/** Claves que empiezan con `prefix` (vacío si el navegador bloquea IndexedDB). */
+export async function storeKeys(prefix: string): Promise<string[]> {
+  const keys = await run<IDBValidKey[]>('readonly', (s) => s.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}￿`)))
+  return (keys ?? []).map(String)
+}
