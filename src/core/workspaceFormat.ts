@@ -31,6 +31,11 @@ export interface CollectionManifest {
   name: string
   /** Versión de la colección que pone el equipo (p. ej. 1.2.0); no es la del formato. */
   collectionVersion?: string
+  /**
+   * Autorización de la colección (la heredan los requests con `inherit`). Sin secretos escritos
+   * tal cual: esos se guardan cifrados en el equipo.
+   */
+  auth?: Record<string, unknown> & { type: string }
 }
 
 const header = (lines: string[]) => lines.map((l) => `# ${l}\n`).join('')
@@ -55,7 +60,15 @@ export function parseWorkspace(text: string): WorkspaceManifest {
 export function serializeCollection(c: CollectionManifest): string {
   return (
     header(['Colección de Arazzo Studio: los Arazzo y contratos de esta carpeta, sus ambientes y sus casos.']) +
-    YAML.stringify({ version: FORMAT_VERSION, name: c.name, ...(c.collectionVersion ? { collectionVersion: c.collectionVersion } : {}) }, { lineWidth: 0 })
+    YAML.stringify(
+      {
+        version: FORMAT_VERSION,
+        name: c.name,
+        ...(c.collectionVersion ? { collectionVersion: c.collectionVersion } : {}),
+        ...(c.auth && c.auth.type !== 'none' ? { auth: c.auth } : {}),
+      },
+      { lineWidth: 0 },
+    )
   )
 }
 
@@ -64,6 +77,7 @@ export function parseCollection(text: string, fallbackName: string): CollectionM
   return {
     name: typeof doc?.name === 'string' && doc.name ? doc.name : fallbackName,
     ...(doc?.collectionVersion !== undefined && doc.collectionVersion !== null ? { collectionVersion: String(doc.collectionVersion) } : {}),
+    ...(doc?.auth && typeof doc.auth === 'object' && typeof doc.auth.type === 'string' ? { auth: doc.auth } : {}),
   }
 }
 
@@ -135,14 +149,20 @@ export function scenariosPath(arazzoFile: string): string {
 
 /** Archivos propios de Arazzo Studio dentro de una colección (no son Arazzo ni contratos). */
 export function isStudioDataPath(path: string): boolean {
-  return path === COLLECTION_FILE || path.startsWith(`${ENVIRONMENTS_DIR}/`) || path.startsWith(`${SCENARIOS_DIR}/`)
+  return path === COLLECTION_FILE || path === 'flow-auth.yaml' || path.startsWith(`${ENVIRONMENTS_DIR}/`) || path.startsWith(`${SCENARIOS_DIR}/`)
 }
 
 /** Archivos que se cargan como parte de la colección: YAML y JSON fuera de las carpetas de datos. */
 export function isCollectionContentPath(path: string): boolean {
   const name = path.split('/').pop() ?? path
-  return /\.(ya?ml|json)$/i.test(name) && !name.startsWith('.') && !isStudioDataPath(path)
+  // Los requests sueltos (requests/*.request.yaml) se leen aparte, no como Arazzo ni contratos.
+  return /\.(ya?ml|json)$/i.test(name) && !name.startsWith('.') && !name.endsWith('.request.yaml') && !isStudioDataPath(path)
 }
+
+/** Claves de los secretos de la autorización de un request y de la colección. */
+export const requestSecretKey = (workspaceId: string, collection: string, path: string) => [workspaceId, collection, 'request', path].join('|')
+export const collectionAuthKey = (workspaceId: string, collection: string) => [workspaceId, collection, 'collection-auth'].join('|')
+export const flowAuthKey = (workspaceId: string, collection: string) => [workspaceId, collection, 'flow-auth'].join('|')
 
 /** Clave de un secreto en el almacén de este equipo. */
 export function secretKey(workspaceId: string, collection: string, envName: string, kind: 'var' | 'cred', name: string): string {
