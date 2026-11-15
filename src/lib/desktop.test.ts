@@ -36,6 +36,12 @@ function fakeBridge(reply: Awaited<ReturnType<DesktopBridge['request']>>) {
     appSetTheme: async () => {},
     appToggleDevTools: async () => {},
     appMetrics: async () => ({ cpu: 0, memory: 0, uptime: 0, pid: 1, processes: [] }),
+    termCreate: async () => ({ id: '1', cwd: '/tmp', shell: 'zsh' }),
+    termWrite: () => {},
+    termResize: () => {},
+    termKill: async () => {},
+    onTermData: () => () => {},
+    onTermExit: () => () => {},
   }
   return { bridge, calls }
 }

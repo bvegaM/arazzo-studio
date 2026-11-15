@@ -26,4 +26,19 @@ contextBridge.exposeInMainWorld('arazzoDesktop', {
   appSetTheme: (theme) => ipcRenderer.invoke('app:setTheme', theme),
   appToggleDevTools: () => ipcRenderer.invoke('app:toggleDevTools'),
   appMetrics: () => ipcRenderer.invoke('app:metrics'),
+  termCreate: (opts) => ipcRenderer.invoke('term:create', opts),
+  termWrite: (id, data) => ipcRenderer.send('term:write', { id, data }),
+  termResize: (id, cols, rows) => ipcRenderer.send('term:resize', { id, cols, rows }),
+  termKill: (id) => ipcRenderer.invoke('term:kill', id),
+  /** Devuelve una función para dejar de escuchar. */
+  onTermData: (cb) => {
+    const listener = (_e, msg) => cb(msg)
+    ipcRenderer.on('term:data', listener)
+    return () => ipcRenderer.removeListener('term:data', listener)
+  },
+  onTermExit: (cb) => {
+    const listener = (_e, msg) => cb(msg)
+    ipcRenderer.on('term:exit', listener)
+    return () => ipcRenderer.removeListener('term:exit', listener)
+  },
 })

@@ -649,4 +649,13 @@ export const ui = {
   'dev.perf.avg': 'Promedio',
   'dev.perf.max': 'Máximo',
   'dev.perf.failed': 'Fallidas',
+  'dev.term.new': 'Nueva terminal',
+  'dev.term.exited': 'La sesión terminó (código {code}).',
+  'dev.term.failed': 'No se pudo abrir la terminal',
+  'dev.term.retry': 'Reintentar',
+  'dev.term.shell': 'terminal',
+  'dev.term.sessions': 'Sesiones de terminal',
+  'dev.term.none': 'No hay terminales abiertas',
+  'dev.term.kill': 'Cerrar la terminal',
+  'dev.term.renameHint': 'Doble clic para renombrar',
 }

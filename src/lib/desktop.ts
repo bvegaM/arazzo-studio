@@ -53,6 +53,13 @@ export interface DesktopBridge {
   appToggleDevTools: () => Promise<void>
   /** CPU (%), memoria (bytes), tiempo encendida (s) y PID del proceso principal. */
   appMetrics: () => Promise<AppMetrics>
+  /** Terminal integrada: abre la shell del sistema (en `cwd` si es un workspace autorizado). */
+  termCreate: (opts: { cols: number; rows: number; cwd?: string }) => Promise<{ id: string; cwd: string; shell: string }>
+  termWrite: (id: string, data: string) => void
+  termResize: (id: string, cols: number, rows: number) => void
+  termKill: (id: string) => Promise<void>
+  onTermData: (cb: (msg: { id: string; data: string }) => void) => () => void
+  onTermExit: (cb: (msg: { id: string; exitCode: number }) => void) => () => void
 }
 
 /** El puente de la app de escritorio, o undefined en el navegador. */

@@ -6,8 +6,10 @@ import { t } from '../../i18n'
 import { desktop, type AppMetrics } from '../../lib/desktop'
 import { clearLogs, clearNetwork, useDevLog, type LogEntry, type LogLevel, type NetworkEntry } from '../../lib/devlog'
 import { Icon } from '../components/kit'
+import { TerminalSessions, type SessionsHandle } from './TerminalSessions'
+import type { TerminalInfo } from './TerminalView'
 
-export type DevTab = 'console' | 'network' | 'performance'
+export type DevTab = 'console' | 'network' | 'performance' | 'terminal'
 
 const ICONS = {
   console: 'M4 17l6-6-6-6M12 19h8',
@@ -16,6 +18,8 @@ const ICONS = {
   trash: 'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14',
   close: 'M6 6l12 12M18 6L6 18',
   inspect: 'M4 4h16v12H4zM8 20h8',
+  terminal: 'M3 5h18v14H3zM7 10l3 2-3 2M12 15h5',
+  plus: 'M12 5v14M5 12h14',
 }
 
 const HEIGHT_KEY = 'dev.height'
@@ -339,8 +343,13 @@ function PerformanceTab({ entries }: { entries: NetworkEntry[] }) {
 
 // --- Panel ---
 
-export function DevPanel({ tab, onTab, onClose }: { tab: DevTab; onTab: (t: DevTab) => void; onClose: () => void }) {
+export function DevPanel({ tab, onTab, onClose, hidden, cwd }: { tab: DevTab; onTab: (t: DevTab) => void; onClose: () => void; hidden: boolean; cwd?: string }) {
   const { logs, network } = useDevLog()
+  // La terminal, una vez abierta, sigue viva aunque se cambie de pestaña o se oculte el panel.
+  const [termOpened, setTermOpened] = useState(false)
+  const [termInfo, setTermInfo] = useState<TerminalInfo>()
+  const termRef = useRef<SessionsHandle>(null)
+  if (tab === 'terminal' && !termOpened) setTermOpened(true)
   const [height, setHeight] = useState(savedHeight)
   const [level, setLevel] = useState<LogLevel | 'all'>('all')
   const [filter, setFilter] = useState('')
@@ -373,10 +382,11 @@ export function DevPanel({ tab, onTab, onClose }: { tab: DevTab; onTab: (t: DevT
     { id: 'console', label: 'Console', count: errors || undefined, alert: errors > 0 },
     { id: 'network', label: 'Network', count: network.length || undefined },
     { id: 'performance', label: 'Performance' },
+    ...(desktop ? [{ id: 'terminal' as const, label: 'Terminal' }] : []),
   ]
 
   return (
-    <section className="dev-panel" style={{ height }} aria-label={t('status.devTools')}>
+    <section className="dev-panel" style={{ height }} hidden={hidden} aria-label={t('status.devTools')}>
       <div className="dev-resize" role="separator" aria-orientation="horizontal" aria-label={t('ws.resize')} onPointerDown={resize} />
       <div className="dev-head">
         <div className="dev-tabs" role="tablist">
@@ -397,8 +407,23 @@ export function DevPanel({ tab, onTab, onClose }: { tab: DevTab; onTab: (t: DevT
           </select>
         )}
         {tab === 'network' && <input className="dev-filter" value={filter} placeholder={t('dev.net.filter')} onChange={(e) => setFilter(e.target.value)} aria-label={t('dev.net.filter')} />}
+        {tab === 'terminal' && termInfo && (
+          <span className="muted small clamp-start dev-term-info" title={termInfo.cwd}>
+            <bdi>{termInfo.cwd}</bdi>
+          </span>
+        )}
+        {tab === 'terminal' && (
+          <button className="icon-btn" onClick={() => termRef.current?.add()} title={t('dev.term.new')} aria-label={t('dev.term.new')}>
+            <Icon d={ICONS.plus} size={14} />
+          </button>
+        )}
         {tab !== 'performance' && (
-          <button className="icon-btn" onClick={tab === 'console' ? clearLogs : clearNetwork} title={t('dev.clear')} aria-label={t('dev.clear')}>
+          <button
+            className="icon-btn"
+            onClick={tab === 'console' ? clearLogs : tab === 'network' ? clearNetwork : () => termRef.current?.clear()}
+            title={t('dev.clear')}
+            aria-label={t('dev.clear')}
+          >
             <Icon d={ICONS.trash} size={14} />
           </button>
         )}
@@ -415,6 +440,11 @@ export function DevPanel({ tab, onTab, onClose }: { tab: DevTab; onTab: (t: DevT
         {tab === 'console' && <ConsoleTab logs={logs} level={level} />}
         {tab === 'network' && <NetworkTab entries={network} filter={filter} />}
         {tab === 'performance' && <PerformanceTab entries={network} />}
+        {termOpened && (
+          <div className="dev-term-wrap" hidden={tab !== 'terminal'}>
+            <TerminalSessions ref={termRef} cwd={cwd} visible={!hidden && tab === 'terminal'} onActiveInfo={setTermInfo} />
+          </div>
+        )}
       </div>
     </section>
   )

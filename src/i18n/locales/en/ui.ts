@@ -650,4 +650,13 @@ export const ui: Record<keyof typeof es, string> = {
   'dev.perf.avg': 'Average',
   'dev.perf.max': 'Max',
   'dev.perf.failed': 'Failed',
+  'dev.term.new': 'New terminal',
+  'dev.term.exited': 'Session ended (exit code {code}).',
+  'dev.term.failed': 'Couldn’t open the terminal',
+  'dev.term.retry': 'Retry',
+  'dev.term.shell': 'terminal',
+  'dev.term.sessions': 'Terminal sessions',
+  'dev.term.none': 'No open terminals',
+  'dev.term.kill': 'Kill terminal',
+  'dev.term.renameHint': 'Double-click to rename',
 }

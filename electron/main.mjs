@@ -1,7 +1,10 @@
 // Proceso principal de la app de escritorio: la ventana, las peticiones HTTP (sin CORS, desde Node)
 // y el acceso a archivos. La interfaz es la misma app web; habla con este proceso por preload.cjs.
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
+import { chmodSync, existsSync } from 'node:fs'
 import { access, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -299,6 +302,73 @@ ipcMain.handle('app:metrics', () => {
 /** Herramientas de desarrollo de la ventana (para inspeccionar peticiones y errores). */
 ipcMain.handle('app:toggleDevTools', (event) => {
   event.sender.toggleDevTools()
+})
+
+// --- Terminal integrada (node-pty): la shell del sistema, en la carpeta del workspace ---
+
+const require = createRequire(import.meta.url)
+const terminals = new Map()
+let pty
+
+/** Carga node-pty solo al abrir la primera terminal (si falla, la app sigue funcionando). */
+function loadPty() {
+  if (pty) return pty
+  const mod = require('node-pty')
+  // node-pty 1.1.0 trae su spawn-helper sin permiso de ejecución (ver scripts/fix-node-pty.mjs).
+  try {
+    const dir = path.dirname(require.resolve('node-pty/package.json')).replace('app.asar', 'app.asar.unpacked')
+    const helper = path.join(dir, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
+    if (existsSync(helper)) chmodSync(helper, 0o755)
+  } catch {
+    /* sin permisos para corregirlo: si falla, se informa al abrir la terminal */
+  }
+  pty = mod
+  return pty
+}
+
+function defaultShell() {
+  if (process.platform === 'win32') return { file: process.env.COMSPEC?.toLowerCase().includes('powershell') ? process.env.COMSPEC : 'powershell.exe', args: [] }
+  return { file: process.env.SHELL || '/bin/zsh', args: ['-l'] }
+}
+
+/** Abre una terminal. Solo en un workspace autorizado o, si no, en la carpeta personal. */
+ipcMain.handle('term:create', (event, { cols, rows, cwd }) => {
+  const dir = cwd && workspaceRoots.has(path.resolve(cwd)) ? path.resolve(cwd) : os.homedir()
+  const { file, args } = defaultShell()
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'ArazzoStudio' }
+  delete env.ELECTRON_RUN_AS_NODE
+  const term = loadPty().spawn(file, args, { name: 'xterm-256color', cols: cols || 80, rows: rows || 24, cwd: dir, env })
+  const id = String(term.pid)
+  const sender = event.sender
+  terminals.set(id, term)
+  term.onData((data) => !sender.isDestroyed() && sender.send('term:data', { id, data }))
+  term.onExit(({ exitCode }) => {
+    terminals.delete(id)
+    if (!sender.isDestroyed()) sender.send('term:exit', { id, exitCode })
+  })
+  // Si se cierra la ventana, su terminal también.
+  sender.once('destroyed', () => {
+    if (terminals.has(id)) term.kill()
+  })
+  return { id, cwd: dir, shell: path.basename(file) }
+})
+
+ipcMain.on('term:write', (_event, { id, data }) => terminals.get(id)?.write(data))
+ipcMain.on('term:resize', (_event, { id, cols, rows }) => {
+  try {
+    terminals.get(id)?.resize(Math.max(cols, 2), Math.max(rows, 1))
+  } catch {
+    /* la terminal ya terminó */
+  }
+})
+ipcMain.handle('term:kill', (_event, id) => {
+  terminals.get(id)?.kill()
+  terminals.delete(id)
+})
+
+app.on('before-quit', () => {
+  for (const term of terminals.values()) term.kill()
+  terminals.clear()
 })
 
 app.whenReady().then(async () => {

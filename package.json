@@ -20,7 +20,8 @@
     "mock": "node examples/mock-server.mjs",
     "mock:bug": "node examples/mock-server.mjs --bug",
     "desktop:dev": "node electron/dev.mjs",
-    "desktop:build": "npm run build && electron-builder"
+    "desktop:build": "npm run build && electron-builder",
+    "postinstall": "node scripts/fix-node-pty.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -31,11 +32,14 @@
     "@codemirror/view": "6.43.15",
     "@faker-js/faker": "10.6.0",
     "@lezer/highlight": "1.2.5",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.12.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "codemirror": "6.0.2",
     "jsonpath-plus": "^11.2.1",
+    "node-pty": "1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "yaml": "^2.9.1"
@@ -65,7 +69,10 @@
       "electron/main.mjs",
       "electron/preload.cjs",
       "package.json",
-      "!node_modules/**"
+      "!node_modules/**",
+      "node_modules/node-pty/package.json",
+      "node_modules/node-pty/lib/**",
+      "node_modules/node-pty/prebuilds/${platform}-${arch}/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -84,6 +91,10 @@
         "AppImage"
       ],
       "category": "Development"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false
   }
 }
